@@ -202,6 +202,8 @@ public:
         battle.fightCamera_ = false;
         battle.barVisible_ = false;
         battle.bossVanished_ = false;
+        // 撃破後は実体の位置を合わせ直さないので、跳んでいる途中で倒しても奪う位置を床の高さにしておく
+        battle.boss_->SetPosition({ battle.bossX_, battle.bossBaseY_, 0.0f });
         TimeManager::GetInstance()->RequestSlowMotion(Tune().defeatSlowSeconds, Tune().defeatSlowScale);
         ScreenFlash::GetInstance()->Request(kDefeatFlashColor, kDefeatFlashSeconds);
         const HitEffectPlayer fx(battle.links_.particles, battle.links_.shaker, battle.links_.rng);
@@ -343,14 +345,20 @@ void FinalBossBattle::GuidePhase::Update(FinalBossBattle& battle, float deltaTim
     player.UpdateCinematicPose(false);
     battle.bossFacing_ = battle.DirectionToPlayer();
     battle.letterbox_ = Approach(battle.letterbox_, kLetterboxOut, deltaTime / Tune().letterboxSeconds);
+    Input* input = battle.links_.input;
+    // 閉じた後は、攻撃ボタンを離してから戦闘へ（オートコンボは長押しでも攻撃を出すため）
+    if (!battle.guideVisible_) {
+        if (!input->PushAction(Input::Action::kAttack)) {
+            battle.ChangePhase(FightPhase::Instance());
+        }
+        return;
+    }
     // 出してすぐは受け付けない（名乗りを飛ばした勢いで読まずに閉じないように）
     if (battle.phaseTimer_ < Tune().guideMinSeconds) {
         return;
     }
-    Input* input = battle.links_.input;
     if (input->TriggerMenuConfirm() || input->TriggerAction(Input::Action::kAttack)) {
         battle.guideVisible_ = false;
-        battle.ChangePhase(FightPhase::Instance());
     }
 }
 

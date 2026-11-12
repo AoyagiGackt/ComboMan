@@ -549,7 +549,8 @@ void GamePlayScene::SetupPauseMenu() {
     pauseMenu_.Initialize(spriteCommon_.get(), &fontRenderer_, audio_, kLayoutName,
         { "ステージセレクト", [] {
              auto* rd = RunData::GetInstance();
-             if (rd->IsRunActive()) {
+             // ラスボス戦の間は保存しない（最後のステージのクリアでコンティニューは消してあり、刀だけの一時的な持ち物を残さないため）
+             if (rd->IsRunActive() && !rd->IsFinalBossPending()) {
                  SaveDataManager::GetInstance()->SaveContinue(*rd);
              }
              SceneFlow::GetInstance()->Transition(kSceneName, "pause_quit", "MAP");

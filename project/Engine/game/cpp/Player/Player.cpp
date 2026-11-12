@@ -242,11 +242,16 @@ void Player::HandleDodge(Input* input) {
         dodgeBackward_ ? t.backDodgeAnimSpeed : t.dodgeAnimSpeed);
 }
 
-/** @brief 時間を正規化して減速補間し、共通のステージ境界に収めてから終了を判定する */
+/**
+ * @brief 減速補間で進む量を求め、今の位置に足してから共通のステージ境界に収め、終了を判定する
+ * @note 位置を開始点からの補間で上書きすると、壁の押し戻しが毎フレーム消えて壁の向こうへ抜けるため、差分だけを足す
+ */
 bool Player::AdvanceHorizontalMove(float& timer, float duration, float startX, float targetX) {
+    const float prevProgress = std::clamp(timer / duration, 0.0f, 1.0f);
     timer += gameConstants::kFrameDeltaTime;
     const float progress = std::clamp(timer / duration, 0.0f, 1.0f);
-    pos_.x = std::clamp(startX + (targetX - startX) * easing::EaseOutQuad(progress), minX_, maxX_);
+    const float step = (targetX - startX) * (easing::EaseOutQuad(progress) - easing::EaseOutQuad(prevProgress));
+    pos_.x = std::clamp(pos_.x + step, minX_, maxX_);
     return progress >= 1.0f;
 }
 
@@ -489,14 +494,15 @@ void Player::BeginDash(DashMotion& dash, float worldDeltaX) {
     dash.targetX = std::clamp(pos_.x + worldDeltaX, minX_, maxX_);
 }
 
-/** @brief ダッシュを1フレーム進める（pos_.xを更新）。ちょうど完了したフレームだけtrueを返す */
+/** @brief ダッシュを1フレーム進める（pos_.xへ今フレームの進み分を足す）。ちょうど完了したフレームだけtrueを返す */
 bool Player::AdvanceDash(DashMotion& dash) {
     if (!dash.active) {
         return false;
     }
+    const float prevT = std::clamp(dash.timer / Tuning().dashDuration, 0.0f, 1.0f);
     dash.timer += gameConstants::kFrameDeltaTime;
     const float t = std::clamp(dash.timer / Tuning().dashDuration, 0.0f, 1.0f);
-    pos_.x = dash.startX + (dash.targetX - dash.startX) * easing::EaseOutQuad(t);
+    pos_.x += (dash.targetX - dash.startX) * (easing::EaseOutQuad(t) - easing::EaseOutQuad(prevT));
     if (t >= 1.0f) {
         dash.active = false;
         return true;

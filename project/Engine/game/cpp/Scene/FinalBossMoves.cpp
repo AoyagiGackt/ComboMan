@@ -539,6 +539,10 @@ void FinalBossBattle::CancelMoves() {
     bossVanished_ = false;
     staggerAccum_ = 0;
     staggerTimer_ = 0.0f;
+    // 打ち切ったフレームに受けたダメージを、戦闘へ戻った時の怯みの数に入れない
+    if (boss_ != nullptr) {
+        lastBossHp_ = boss_->GetHp();
+    }
     for (PhantomBlade& blade : phantoms_) {
         blade.active = false;
     }

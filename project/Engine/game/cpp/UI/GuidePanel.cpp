@@ -98,7 +98,7 @@ void StageControlsGuide::Arm(const std::string& levelPath) {
     armed_ = !sStageGuideShown && !StageTune().level.empty() && levelPath == StageTune().level;
 }
 
-/** @brief 1フレーム進める（開いていて閉じ始めていない間は true） */
+/** @brief 1フレーム進める（開いていて閉じ始めていない間と、閉じた攻撃ボタンが離されるまでは true） */
 bool StageControlsGuide::Update(const Input& input, bool canOpen) {
     const StageGuideTuning& tune = StageTune();
     const float fadeStep = gameConstants::kFrameDeltaTime / (std::max)(tune.fadeSeconds, kMinFadeSeconds);
@@ -110,21 +110,23 @@ bool StageControlsGuide::Update(const Input& input, bool canOpen) {
         timer_ = 0.0f;
         sStageGuideShown = true;
     }
-    if (!open_) {
-        return false;
+    // 閉じ始めたら薄くして、消え切ったら終わり（その間はもう操作できる）
+    if (!open_ || closing_) {
+        if (open_) {
+            alpha_ = (std::max)(alpha_ - fadeStep, 0.0f);
+            open_ = alpha_ > 0.0f;
+        }
+        // 閉じたボタンを押し続けている間は止めたままにする（オートコンボは長押しでも攻撃を出すため、消え切った後も離すまで待つ）
+        holdingCloseAttack_ = holdingCloseAttack_ && input.PushAction(Input::Action::kAttack);
+        return holdingCloseAttack_;
     }
     timer_ += gameConstants::kFrameDeltaTime;
-    // 閉じ始めたら薄くして、消え切ったら終わり（その間はもう操作できる）
-    if (closing_) {
-        alpha_ = (std::max)(alpha_ - fadeStep, 0.0f);
-        open_ = alpha_ > 0.0f;
-        return false;
-    }
     alpha_ = (std::min)(alpha_ + fadeStep, 1.0f);
     // 出してすぐは受け付けない（読まずに閉じないように）
     if (timer_ >= tune.minSeconds && (input.TriggerMenuConfirm() || input.TriggerAction(Input::Action::kAttack))) {
         // 閉じる時に押したボタンで攻撃が出ないよう、このフレームまではゲームを止めておく
         closing_ = true;
+        holdingCloseAttack_ = true;
     }
     return true;
 }

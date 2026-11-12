@@ -42,7 +42,7 @@ public:
     /** @brief このレベルで出すなら出す準備をする（開始演出が終わったら開く） */
     void Arm(const std::string& levelPath);
     /**
-     * @brief 1フレーム進める（開くのを待っている・開いている間は true を返し、呼ぶ側はゲームを止める）
+     * @brief 1フレーム進める（開いている間と、閉じた攻撃ボタンが離されるまでは true を返し、呼ぶ側はゲームを止める）
      * @param canOpen 開いてよいか（開始演出の最中は false）
      */
     bool Update(const Input& input, bool canOpen);
@@ -55,6 +55,7 @@ private:
     bool armed_ = false; ///< 開くのを待っているか
     bool open_ = false; ///< 開いているか（閉じ始めても薄くなり切るまで描く）
     bool closing_ = false; ///< 決定が押されて薄くなっている途中か
+    bool holdingCloseAttack_ = false; ///< 閉じた後、攻撃ボタンが離されるのを待っているか
     float timer_ = 0.0f; ///< 開いてからの秒数
     float alpha_ = 0.0f; ///< 板の不透明度
 };
