@@ -1,12 +1,12 @@
 /** @file ArchitectureTests.cpp
  * @brief シーン制御・HUD所有権・編集履歴・イベント接続とJSON上書きを確かめるテスト
  */
-#include "../Engine/game/h/Scene/SceneTransitionFlow.h"
-#include "../Engine/game/h/Scene/GamePauseController.h"
-#include "../Engine/game/h/UI/HudLayer.h"
-#include "../Engine/game/h/Level/EditorHistory.h"
-#include "../Engine/game/h/Level/StageEditorEventConnection.h"
-#include "../Engine/game/h/Level/StageEditorObjectPresets.h"
+#include "../Game/h/Scene/SceneTransitionFlow.h"
+#include "../Game/h/Scene/GamePauseController.h"
+#include "../Game/h/UI/HudLayer.h"
+#include "../Game/h/Level/EditorHistory.h"
+#include "../Game/h/Level/StageEditorEventConnection.h"
+#include "../Game/h/Level/StageEditorObjectPresets.h"
 #include "JsonHelper.h"
 #include "TestReport.h"
 #include <algorithm>
