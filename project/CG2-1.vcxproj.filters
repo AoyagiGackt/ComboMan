@@ -90,40 +90,40 @@
     <Filter Include="ソースファイル\Engine">
       <UniqueIdentifier>{ecf378af-ef5f-459c-96c3-5a7ff63ac010}</UniqueIdentifier>
     </Filter>
-    <Filter Include="ソースファイル\Engine\game">
+    <Filter Include="ソースファイル\Game">
       <UniqueIdentifier>{3c03d5d5-b370-4c16-a722-c40d286713c5}</UniqueIdentifier>
     </Filter>
-    <Filter Include="ソースファイル\Engine\game\cpp">
+    <Filter Include="ソースファイル\Game\cpp">
       <UniqueIdentifier>{e282dd45-3039-4328-bd4d-7c142c7ba870}</UniqueIdentifier>
     </Filter>
-    <Filter Include="ソースファイル\Engine\game\cpp\Util">
+    <Filter Include="ソースファイル\Game\cpp\Util">
       <UniqueIdentifier>{f9a13c53-ead2-49ff-9e15-04581da6cc9c}</UniqueIdentifier>
     </Filter>
-    <Filter Include="ソースファイル\Engine\game\cpp\Core">
+    <Filter Include="ソースファイル\Game\cpp\Core">
       <UniqueIdentifier>{e58192cf-1c0e-44b2-a723-049e758422dd}</UniqueIdentifier>
     </Filter>
-    <Filter Include="ソースファイル\Engine\game\cpp\Scene">
+    <Filter Include="ソースファイル\Game\cpp\Scene">
       <UniqueIdentifier>{c21cdedd-f5a3-4851-9d5b-bde61660f5f9}</UniqueIdentifier>
     </Filter>
-    <Filter Include="ソースファイル\Engine\game\cpp\UI">
+    <Filter Include="ソースファイル\Game\cpp\UI">
       <UniqueIdentifier>{9afa3876-b9e5-4f08-9c37-fe73a701af5d}</UniqueIdentifier>
     </Filter>
-    <Filter Include="ソースファイル\Engine\game\cpp\Collision">
+    <Filter Include="ソースファイル\Game\cpp\Collision">
       <UniqueIdentifier>{9792e716-a796-45bb-bec1-7ec4a5a03892}</UniqueIdentifier>
     </Filter>
-    <Filter Include="ソースファイル\Engine\game\cpp\Core\App">
+    <Filter Include="ソースファイル\Game\cpp\Core\App">
       <UniqueIdentifier>{8dd14536-b36c-492d-b3b0-536138998540}</UniqueIdentifier>
     </Filter>
-    <Filter Include="ソースファイル\Engine\game\cpp\Effect">
+    <Filter Include="ソースファイル\Game\cpp\Effect">
       <UniqueIdentifier>{95980158-fc73-456b-b2e4-f0c67feec7ea}</UniqueIdentifier>
     </Filter>
-    <Filter Include="ソースファイル\Engine\game\cpp\Player">
+    <Filter Include="ソースファイル\Game\cpp\Player">
       <UniqueIdentifier>{654a610e-501d-4b86-a36b-45f160e9fcb8}</UniqueIdentifier>
     </Filter>
-    <Filter Include="ソースファイル\Engine\game\cpp\Level">
+    <Filter Include="ソースファイル\Game\cpp\Level">
       <UniqueIdentifier>{0f0b60e6-f031-41d2-9ea7-9185da962ee0}</UniqueIdentifier>
     </Filter>
-    <Filter Include="ソースファイル\Engine\game\cpp\Scripting">
+    <Filter Include="ソースファイル\Game\cpp\Scripting">
       <UniqueIdentifier>{576c378f-d692-48b9-a568-210c0d23c385}</UniqueIdentifier>
     </Filter>
     <Filter Include="ソースファイル\Engine\graphics">
@@ -153,7 +153,7 @@
     <Filter Include="ソースファイル\Engine\graphics\cpp\Manager">
       <UniqueIdentifier>{8047d0d3-c0bb-4588-abbe-36c668e24f3e}</UniqueIdentifier>
     </Filter>
-    <Filter Include="ソースファイル\Engine\base">
+    <Filter Include="ソースファイル\Game\base">
       <UniqueIdentifier>{8b236fff-1c7d-40d8-9abc-945b755f7b05}</UniqueIdentifier>
     </Filter>
     <Filter Include="ソースファイル\Engine\graphics\cpp\Skeleton">
@@ -171,40 +171,40 @@
     <Filter Include="ヘッダーファイル\Engine">
       <UniqueIdentifier>{090bbea6-ca3f-42e6-9615-b3fa3f02dada}</UniqueIdentifier>
     </Filter>
-    <Filter Include="ヘッダーファイル\Engine\game">
+    <Filter Include="ヘッダーファイル\Game">
       <UniqueIdentifier>{9112652d-740d-466f-a15e-bc8679f7ca6d}</UniqueIdentifier>
     </Filter>
-    <Filter Include="ヘッダーファイル\Engine\game\h">
+    <Filter Include="ヘッダーファイル\Game\h">
       <UniqueIdentifier>{3be63266-9107-4281-9a59-cd8408dd455b}</UniqueIdentifier>
     </Filter>
-    <Filter Include="ヘッダーファイル\Engine\game\h\Scene">
+    <Filter Include="ヘッダーファイル\Game\h\Scene">
       <UniqueIdentifier>{4c328578-de67-459c-ae54-d702b9e3a1b1}</UniqueIdentifier>
     </Filter>
-    <Filter Include="ヘッダーファイル\Engine\game\h\Util">
+    <Filter Include="ヘッダーファイル\Game\h\Util">
       <UniqueIdentifier>{959fb81d-b268-499c-a83e-e8f1bb2fdcd3}</UniqueIdentifier>
     </Filter>
-    <Filter Include="ヘッダーファイル\Engine\game\h\Core">
+    <Filter Include="ヘッダーファイル\Game\h\Core">
       <UniqueIdentifier>{839d2ccb-1b95-4dad-afa4-d3cc6cac794b}</UniqueIdentifier>
     </Filter>
-    <Filter Include="ヘッダーファイル\Engine\game\h\Collision">
+    <Filter Include="ヘッダーファイル\Game\h\Collision">
       <UniqueIdentifier>{faa21ec4-3401-4dc8-8019-34e4c9a0dd6c}</UniqueIdentifier>
     </Filter>
-    <Filter Include="ヘッダーファイル\Engine\game\h\Core\App">
+    <Filter Include="ヘッダーファイル\Game\h\Core\App">
       <UniqueIdentifier>{396c4397-dd71-4732-9c60-714df3d0b63d}</UniqueIdentifier>
     </Filter>
-    <Filter Include="ヘッダーファイル\Engine\game\h\Effect">
+    <Filter Include="ヘッダーファイル\Game\h\Effect">
       <UniqueIdentifier>{8e712611-780c-4cf7-9ae9-ecdf2e1e5f2a}</UniqueIdentifier>
     </Filter>
-    <Filter Include="ヘッダーファイル\Engine\game\h\Player">
+    <Filter Include="ヘッダーファイル\Game\h\Player">
       <UniqueIdentifier>{1020a505-c3af-4880-8cb2-73cc4b7f53e2}</UniqueIdentifier>
     </Filter>
-    <Filter Include="ヘッダーファイル\Engine\game\h\UI">
+    <Filter Include="ヘッダーファイル\Game\h\UI">
       <UniqueIdentifier>{304edbf7-db06-4cf6-9159-b30b193fa912}</UniqueIdentifier>
     </Filter>
-    <Filter Include="ヘッダーファイル\Engine\game\h\Level">
+    <Filter Include="ヘッダーファイル\Game\h\Level">
       <UniqueIdentifier>{864a7406-37fd-4cd4-8460-e2c0790a69ce}</UniqueIdentifier>
     </Filter>
-    <Filter Include="ヘッダーファイル\Engine\game\h\Scripting">
+    <Filter Include="ヘッダーファイル\Game\h\Scripting">
       <UniqueIdentifier>{0817d5b8-13f7-48a4-9362-9d8763672d01}</UniqueIdentifier>
     </Filter>
     <Filter Include="ヘッダーファイル\Engine\graphics">
@@ -261,55 +261,55 @@
     <Filter Include="JSON\演出">
       <UniqueIdentifier>{8cfdd7fa-3bc1-4137-b702-0356a6970272}</UniqueIdentifier>
     </Filter>
-    <Filter Include="ソースファイル\Engine\game\cpp\Level\StageEditor">
+    <Filter Include="ソースファイル\Game\cpp\Level\StageEditor">
       <UniqueIdentifier>{9d606f36-6cbb-40b5-87cc-ea150486871b}</UniqueIdentifier>
     </Filter>
-    <Filter Include="ソースファイル\Engine\game\cpp\Level\StageEditor\パネル">
+    <Filter Include="ソースファイル\Game\cpp\Level\StageEditor\パネル">
       <UniqueIdentifier>{94119bcc-d1a1-4259-a5bf-741289fc57c5}</UniqueIdentifier>
     </Filter>
-    <Filter Include="ソースファイル\Engine\game\cpp\Level\配置物の種類">
+    <Filter Include="ソースファイル\Game\cpp\Level\配置物の種類">
       <UniqueIdentifier>{5794980d-c231-47ec-bd04-c185952136ab}</UniqueIdentifier>
     </Filter>
-    <Filter Include="ソースファイル\Engine\game\cpp\Player\コンボ">
+    <Filter Include="ソースファイル\Game\cpp\Player\コンボ">
       <UniqueIdentifier>{6d05bb86-23eb-4b38-b66e-bc9935f86c12}</UniqueIdentifier>
     </Filter>
-    <Filter Include="ソースファイル\Engine\game\cpp\Player\敵">
+    <Filter Include="ソースファイル\Game\cpp\Player\敵">
       <UniqueIdentifier>{be2c3742-ecd0-4867-8f38-b3348d8f2b89}</UniqueIdentifier>
     </Filter>
-    <Filter Include="ソースファイル\Engine\game\cpp\Player\武器">
+    <Filter Include="ソースファイル\Game\cpp\Player\武器">
       <UniqueIdentifier>{f69a5d73-33fc-4132-a77b-726cdfc79a4b}</UniqueIdentifier>
     </Filter>
-    <Filter Include="ソースファイル\Engine\game\cpp\Scene\ゲームプレイ">
+    <Filter Include="ソースファイル\Game\cpp\Scene\ゲームプレイ">
       <UniqueIdentifier>{a78ec0eb-f0e7-4e39-9082-392376579c90}</UniqueIdentifier>
     </Filter>
-    <Filter Include="ソースファイル\Engine\game\cpp\Scene\トレーニング">
+    <Filter Include="ソースファイル\Game\cpp\Scene\トレーニング">
       <UniqueIdentifier>{4197ee03-eaab-466d-8fbb-7bbb508d9fb6}</UniqueIdentifier>
     </Filter>
-    <Filter Include="ソースファイル\Engine\game\cpp\Scene\バトルテスト">
+    <Filter Include="ソースファイル\Game\cpp\Scene\バトルテスト">
       <UniqueIdentifier>{dc65818b-8e46-4eb1-b69d-2ed60bc5c090}</UniqueIdentifier>
     </Filter>
-    <Filter Include="ソースファイル\Engine\game\cpp\Scene\共通">
+    <Filter Include="ソースファイル\Game\cpp\Scene\共通">
       <UniqueIdentifier>{533de4a2-70ac-4d4f-8aba-91c47799b065}</UniqueIdentifier>
     </Filter>
-    <Filter Include="ソースファイル\Engine\game\cpp\Scene\演出">
+    <Filter Include="ソースファイル\Game\cpp\Scene\演出">
       <UniqueIdentifier>{ac79f5f3-84dd-4e6e-9ff1-d7d4a924e692}</UniqueIdentifier>
     </Filter>
-    <Filter Include="ソースファイル\Engine\game\cpp\Scene\画面">
+    <Filter Include="ソースファイル\Game\cpp\Scene\画面">
       <UniqueIdentifier>{6bee424a-faca-461e-96ab-6e7e6e89eb08}</UniqueIdentifier>
     </Filter>
-    <Filter Include="ソースファイル\Engine\game\cpp\Scripting\グラフ">
+    <Filter Include="ソースファイル\Game\cpp\Scripting\グラフ">
       <UniqueIdentifier>{47a08a5c-1ddc-456a-b671-a7a9d6979407}</UniqueIdentifier>
     </Filter>
-    <Filter Include="ソースファイル\Engine\game\cpp\Scripting\ブリッジ">
+    <Filter Include="ソースファイル\Game\cpp\Scripting\ブリッジ">
       <UniqueIdentifier>{cb11bc72-4b54-4501-b3d4-d5ed68204c64}</UniqueIdentifier>
     </Filter>
-    <Filter Include="ソースファイル\Engine\game\cpp\Scripting\調整値">
+    <Filter Include="ソースファイル\Game\cpp\Scripting\調整値">
       <UniqueIdentifier>{450837a5-1e0b-42ab-9380-3d5e0323b53e}</UniqueIdentifier>
     </Filter>
-    <Filter Include="ソースファイル\Engine\game\cpp\UI\HUD">
+    <Filter Include="ソースファイル\Game\cpp\UI\HUD">
       <UniqueIdentifier>{34ae0f1b-309c-4e53-82bd-307d4d471fb3}</UniqueIdentifier>
     </Filter>
-    <Filter Include="ソースファイル\Engine\game\cpp\UI\部品">
+    <Filter Include="ソースファイル\Game\cpp\UI\部品">
       <UniqueIdentifier>{fcdce1c3-982d-42b9-afc4-67d9042fec82}</UniqueIdentifier>
     </Filter>
     <Filter Include="ソースファイル\Engine\graphics\cpp\Effect\ポストエフェクト">
@@ -318,55 +318,55 @@
     <Filter Include="ソースファイル\Engine\graphics\cpp\Effect\ワールド演出">
       <UniqueIdentifier>{39df7540-4012-402b-97d1-dc6b6e3b023f}</UniqueIdentifier>
     </Filter>
-    <Filter Include="ヘッダーファイル\Engine\game\h\Level\StageEditor">
+    <Filter Include="ヘッダーファイル\Game\h\Level\StageEditor">
       <UniqueIdentifier>{8b25bd7d-fc56-4c13-9254-27b42a16c52d}</UniqueIdentifier>
     </Filter>
-    <Filter Include="ヘッダーファイル\Engine\game\h\Level\StageEditor\パネル">
+    <Filter Include="ヘッダーファイル\Game\h\Level\StageEditor\パネル">
       <UniqueIdentifier>{248e6897-f634-4944-b5ad-ee6b4197f68c}</UniqueIdentifier>
     </Filter>
-    <Filter Include="ヘッダーファイル\Engine\game\h\Level\配置物の種類">
+    <Filter Include="ヘッダーファイル\Game\h\Level\配置物の種類">
       <UniqueIdentifier>{50ac34f6-644a-4ab9-aca6-c6a820e6a3bb}</UniqueIdentifier>
     </Filter>
-    <Filter Include="ヘッダーファイル\Engine\game\h\Player\コンボ">
+    <Filter Include="ヘッダーファイル\Game\h\Player\コンボ">
       <UniqueIdentifier>{6f400951-5bed-496b-9004-89bdf2064455}</UniqueIdentifier>
     </Filter>
-    <Filter Include="ヘッダーファイル\Engine\game\h\Player\敵">
+    <Filter Include="ヘッダーファイル\Game\h\Player\敵">
       <UniqueIdentifier>{96d332a8-f8be-453c-a5e6-d3f01252aca9}</UniqueIdentifier>
     </Filter>
-    <Filter Include="ヘッダーファイル\Engine\game\h\Player\武器">
+    <Filter Include="ヘッダーファイル\Game\h\Player\武器">
       <UniqueIdentifier>{7dccc930-f62e-45fe-ba2a-fdda0d0fb1f9}</UniqueIdentifier>
     </Filter>
-    <Filter Include="ヘッダーファイル\Engine\game\h\Scene\ゲームプレイ">
+    <Filter Include="ヘッダーファイル\Game\h\Scene\ゲームプレイ">
       <UniqueIdentifier>{cfc787fd-c49f-4698-8fc6-fdbf141a3c7e}</UniqueIdentifier>
     </Filter>
-    <Filter Include="ヘッダーファイル\Engine\game\h\Scene\トレーニング">
+    <Filter Include="ヘッダーファイル\Game\h\Scene\トレーニング">
       <UniqueIdentifier>{22ead86c-35ac-4201-b8e9-635c61d7c06c}</UniqueIdentifier>
     </Filter>
-    <Filter Include="ヘッダーファイル\Engine\game\h\Scene\バトルテスト">
+    <Filter Include="ヘッダーファイル\Game\h\Scene\バトルテスト">
       <UniqueIdentifier>{fc74de0d-5dbd-40db-9ea6-7c2ec97baf9e}</UniqueIdentifier>
     </Filter>
-    <Filter Include="ヘッダーファイル\Engine\game\h\Scene\共通">
+    <Filter Include="ヘッダーファイル\Game\h\Scene\共通">
       <UniqueIdentifier>{8b74a046-819c-4721-a236-d04991f00cbd}</UniqueIdentifier>
     </Filter>
-    <Filter Include="ヘッダーファイル\Engine\game\h\Scene\演出">
+    <Filter Include="ヘッダーファイル\Game\h\Scene\演出">
       <UniqueIdentifier>{d8ecdb36-881e-4679-ba5e-a334e6d52635}</UniqueIdentifier>
     </Filter>
-    <Filter Include="ヘッダーファイル\Engine\game\h\Scene\画面">
+    <Filter Include="ヘッダーファイル\Game\h\Scene\画面">
       <UniqueIdentifier>{5c4ec9b9-ddd4-4f50-9c2b-a72bcc4c5158}</UniqueIdentifier>
     </Filter>
-    <Filter Include="ヘッダーファイル\Engine\game\h\Scripting\グラフ">
+    <Filter Include="ヘッダーファイル\Game\h\Scripting\グラフ">
       <UniqueIdentifier>{3f048e24-419b-4521-a784-4b5c97ae6e69}</UniqueIdentifier>
     </Filter>
-    <Filter Include="ヘッダーファイル\Engine\game\h\Scripting\ブリッジ">
+    <Filter Include="ヘッダーファイル\Game\h\Scripting\ブリッジ">
       <UniqueIdentifier>{56b0f5cc-5928-4d58-95fe-073c1fc78aaf}</UniqueIdentifier>
     </Filter>
-    <Filter Include="ヘッダーファイル\Engine\game\h\Scripting\調整値">
+    <Filter Include="ヘッダーファイル\Game\h\Scripting\調整値">
       <UniqueIdentifier>{cc0bf6a0-cc01-4b03-a394-3d78cbb8bb8d}</UniqueIdentifier>
     </Filter>
-    <Filter Include="ヘッダーファイル\Engine\game\h\UI\HUD">
+    <Filter Include="ヘッダーファイル\Game\h\UI\HUD">
       <UniqueIdentifier>{0eb92f18-c2be-4c02-8be0-9d6d370486c3}</UniqueIdentifier>
     </Filter>
-    <Filter Include="ヘッダーファイル\Engine\game\h\UI\部品">
+    <Filter Include="ヘッダーファイル\Game\h\UI\部品">
       <UniqueIdentifier>{66022555-523f-41fb-a950-3d9c12bd86a9}</UniqueIdentifier>
     </Filter>
     <Filter Include="ヘッダーファイル\Engine\graphics\h\Effect\ポストエフェクト">
@@ -383,188 +383,188 @@
     <ClCompile Include="Engine\core\cpp\Audio\Audio.cpp">
       <Filter>ソースファイル\Engine\core\cpp\Audio</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Scene\ClearScene.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Scene\画面</Filter>
+    <ClCompile Include="Game\cpp\Scene\ClearScene.cpp">
+      <Filter>ソースファイル\Game\cpp\Scene\画面</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Scene\GameOverScene.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Scene\画面</Filter>
+    <ClCompile Include="Game\cpp\Scene\GameOverScene.cpp">
+      <Filter>ソースファイル\Game\cpp\Scene\画面</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\UI\ScoreDisplay.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\UI\HUD</Filter>
+    <ClCompile Include="Game\cpp\UI\ScoreDisplay.cpp">
+      <Filter>ソースファイル\Game\cpp\UI\HUD</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Collision\Collision.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Collision</Filter>
+    <ClCompile Include="Game\cpp\Collision\Collision.cpp">
+      <Filter>ソースファイル\Game\cpp\Collision</Filter>
     </ClCompile>
     <ClCompile Include="Engine\core\cpp\App\Framework.cpp">
       <Filter>ソースファイル\Engine\core\cpp\App</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Core\App\MyGame.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Core\App</Filter>
+    <ClCompile Include="Game\cpp\Core\App\MyGame.cpp">
+      <Filter>ソースファイル\Game\cpp\Core\App</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Core\App\SmokeTestRunner.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Core\App</Filter>
+    <ClCompile Include="Game\cpp\Core\App\SmokeTestRunner.cpp">
+      <Filter>ソースファイル\Game\cpp\Core\App</Filter>
     </ClCompile>
     <ClCompile Include="Engine\core\cpp\Object\GameObject.cpp">
       <Filter>ソースファイル\Engine\core\cpp\Object</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Effect\AfterImageRenderer.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Effect</Filter>
+    <ClCompile Include="Game\cpp\Effect\AfterImageRenderer.cpp">
+      <Filter>ソースファイル\Game\cpp\Effect</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Scene\BattleTestScene.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Scene\バトルテスト</Filter>
+    <ClCompile Include="Game\cpp\Scene\BattleTestScene.cpp">
+      <Filter>ソースファイル\Game\cpp\Scene\バトルテスト</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Scene\BattleTestSceneCombat.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Scene\バトルテスト</Filter>
+    <ClCompile Include="Game\cpp\Scene\BattleTestSceneCombat.cpp">
+      <Filter>ソースファイル\Game\cpp\Scene\バトルテスト</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Scene\BattleTestSceneHud.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Scene\バトルテスト</Filter>
+    <ClCompile Include="Game\cpp\Scene\BattleTestSceneHud.cpp">
+      <Filter>ソースファイル\Game\cpp\Scene\バトルテスト</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Scene\BattleTestSceneRenderer.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Scene\バトルテスト</Filter>
+    <ClCompile Include="Game\cpp\Scene\BattleTestSceneRenderer.cpp">
+      <Filter>ソースファイル\Game\cpp\Scene\バトルテスト</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Player\BulletPool.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Player\武器</Filter>
+    <ClCompile Include="Game\cpp\Player\BulletPool.cpp">
+      <Filter>ソースファイル\Game\cpp\Player\武器</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Player\EnemyEntity.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Player\敵</Filter>
+    <ClCompile Include="Game\cpp\Player\EnemyEntity.cpp">
+      <Filter>ソースファイル\Game\cpp\Player\敵</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Player\KnightEnemy.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Player\敵</Filter>
+    <ClCompile Include="Game\cpp\Player\KnightEnemy.cpp">
+      <Filter>ソースファイル\Game\cpp\Player\敵</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Effect\CameraShaker.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Effect</Filter>
+    <ClCompile Include="Game\cpp\Effect\CameraShaker.cpp">
+      <Filter>ソースファイル\Game\cpp\Effect</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Effect\ComboFeelDirector.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Effect</Filter>
+    <ClCompile Include="Game\cpp\Effect\ComboFeelDirector.cpp">
+      <Filter>ソースファイル\Game\cpp\Effect</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Effect\HitEffectLibrary.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Effect</Filter>
+    <ClCompile Include="Game\cpp\Effect\HitEffectLibrary.cpp">
+      <Filter>ソースファイル\Game\cpp\Effect</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Effect\SceneVisualTuning.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Effect</Filter>
+    <ClCompile Include="Game\cpp\Effect\SceneVisualTuning.cpp">
+      <Filter>ソースファイル\Game\cpp\Effect</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\UI\CommandListView.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\UI\HUD</Filter>
+    <ClCompile Include="Game\cpp\UI\CommandListView.cpp">
+      <Filter>ソースファイル\Game\cpp\UI\HUD</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Effect\SlashMark.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Effect</Filter>
+    <ClCompile Include="Game\cpp\Effect\SlashMark.cpp">
+      <Filter>ソースファイル\Game\cpp\Effect</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Effect\GameSounds.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Effect</Filter>
+    <ClCompile Include="Game\cpp\Effect\GameSounds.cpp">
+      <Filter>ソースファイル\Game\cpp\Effect</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Effect\KickedBombPool.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Effect</Filter>
+    <ClCompile Include="Game\cpp\Effect\KickedBombPool.cpp">
+      <Filter>ソースファイル\Game\cpp\Effect</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Effect\ThrownWeaponPool.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Effect</Filter>
+    <ClCompile Include="Game\cpp\Effect\ThrownWeaponPool.cpp">
+      <Filter>ソースファイル\Game\cpp\Effect</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Scripting\WeaponFinisherTuning.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Scripting\調整値</Filter>
+    <ClCompile Include="Game\cpp\Scripting\WeaponFinisherTuning.cpp">
+      <Filter>ソースファイル\Game\cpp\Scripting\調整値</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Scripting\MonsterTraitTuning.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Scripting\調整値</Filter>
+    <ClCompile Include="Game\cpp\Scripting\MonsterTraitTuning.cpp">
+      <Filter>ソースファイル\Game\cpp\Scripting\調整値</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Scene\GamePlaySceneBombs.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Scene</Filter>
+    <ClCompile Include="Game\cpp\Scene\GamePlaySceneBombs.cpp">
+      <Filter>ソースファイル\Game\cpp\Scene</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Scene\GamePlaySceneFinishers.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Scene</Filter>
+    <ClCompile Include="Game\cpp\Scene\GamePlaySceneFinishers.cpp">
+      <Filter>ソースファイル\Game\cpp\Scene</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Scene\GamePlaySceneMonsters.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Scene</Filter>
+    <ClCompile Include="Game\cpp\Scene\GamePlaySceneMonsters.cpp">
+      <Filter>ソースファイル\Game\cpp\Scene</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Scene\GamePlaySceneBoss.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Scene</Filter>
+    <ClCompile Include="Game\cpp\Scene\GamePlaySceneBoss.cpp">
+      <Filter>ソースファイル\Game\cpp\Scene</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Scene\GamePlaySceneExecution.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Scene</Filter>
+    <ClCompile Include="Game\cpp\Scene\GamePlaySceneExecution.cpp">
+      <Filter>ソースファイル\Game\cpp\Scene</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Scene\BossBattleDirector.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Scene</Filter>
+    <ClCompile Include="Game\cpp\Scene\BossBattleDirector.cpp">
+      <Filter>ソースファイル\Game\cpp\Scene</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Effect\SoundAssignEditor.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Effect</Filter>
+    <ClCompile Include="Game\cpp\Effect\SoundAssignEditor.cpp">
+      <Filter>ソースファイル\Game\cpp\Effect</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Effect\ElementEffect.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Effect</Filter>
+    <ClCompile Include="Game\cpp\Effect\ElementEffect.cpp">
+      <Filter>ソースファイル\Game\cpp\Effect</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Scene\GamePlayScene.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Scene\ゲームプレイ</Filter>
+    <ClCompile Include="Game\cpp\Scene\GamePlayScene.cpp">
+      <Filter>ソースファイル\Game\cpp\Scene\ゲームプレイ</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Scene\GamePlaySceneCombat.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Scene\ゲームプレイ</Filter>
+    <ClCompile Include="Game\cpp\Scene\GamePlaySceneCombat.cpp">
+      <Filter>ソースファイル\Game\cpp\Scene\ゲームプレイ</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Scene\GamePlaySceneDraw.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Scene\ゲームプレイ</Filter>
+    <ClCompile Include="Game\cpp\Scene\GamePlaySceneDraw.cpp">
+      <Filter>ソースファイル\Game\cpp\Scene\ゲームプレイ</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Scene\GamePlaySceneUI.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Scene\ゲームプレイ</Filter>
+    <ClCompile Include="Game\cpp\Scene\GamePlaySceneUI.cpp">
+      <Filter>ソースファイル\Game\cpp\Scene\ゲームプレイ</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Scene\GamePlaySceneClear.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Scene\ゲームプレイ</Filter>
+    <ClCompile Include="Game\cpp\Scene\GamePlaySceneClear.cpp">
+      <Filter>ソースファイル\Game\cpp\Scene\ゲームプレイ</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Scene\GamePlaySceneInitializer.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Scene\ゲームプレイ</Filter>
+    <ClCompile Include="Game\cpp\Scene\GamePlaySceneInitializer.cpp">
+      <Filter>ソースファイル\Game\cpp\Scene\ゲームプレイ</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Core\App\GameSettings.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Core\App</Filter>
+    <ClCompile Include="Game\cpp\Core\App\GameSettings.cpp">
+      <Filter>ソースファイル\Game\cpp\Core\App</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Core\App\SaveData.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Core\App</Filter>
+    <ClCompile Include="Game\cpp\Core\App\SaveData.cpp">
+      <Filter>ソースファイル\Game\cpp\Core\App</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Player\Player.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Player</Filter>
+    <ClCompile Include="Game\cpp\Player\Player.cpp">
+      <Filter>ソースファイル\Game\cpp\Player</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Player\PlayerCombatInput.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Player</Filter>
+    <ClCompile Include="Game\cpp\Player\PlayerCombatInput.cpp">
+      <Filter>ソースファイル\Game\cpp\Player</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Player\PlayerPhysicsStates.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Player</Filter>
+    <ClCompile Include="Game\cpp\Player\PlayerPhysicsStates.cpp">
+      <Filter>ソースファイル\Game\cpp\Player</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Player\PlayerRampageStates.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Player</Filter>
+    <ClCompile Include="Game\cpp\Player\PlayerRampageStates.cpp">
+      <Filter>ソースファイル\Game\cpp\Player</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Player\PlayerWeaponBehaviors.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Player</Filter>
+    <ClCompile Include="Game\cpp\Player\PlayerWeaponBehaviors.cpp">
+      <Filter>ソースファイル\Game\cpp\Player</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Player\PlayerTuning.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Player</Filter>
+    <ClCompile Include="Game\cpp\Player\PlayerTuning.cpp">
+      <Filter>ソースファイル\Game\cpp\Player</Filter>
     </ClCompile>
     <ClCompile Include="Engine\core\cpp\Time\TimeManager.cpp">
       <Filter>ソースファイル\Engine\core\cpp\Time</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\UI\ScreenFlash.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\UI\HUD</Filter>
+    <ClCompile Include="Game\cpp\UI\ScreenFlash.cpp">
+      <Filter>ソースファイル\Game\cpp\UI\HUD</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Scene\TrainingScene.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Scene\トレーニング</Filter>
+    <ClCompile Include="Game\cpp\Scene\TrainingScene.cpp">
+      <Filter>ソースファイル\Game\cpp\Scene\トレーニング</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Player\WaterPool.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Player\武器</Filter>
+    <ClCompile Include="Game\cpp\Player\WaterPool.cpp">
+      <Filter>ソースファイル\Game\cpp\Player\武器</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\UI\FontRenderer.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\UI\部品</Filter>
+    <ClCompile Include="Game\cpp\UI\FontRenderer.cpp">
+      <Filter>ソースファイル\Game\cpp\UI\部品</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Player\AutoComboAssist.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Player\コンボ</Filter>
+    <ClCompile Include="Game\cpp\Player\AutoComboAssist.cpp">
+      <Filter>ソースファイル\Game\cpp\Player\コンボ</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Player\MeleeCombo.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Player\コンボ</Filter>
+    <ClCompile Include="Game\cpp\Player\MeleeCombo.cpp">
+      <Filter>ソースファイル\Game\cpp\Player\コンボ</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Player\ComboMotion.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Player\コンボ</Filter>
+    <ClCompile Include="Game\cpp\Player\ComboMotion.cpp">
+      <Filter>ソースファイル\Game\cpp\Player\コンボ</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Player\ReachPoseLayer.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Player\コンボ</Filter>
+    <ClCompile Include="Game\cpp\Player\ReachPoseLayer.cpp">
+      <Filter>ソースファイル\Game\cpp\Player\コンボ</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Player\ComboMotionEditor.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Player\コンボ</Filter>
+    <ClCompile Include="Game\cpp\Player\ComboMotionEditor.cpp">
+      <Filter>ソースファイル\Game\cpp\Player\コンボ</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Player\GunCombo.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Player\コンボ</Filter>
+    <ClCompile Include="Game\cpp\Player\GunCombo.cpp">
+      <Filter>ソースファイル\Game\cpp\Player\コンボ</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Player\WeaponManager.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Player\武器</Filter>
+    <ClCompile Include="Game\cpp\Player\WeaponManager.cpp">
+      <Filter>ソースファイル\Game\cpp\Player\武器</Filter>
     </ClCompile>
     <ClCompile Include="Engine\core\cpp\Util\JsonHelper.cpp">
       <Filter>ソースファイル\Engine\core\cpp\Util</Filter>
@@ -572,206 +572,206 @@
     <ClCompile Include="Engine\core\cpp\Util\CrashBreadcrumbs.cpp">
       <Filter>ソースファイル\Engine\core\cpp\Util</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Util\EventBus.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Util</Filter>
+    <ClCompile Include="Game\cpp\Util\EventBus.cpp">
+      <Filter>ソースファイル\Game\cpp\Util</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Util\PlaytestLog.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Util</Filter>
+    <ClCompile Include="Game\cpp\Util\PlaytestLog.cpp">
+      <Filter>ソースファイル\Game\cpp\Util</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Scripting\GraphTypes.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Scripting\グラフ</Filter>
+    <ClCompile Include="Game\cpp\Scripting\GraphTypes.cpp">
+      <Filter>ソースファイル\Game\cpp\Scripting\グラフ</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Scripting\NodeRegistry.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Scripting\グラフ</Filter>
+    <ClCompile Include="Game\cpp\Scripting\NodeRegistry.cpp">
+      <Filter>ソースファイル\Game\cpp\Scripting\グラフ</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Scripting\GraphRuntime.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Scripting\グラフ</Filter>
+    <ClCompile Include="Game\cpp\Scripting\GraphRuntime.cpp">
+      <Filter>ソースファイル\Game\cpp\Scripting\グラフ</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Scripting\GraphEditor.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Scripting\グラフ</Filter>
+    <ClCompile Include="Game\cpp\Scripting\GraphEditor.cpp">
+      <Filter>ソースファイル\Game\cpp\Scripting\グラフ</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Scripting\GraphEditorDraw.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Scripting\グラフ</Filter>
+    <ClCompile Include="Game\cpp\Scripting\GraphEditorDraw.cpp">
+      <Filter>ソースファイル\Game\cpp\Scripting\グラフ</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Scripting\GraphEditorServices.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Scripting\グラフ</Filter>
+    <ClCompile Include="Game\cpp\Scripting\GraphEditorServices.cpp">
+      <Filter>ソースファイル\Game\cpp\Scripting\グラフ</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Scripting\GameFlags.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Scripting\ブリッジ</Filter>
+    <ClCompile Include="Game\cpp\Scripting\GameFlags.cpp">
+      <Filter>ソースファイル\Game\cpp\Scripting\ブリッジ</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Scripting\EnemyRegistry.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Scripting\調整値</Filter>
+    <ClCompile Include="Game\cpp\Scripting\EnemyRegistry.cpp">
+      <Filter>ソースファイル\Game\cpp\Scripting\調整値</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Scripting\SceneEffectBridge.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Scripting\ブリッジ</Filter>
+    <ClCompile Include="Game\cpp\Scripting\SceneEffectBridge.cpp">
+      <Filter>ソースファイル\Game\cpp\Scripting\ブリッジ</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Scripting\SceneFlow.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Scripting\ブリッジ</Filter>
+    <ClCompile Include="Game\cpp\Scripting\SceneFlow.cpp">
+      <Filter>ソースファイル\Game\cpp\Scripting\ブリッジ</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Scripting\GameRules.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Scripting\調整値</Filter>
+    <ClCompile Include="Game\cpp\Scripting\GameRules.cpp">
+      <Filter>ソースファイル\Game\cpp\Scripting\調整値</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Scripting\EnemyTuning.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Scripting\調整値</Filter>
+    <ClCompile Include="Game\cpp\Scripting\EnemyTuning.cpp">
+      <Filter>ソースファイル\Game\cpp\Scripting\調整値</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Scripting\EnemyTypeLibrary.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Scripting\調整値</Filter>
+    <ClCompile Include="Game\cpp\Scripting\EnemyTypeLibrary.cpp">
+      <Filter>ソースファイル\Game\cpp\Scripting\調整値</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Scripting\CombatTuning.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Scripting\調整値</Filter>
+    <ClCompile Include="Game\cpp\Scripting\CombatTuning.cpp">
+      <Filter>ソースファイル\Game\cpp\Scripting\調整値</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Scripting\LevelGraphRunner.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Scripting\グラフ</Filter>
+    <ClCompile Include="Game\cpp\Scripting\LevelGraphRunner.cpp">
+      <Filter>ソースファイル\Game\cpp\Scripting\グラフ</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Scripting\AudioBridge.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Scripting\ブリッジ</Filter>
+    <ClCompile Include="Game\cpp\Scripting\AudioBridge.cpp">
+      <Filter>ソースファイル\Game\cpp\Scripting\ブリッジ</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Scripting\PlayerBridge.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Scripting\ブリッジ</Filter>
+    <ClCompile Include="Game\cpp\Scripting\PlayerBridge.cpp">
+      <Filter>ソースファイル\Game\cpp\Scripting\ブリッジ</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Level\LevelLoader.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Level</Filter>
+    <ClCompile Include="Game\cpp\Level\LevelLoader.cpp">
+      <Filter>ソースファイル\Game\cpp\Level</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Level\TriggerVolume.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Level\配置物の種類</Filter>
+    <ClCompile Include="Game\cpp\Level\TriggerVolume.cpp">
+      <Filter>ソースファイル\Game\cpp\Level\配置物の種類</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Level\StageEditor.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Level\StageEditor</Filter>
+    <ClCompile Include="Game\cpp\Level\StageEditor.cpp">
+      <Filter>ソースファイル\Game\cpp\Level\StageEditor</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Level\EnemyTypeEditor.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Level\StageEditor</Filter>
+    <ClCompile Include="Game\cpp\Level\EnemyTypeEditor.cpp">
+      <Filter>ソースファイル\Game\cpp\Level\StageEditor</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Level\StageEditorSelectionService.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Level\StageEditor</Filter>
+    <ClCompile Include="Game\cpp\Level\StageEditorSelectionService.cpp">
+      <Filter>ソースファイル\Game\cpp\Level\StageEditor</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Level\StageEditorSelectionKinds.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Level\StageEditor</Filter>
+    <ClCompile Include="Game\cpp\Level\StageEditorSelectionKinds.cpp">
+      <Filter>ソースファイル\Game\cpp\Level\StageEditor</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Level\StageEditorRuntime.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Level\StageEditor</Filter>
+    <ClCompile Include="Game\cpp\Level\StageEditorRuntime.cpp">
+      <Filter>ソースファイル\Game\cpp\Level\StageEditor</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Level\StageEditorInteraction.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Level\StageEditor</Filter>
+    <ClCompile Include="Game\cpp\Level\StageEditorInteraction.cpp">
+      <Filter>ソースファイル\Game\cpp\Level\StageEditor</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Level\StageEditorContentPanels.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Level\StageEditor\パネル</Filter>
+    <ClCompile Include="Game\cpp\Level\StageEditorContentPanels.cpp">
+      <Filter>ソースファイル\Game\cpp\Level\StageEditor\パネル</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Level\StageEditorFlagsPanel.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Level\StageEditor\パネル</Filter>
+    <ClCompile Include="Game\cpp\Level\StageEditorFlagsPanel.cpp">
+      <Filter>ソースファイル\Game\cpp\Level\StageEditor\パネル</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Level\StageEditorPanels.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Level\StageEditor\パネル</Filter>
+    <ClCompile Include="Game\cpp\Level\StageEditorPanels.cpp">
+      <Filter>ソースファイル\Game\cpp\Level\StageEditor\パネル</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Level\StageEditorInspectorPanels.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Level\StageEditor\パネル</Filter>
+    <ClCompile Include="Game\cpp\Level\StageEditorInspectorPanels.cpp">
+      <Filter>ソースファイル\Game\cpp\Level\StageEditor\パネル</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Level\StageEditorContentFactory.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Level\StageEditor</Filter>
+    <ClCompile Include="Game\cpp\Level\StageEditorContentFactory.cpp">
+      <Filter>ソースファイル\Game\cpp\Level\StageEditor</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Level\StageEditorPrefabService.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Level\StageEditor</Filter>
+    <ClCompile Include="Game\cpp\Level\StageEditorPrefabService.cpp">
+      <Filter>ソースファイル\Game\cpp\Level\StageEditor</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Level\StageEditorEventConnection.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Level\StageEditor</Filter>
+    <ClCompile Include="Game\cpp\Level\StageEditorEventConnection.cpp">
+      <Filter>ソースファイル\Game\cpp\Level\StageEditor</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Level\ObjectKind.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Level\配置物の種類</Filter>
+    <ClCompile Include="Game\cpp\Level\ObjectKind.cpp">
+      <Filter>ソースファイル\Game\cpp\Level\配置物の種類</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Level\GimmickMotion.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Level\配置物の種類</Filter>
+    <ClCompile Include="Game\cpp\Level\GimmickMotion.cpp">
+      <Filter>ソースファイル\Game\cpp\Level\配置物の種類</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Level\StageEditorViewport.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Level\StageEditor</Filter>
+    <ClCompile Include="Game\cpp\Level\StageEditorViewport.cpp">
+      <Filter>ソースファイル\Game\cpp\Level\StageEditor</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Scene\SceneEditor.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Scene\共通</Filter>
+    <ClCompile Include="Game\cpp\Scene\SceneEditor.cpp">
+      <Filter>ソースファイル\Game\cpp\Scene\共通</Filter>
     </ClCompile>
     <ClCompile Include="Engine\graphics\cpp\Light\LightingMode.cpp">
       <Filter>ソースファイル\Engine\graphics\cpp\Light</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Scene\SceneFactory.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Scene\共通</Filter>
+    <ClCompile Include="Game\cpp\Scene\SceneFactory.cpp">
+      <Filter>ソースファイル\Game\cpp\Scene\共通</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Scene\SceneManager.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Scene\共通</Filter>
+    <ClCompile Include="Game\cpp\Scene\SceneManager.cpp">
+      <Filter>ソースファイル\Game\cpp\Scene\共通</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Scene\BaseScene.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Scene\共通</Filter>
+    <ClCompile Include="Game\cpp\Scene\BaseScene.cpp">
+      <Filter>ソースファイル\Game\cpp\Scene\共通</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Scene\SceneShared.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Scene\共通</Filter>
+    <ClCompile Include="Game\cpp\Scene\SceneShared.cpp">
+      <Filter>ソースファイル\Game\cpp\Scene\共通</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\UI\DebugButton.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\UI\部品</Filter>
+    <ClCompile Include="Game\cpp\UI\DebugButton.cpp">
+      <Filter>ソースファイル\Game\cpp\UI\部品</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\UI\GuidePanel.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\UI\部品</Filter>
+    <ClCompile Include="Game\cpp\UI\GuidePanel.cpp">
+      <Filter>ソースファイル\Game\cpp\UI\部品</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\UI\StyleMeter.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\UI\HUD</Filter>
+    <ClCompile Include="Game\cpp\UI\StyleMeter.cpp">
+      <Filter>ソースファイル\Game\cpp\UI\HUD</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\UI\ResultBackdrop.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\UI</Filter>
+    <ClCompile Include="Game\cpp\UI\ResultBackdrop.cpp">
+      <Filter>ソースファイル\Game\cpp\UI</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\UI\ScoreManager.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\UI</Filter>
+    <ClCompile Include="Game\cpp\UI\ScoreManager.cpp">
+      <Filter>ソースファイル\Game\cpp\UI</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Scene\OptionsScene.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Scene\画面</Filter>
+    <ClCompile Include="Game\cpp\Scene\OptionsScene.cpp">
+      <Filter>ソースファイル\Game\cpp\Scene\画面</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Scene\PlayerDefeat.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Scene\演出</Filter>
+    <ClCompile Include="Game\cpp\Scene\PlayerDefeat.cpp">
+      <Filter>ソースファイル\Game\cpp\Scene\演出</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Scene\PlayerDefeatTuning.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Scene\演出</Filter>
+    <ClCompile Include="Game\cpp\Scene\PlayerDefeatTuning.cpp">
+      <Filter>ソースファイル\Game\cpp\Scene\演出</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Scene\BossExecution.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Scene\演出</Filter>
+    <ClCompile Include="Game\cpp\Scene\BossExecution.cpp">
+      <Filter>ソースファイル\Game\cpp\Scene\演出</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Scene\BossExecutionTuning.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Scene\演出</Filter>
+    <ClCompile Include="Game\cpp\Scene\BossExecutionTuning.cpp">
+      <Filter>ソースファイル\Game\cpp\Scene\演出</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Scene\ClearFinish.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Scene\演出</Filter>
+    <ClCompile Include="Game\cpp\Scene\ClearFinish.cpp">
+      <Filter>ソースファイル\Game\cpp\Scene\演出</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Scene\FinalBossArena.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Scene\演出</Filter>
+    <ClCompile Include="Game\cpp\Scene\FinalBossArena.cpp">
+      <Filter>ソースファイル\Game\cpp\Scene\演出</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Scene\FinalBossBody.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Scene\演出</Filter>
+    <ClCompile Include="Game\cpp\Scene\FinalBossBody.cpp">
+      <Filter>ソースファイル\Game\cpp\Scene\演出</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Scene\FinalBossBattle.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Scene\演出</Filter>
+    <ClCompile Include="Game\cpp\Scene\FinalBossBattle.cpp">
+      <Filter>ソースファイル\Game\cpp\Scene\演出</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Scene\FinalBossTelegraph.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Scene\演出</Filter>
+    <ClCompile Include="Game\cpp\Scene\FinalBossTelegraph.cpp">
+      <Filter>ソースファイル\Game\cpp\Scene\演出</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Scene\FinalBossHud.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Scene\演出</Filter>
+    <ClCompile Include="Game\cpp\Scene\FinalBossHud.cpp">
+      <Filter>ソースファイル\Game\cpp\Scene\演出</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Scene\FinalBossMoves.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Scene\演出</Filter>
+    <ClCompile Include="Game\cpp\Scene\FinalBossMoves.cpp">
+      <Filter>ソースファイル\Game\cpp\Scene\演出</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Scene\FinalBossPhases.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Scene\演出</Filter>
+    <ClCompile Include="Game\cpp\Scene\FinalBossPhases.cpp">
+      <Filter>ソースファイル\Game\cpp\Scene\演出</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Scene\FinalBossTuning.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Scene\演出</Filter>
+    <ClCompile Include="Game\cpp\Scene\FinalBossTuning.cpp">
+      <Filter>ソースファイル\Game\cpp\Scene\演出</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Scene\GamePlaySceneFinalBoss.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Scene\ゲームプレイ</Filter>
+    <ClCompile Include="Game\cpp\Scene\GamePlaySceneFinalBoss.cpp">
+      <Filter>ソースファイル\Game\cpp\Scene\ゲームプレイ</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Scene\StageLiberation.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Scene\演出</Filter>
+    <ClCompile Include="Game\cpp\Scene\StageLiberation.cpp">
+      <Filter>ソースファイル\Game\cpp\Scene\演出</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Scene\StageIntro.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Scene\演出</Filter>
+    <ClCompile Include="Game\cpp\Scene\StageIntro.cpp">
+      <Filter>ソースファイル\Game\cpp\Scene\演出</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Scene\FinisherEffects.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Scene\演出</Filter>
+    <ClCompile Include="Game\cpp\Scene\FinisherEffects.cpp">
+      <Filter>ソースファイル\Game\cpp\Scene\演出</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Scene\TitleScene.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Scene\画面</Filter>
+    <ClCompile Include="Game\cpp\Scene\TitleScene.cpp">
+      <Filter>ソースファイル\Game\cpp\Scene\画面</Filter>
     </ClCompile>
     <ClCompile Include="Engine\graphics\cpp\Camera\Camera.cpp">
       <Filter>ソースファイル\Engine\graphics\cpp\Camera</Filter>
@@ -868,8 +868,8 @@
     </ClCompile>    <ClCompile Include="Engine\graphics\cpp\Manager\MeshManager.cpp">
       <Filter>ソースファイル\Engine\graphics\cpp\Manager</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\base\main.cpp">
-      <Filter>ソースファイル\Engine\base</Filter>
+    <ClCompile Include="Game\base\main.cpp">
+      <Filter>ソースファイル\Game\base</Filter>
     </ClCompile>
     <ClCompile Include="Engine\core\cpp\Input\Input.cpp">
       <Filter>ソースファイル\Engine\core\cpp\Input</Filter>
@@ -964,34 +964,34 @@
     <ClCompile Include="Engine\graphics\cpp\Effect\BloomEffect.cpp">
       <Filter>ソースファイル\Engine\graphics\cpp\Effect\ポストエフェクト</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Util\AnimationStateMachine.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Util</Filter>
+    <ClCompile Include="Game\cpp\Util\AnimationStateMachine.cpp">
+      <Filter>ソースファイル\Game\cpp\Util</Filter>
     </ClCompile>
     <ClCompile Include="Engine\graphics\cpp\Effect\OutlineEffect.cpp">
       <Filter>ソースファイル\Engine\graphics\cpp\Effect\ポストエフェクト</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Effect\InputBuffer.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Effect</Filter>
+    <ClCompile Include="Game\cpp\Effect\InputBuffer.cpp">
+      <Filter>ソースファイル\Game\cpp\Effect</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\UI\UIMenu.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\UI\部品</Filter>
+    <ClCompile Include="Game\cpp\UI\UIMenu.cpp">
+      <Filter>ソースファイル\Game\cpp\UI\部品</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\UI\UILayout.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\UI\部品</Filter>
+    <ClCompile Include="Game\cpp\UI\UILayout.cpp">
+      <Filter>ソースファイル\Game\cpp\UI\部品</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Scene\MapScene.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Scene\画面</Filter>
+    <ClCompile Include="Game\cpp\Scene\MapScene.cpp">
+      <Filter>ソースファイル\Game\cpp\Scene\画面</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Scene\MapSceneUI.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Scene\画面</Filter>
+    <ClCompile Include="Game\cpp\Scene\MapSceneUI.cpp">
+      <Filter>ソースファイル\Game\cpp\Scene\画面</Filter>
     </ClCompile>
     <ClCompile Include="Engine\graphics\cpp\Effect\SSAOEffect.cpp">
       <Filter>ソースファイル\Engine\graphics\cpp\Effect\ポストエフェクト</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="Engine\game\h\Scene\AbstractSceneFactory.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Scene\共通</Filter>
+    <ClInclude Include="Game\h\Scene\AbstractSceneFactory.h">
+      <Filter>ヘッダーファイル\Game\h\Scene\共通</Filter>
     </ClInclude>
     <ClInclude Include="Engine\graphics\h\Skeleton\Animation.h">
       <Filter>ヘッダーファイル\Engine\graphics\h\Skeleton</Filter>
@@ -999,17 +999,17 @@
     <ClInclude Include="Engine\core\h\Audio\Audio.h">
       <Filter>ヘッダーファイル\Engine\core\h\Audio</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Scene\BaseScene.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Scene\共通</Filter>
+    <ClInclude Include="Game\h\Scene\BaseScene.h">
+      <Filter>ヘッダーファイル\Game\h\Scene\共通</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Scene\ClearScene.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Scene\画面</Filter>
+    <ClInclude Include="Game\h\Scene\ClearScene.h">
+      <Filter>ヘッダーファイル\Game\h\Scene\画面</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Scene\GameOverScene.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Scene\画面</Filter>
+    <ClInclude Include="Game\h\Scene\GameOverScene.h">
+      <Filter>ヘッダーファイル\Game\h\Scene\画面</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Collision\Collision.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Collision</Filter>
+    <ClInclude Include="Game\h\Collision\Collision.h">
+      <Filter>ヘッダーファイル\Game\h\Collision</Filter>
     </ClInclude>
     <ClInclude Include="Engine\core\h\Collision\CollisionConfig.h">
       <Filter>ヘッダーファイル\Engine\core\h\Collision</Filter>
@@ -1017,200 +1017,200 @@
     <ClInclude Include="Engine\core\h\App\Framework.h">
       <Filter>ヘッダーファイル\Engine\core\h\App</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Core\App\MyGame.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Core\App</Filter>
+    <ClInclude Include="Game\h\Core\App\MyGame.h">
+      <Filter>ヘッダーファイル\Game\h\Core\App</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Core\App\SmokeTestRunner.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Core\App</Filter>
+    <ClInclude Include="Game\h\Core\App\SmokeTestRunner.h">
+      <Filter>ヘッダーファイル\Game\h\Core\App</Filter>
     </ClInclude>
     <ClInclude Include="Engine\core\h\Object\GameObject.h">
       <Filter>ヘッダーファイル\Engine\core\h\Object</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Util\GameConstants.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Util</Filter>
+    <ClInclude Include="Game\h\Util\GameConstants.h">
+      <Filter>ヘッダーファイル\Game\h\Util</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Util\GravityBody.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Util</Filter>
+    <ClInclude Include="Game\h\Util\GravityBody.h">
+      <Filter>ヘッダーファイル\Game\h\Util</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Util\BorderBlockBuilder.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Util</Filter>
+    <ClInclude Include="Game\h\Util\BorderBlockBuilder.h">
+      <Filter>ヘッダーファイル\Game\h\Util</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Effect\AfterImageRenderer.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Effect</Filter>
+    <ClInclude Include="Game\h\Effect\AfterImageRenderer.h">
+      <Filter>ヘッダーファイル\Game\h\Effect</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Scene\BattleTestScene.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Scene\バトルテスト</Filter>
+    <ClInclude Include="Game\h\Scene\BattleTestScene.h">
+      <Filter>ヘッダーファイル\Game\h\Scene\バトルテスト</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Scene\PlayerDefeat.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Scene\演出</Filter>
+    <ClInclude Include="Game\h\Scene\PlayerDefeat.h">
+      <Filter>ヘッダーファイル\Game\h\Scene\演出</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Scene\PlayerDefeatTuning.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Scene\演出</Filter>
+    <ClInclude Include="Game\h\Scene\PlayerDefeatTuning.h">
+      <Filter>ヘッダーファイル\Game\h\Scene\演出</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Scene\BossExecution.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Scene\演出</Filter>
+    <ClInclude Include="Game\h\Scene\BossExecution.h">
+      <Filter>ヘッダーファイル\Game\h\Scene\演出</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Scene\BossExecutionTuning.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Scene\演出</Filter>
+    <ClInclude Include="Game\h\Scene\BossExecutionTuning.h">
+      <Filter>ヘッダーファイル\Game\h\Scene\演出</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Scene\ClearFinish.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Scene\演出</Filter>
+    <ClInclude Include="Game\h\Scene\ClearFinish.h">
+      <Filter>ヘッダーファイル\Game\h\Scene\演出</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Scene\FinalBossArena.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Scene\演出</Filter>
+    <ClInclude Include="Game\h\Scene\FinalBossArena.h">
+      <Filter>ヘッダーファイル\Game\h\Scene\演出</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Scene\FinalBossBattle.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Scene\演出</Filter>
+    <ClInclude Include="Game\h\Scene\FinalBossBattle.h">
+      <Filter>ヘッダーファイル\Game\h\Scene\演出</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Scene\FinalBossTelegraph.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Scene\演出</Filter>
+    <ClInclude Include="Game\h\Scene\FinalBossTelegraph.h">
+      <Filter>ヘッダーファイル\Game\h\Scene\演出</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Scene\FinalBossHud.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Scene\演出</Filter>
+    <ClInclude Include="Game\h\Scene\FinalBossHud.h">
+      <Filter>ヘッダーファイル\Game\h\Scene\演出</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Scene\FinalBossTuning.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Scene\演出</Filter>
+    <ClInclude Include="Game\h\Scene\FinalBossTuning.h">
+      <Filter>ヘッダーファイル\Game\h\Scene\演出</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Scene\StageLiberation.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Scene\演出</Filter>
+    <ClInclude Include="Game\h\Scene\StageLiberation.h">
+      <Filter>ヘッダーファイル\Game\h\Scene\演出</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Scene\StageIntro.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Scene\演出</Filter>
+    <ClInclude Include="Game\h\Scene\StageIntro.h">
+      <Filter>ヘッダーファイル\Game\h\Scene\演出</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Scene\FinisherEffects.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Scene\演出</Filter>
+    <ClInclude Include="Game\h\Scene\FinisherEffects.h">
+      <Filter>ヘッダーファイル\Game\h\Scene\演出</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Scene\TitleDemoTuning.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Scene\画面</Filter>
+    <ClInclude Include="Game\h\Scene\TitleDemoTuning.h">
+      <Filter>ヘッダーファイル\Game\h\Scene\画面</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Scene\BattleTestTuning.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Scene\バトルテスト</Filter>
+    <ClInclude Include="Game\h\Scene\BattleTestTuning.h">
+      <Filter>ヘッダーファイル\Game\h\Scene\バトルテスト</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Scene\BattleTestSceneRenderer.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Scene\バトルテスト</Filter>
+    <ClInclude Include="Game\h\Scene\BattleTestSceneRenderer.h">
+      <Filter>ヘッダーファイル\Game\h\Scene\バトルテスト</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Player\BulletPool.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Player\武器</Filter>
+    <ClInclude Include="Game\h\Player\BulletPool.h">
+      <Filter>ヘッダーファイル\Game\h\Player\武器</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Player\EnemyEntity.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Player\敵</Filter>
+    <ClInclude Include="Game\h\Player\EnemyEntity.h">
+      <Filter>ヘッダーファイル\Game\h\Player\敵</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Player\IEnemyEntity.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Player\敵</Filter>
+    <ClInclude Include="Game\h\Player\IEnemyEntity.h">
+      <Filter>ヘッダーファイル\Game\h\Player\敵</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Player\KnightEnemy.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Player\敵</Filter>
+    <ClInclude Include="Game\h\Player\KnightEnemy.h">
+      <Filter>ヘッダーファイル\Game\h\Player\敵</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Effect\CameraShaker.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Effect</Filter>
+    <ClInclude Include="Game\h\Effect\CameraShaker.h">
+      <Filter>ヘッダーファイル\Game\h\Effect</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Effect\HitEffectLibrary.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Effect</Filter>
+    <ClInclude Include="Game\h\Effect\HitEffectLibrary.h">
+      <Filter>ヘッダーファイル\Game\h\Effect</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Effect\SceneVisualTuning.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Effect</Filter>
+    <ClInclude Include="Game\h\Effect\SceneVisualTuning.h">
+      <Filter>ヘッダーファイル\Game\h\Effect</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Effect\ComboFeelDirector.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Effect</Filter>
+    <ClInclude Include="Game\h\Effect\ComboFeelDirector.h">
+      <Filter>ヘッダーファイル\Game\h\Effect</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Scene\ShotTargetPicker.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Scene\ゲームプレイ</Filter>
+    <ClInclude Include="Game\h\Scene\ShotTargetPicker.h">
+      <Filter>ヘッダーファイル\Game\h\Scene\ゲームプレイ</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\UI\CommandListView.h">
-      <Filter>ヘッダーファイル\Engine\game\h\UI\HUD</Filter>
+    <ClInclude Include="Game\h\UI\CommandListView.h">
+      <Filter>ヘッダーファイル\Game\h\UI\HUD</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Effect\SlashMark.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Effect</Filter>
+    <ClInclude Include="Game\h\Effect\SlashMark.h">
+      <Filter>ヘッダーファイル\Game\h\Effect</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Effect\GameSounds.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Effect</Filter>
+    <ClInclude Include="Game\h\Effect\GameSounds.h">
+      <Filter>ヘッダーファイル\Game\h\Effect</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Effect\KickedBombPool.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Effect</Filter>
+    <ClInclude Include="Game\h\Effect\KickedBombPool.h">
+      <Filter>ヘッダーファイル\Game\h\Effect</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Effect\ThrownWeaponPool.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Effect</Filter>
+    <ClInclude Include="Game\h\Effect\ThrownWeaponPool.h">
+      <Filter>ヘッダーファイル\Game\h\Effect</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Scripting\WeaponFinisherTuning.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Scripting\調整値</Filter>
+    <ClInclude Include="Game\h\Scripting\WeaponFinisherTuning.h">
+      <Filter>ヘッダーファイル\Game\h\Scripting\調整値</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Scripting\MonsterTraitTuning.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Scripting\調整値</Filter>
+    <ClInclude Include="Game\h\Scripting\MonsterTraitTuning.h">
+      <Filter>ヘッダーファイル\Game\h\Scripting\調整値</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Scene\BossBattleDirector.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Scene</Filter>
+    <ClInclude Include="Game\h\Scene\BossBattleDirector.h">
+      <Filter>ヘッダーファイル\Game\h\Scene</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Effect\SoundAssignEditor.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Effect</Filter>
+    <ClInclude Include="Game\h\Effect\SoundAssignEditor.h">
+      <Filter>ヘッダーファイル\Game\h\Effect</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Effect\ElementEffect.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Effect</Filter>
+    <ClInclude Include="Game\h\Effect\ElementEffect.h">
+      <Filter>ヘッダーファイル\Game\h\Effect</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Effect\Easing.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Effect</Filter>
+    <ClInclude Include="Game\h\Effect\Easing.h">
+      <Filter>ヘッダーファイル\Game\h\Effect</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Scene\GamePlayScene.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Scene\ゲームプレイ</Filter>
+    <ClInclude Include="Game\h\Scene\GamePlayScene.h">
+      <Filter>ヘッダーファイル\Game\h\Scene\ゲームプレイ</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Scene\GamePlaySceneInitializer.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Scene\ゲームプレイ</Filter>
+    <ClInclude Include="Game\h\Scene\GamePlaySceneInitializer.h">
+      <Filter>ヘッダーファイル\Game\h\Scene\ゲームプレイ</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Core\App\GameSettings.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Core\App</Filter>
+    <ClInclude Include="Game\h\Core\App\GameSettings.h">
+      <Filter>ヘッダーファイル\Game\h\Core\App</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Core\App\SaveData.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Core\App</Filter>
+    <ClInclude Include="Game\h\Core\App\SaveData.h">
+      <Filter>ヘッダーファイル\Game\h\Core\App</Filter>
     </ClInclude>
     <ClInclude Include="Engine\core\h\Time\TimeManager.h">
       <Filter>ヘッダーファイル\Engine\core\h\Time</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\UI\ScreenFlash.h">
-      <Filter>ヘッダーファイル\Engine\game\h\UI\HUD</Filter>
+    <ClInclude Include="Game\h\UI\ScreenFlash.h">
+      <Filter>ヘッダーファイル\Game\h\UI\HUD</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Player\Player.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Player</Filter>
+    <ClInclude Include="Game\h\Player\Player.h">
+      <Filter>ヘッダーファイル\Game\h\Player</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Player\PlayerTuning.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Player</Filter>
+    <ClInclude Include="Game\h\Player\PlayerTuning.h">
+      <Filter>ヘッダーファイル\Game\h\Player</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Player\CharacterVisuals.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Player</Filter>
+    <ClInclude Include="Game\h\Player\CharacterVisuals.h">
+      <Filter>ヘッダーファイル\Game\h\Player</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Scene\TrainingScene.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Scene\トレーニング</Filter>
+    <ClInclude Include="Game\h\Scene\TrainingScene.h">
+      <Filter>ヘッダーファイル\Game\h\Scene\トレーニング</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Player\Weapon.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Player\武器</Filter>
+    <ClInclude Include="Game\h\Player\Weapon.h">
+      <Filter>ヘッダーファイル\Game\h\Player\武器</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Player\WaterPool.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Player\武器</Filter>
+    <ClInclude Include="Game\h\Player\WaterPool.h">
+      <Filter>ヘッダーファイル\Game\h\Player\武器</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\UI\FontRenderer.h">
-      <Filter>ヘッダーファイル\Engine\game\h\UI\部品</Filter>
+    <ClInclude Include="Game\h\UI\FontRenderer.h">
+      <Filter>ヘッダーファイル\Game\h\UI\部品</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Player\AutoComboAssist.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Player\コンボ</Filter>
+    <ClInclude Include="Game\h\Player\AutoComboAssist.h">
+      <Filter>ヘッダーファイル\Game\h\Player\コンボ</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Player\MeleeCombo.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Player\コンボ</Filter>
+    <ClInclude Include="Game\h\Player\MeleeCombo.h">
+      <Filter>ヘッダーファイル\Game\h\Player\コンボ</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Player\ComboMotion.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Player\コンボ</Filter>
+    <ClInclude Include="Game\h\Player\ComboMotion.h">
+      <Filter>ヘッダーファイル\Game\h\Player\コンボ</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Player\ReachPoseLayer.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Player\コンボ</Filter>
+    <ClInclude Include="Game\h\Player\ReachPoseLayer.h">
+      <Filter>ヘッダーファイル\Game\h\Player\コンボ</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Player\ComboMotionEditor.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Player\コンボ</Filter>
+    <ClInclude Include="Game\h\Player\ComboMotionEditor.h">
+      <Filter>ヘッダーファイル\Game\h\Player\コンボ</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Player\GunCombo.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Player\コンボ</Filter>
+    <ClInclude Include="Game\h\Player\GunCombo.h">
+      <Filter>ヘッダーファイル\Game\h\Player\コンボ</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Player\ComboTable.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Player\コンボ</Filter>
+    <ClInclude Include="Game\h\Player\ComboTable.h">
+      <Filter>ヘッダーファイル\Game\h\Player\コンボ</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Player\WeaponManager.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Player\武器</Filter>
+    <ClInclude Include="Game\h\Player\WeaponManager.h">
+      <Filter>ヘッダーファイル\Game\h\Player\武器</Filter>
     </ClInclude>
     <ClInclude Include="Engine\core\h\Util\JsonHelper.h">
       <Filter>ヘッダーファイル\Engine\core\h\Util</Filter>
@@ -1218,113 +1218,113 @@
     <ClInclude Include="Engine\core\h\Util\CrashBreadcrumbs.h">
       <Filter>ヘッダーファイル\Engine\core\h\Util</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Util\JsonFieldTable.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Util</Filter>
+    <ClInclude Include="Game\h\Util\JsonFieldTable.h">
+      <Filter>ヘッダーファイル\Game\h\Util</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Util\PlaytestLog.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Util</Filter>
+    <ClInclude Include="Game\h\Util\PlaytestLog.h">
+      <Filter>ヘッダーファイル\Game\h\Util</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Util\EventBus.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Util</Filter>
+    <ClInclude Include="Game\h\Util\EventBus.h">
+      <Filter>ヘッダーファイル\Game\h\Util</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Scripting\GraphTypes.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Scripting\グラフ</Filter>
+    <ClInclude Include="Game\h\Scripting\GraphTypes.h">
+      <Filter>ヘッダーファイル\Game\h\Scripting\グラフ</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Scripting\NodeRegistry.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Scripting\グラフ</Filter>
+    <ClInclude Include="Game\h\Scripting\NodeRegistry.h">
+      <Filter>ヘッダーファイル\Game\h\Scripting\グラフ</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Scripting\GraphRuntime.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Scripting\グラフ</Filter>
+    <ClInclude Include="Game\h\Scripting\GraphRuntime.h">
+      <Filter>ヘッダーファイル\Game\h\Scripting\グラフ</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Scripting\GraphEditor.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Scripting\グラフ</Filter>
+    <ClInclude Include="Game\h\Scripting\GraphEditor.h">
+      <Filter>ヘッダーファイル\Game\h\Scripting\グラフ</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Scripting\GraphEditorServices.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Scripting\グラフ</Filter>
+    <ClInclude Include="Game\h\Scripting\GraphEditorServices.h">
+      <Filter>ヘッダーファイル\Game\h\Scripting\グラフ</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Scripting\GameFlags.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Scripting\ブリッジ</Filter>
+    <ClInclude Include="Game\h\Scripting\GameFlags.h">
+      <Filter>ヘッダーファイル\Game\h\Scripting\ブリッジ</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Scripting\EnemyRegistry.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Scripting\調整値</Filter>
+    <ClInclude Include="Game\h\Scripting\EnemyRegistry.h">
+      <Filter>ヘッダーファイル\Game\h\Scripting\調整値</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Scripting\SceneEffectBridge.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Scripting\ブリッジ</Filter>
+    <ClInclude Include="Game\h\Scripting\SceneEffectBridge.h">
+      <Filter>ヘッダーファイル\Game\h\Scripting\ブリッジ</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Scripting\SceneFlow.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Scripting\ブリッジ</Filter>
+    <ClInclude Include="Game\h\Scripting\SceneFlow.h">
+      <Filter>ヘッダーファイル\Game\h\Scripting\ブリッジ</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Scripting\GameRules.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Scripting\調整値</Filter>
+    <ClInclude Include="Game\h\Scripting\GameRules.h">
+      <Filter>ヘッダーファイル\Game\h\Scripting\調整値</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Scripting\EnemyTuning.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Scripting\調整値</Filter>
+    <ClInclude Include="Game\h\Scripting\EnemyTuning.h">
+      <Filter>ヘッダーファイル\Game\h\Scripting\調整値</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Scripting\EnemyTypeLibrary.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Scripting\調整値</Filter>
+    <ClInclude Include="Game\h\Scripting\EnemyTypeLibrary.h">
+      <Filter>ヘッダーファイル\Game\h\Scripting\調整値</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Scripting\CombatTuning.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Scripting\調整値</Filter>
+    <ClInclude Include="Game\h\Scripting\CombatTuning.h">
+      <Filter>ヘッダーファイル\Game\h\Scripting\調整値</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Scripting\LevelGraphRunner.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Scripting\グラフ</Filter>
+    <ClInclude Include="Game\h\Scripting\LevelGraphRunner.h">
+      <Filter>ヘッダーファイル\Game\h\Scripting\グラフ</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Scripting\AudioBridge.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Scripting\ブリッジ</Filter>
+    <ClInclude Include="Game\h\Scripting\AudioBridge.h">
+      <Filter>ヘッダーファイル\Game\h\Scripting\ブリッジ</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Scripting\PlayerBridge.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Scripting\ブリッジ</Filter>
+    <ClInclude Include="Game\h\Scripting\PlayerBridge.h">
+      <Filter>ヘッダーファイル\Game\h\Scripting\ブリッジ</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Level\LevelLoader.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Level</Filter>
+    <ClInclude Include="Game\h\Level\LevelLoader.h">
+      <Filter>ヘッダーファイル\Game\h\Level</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Level\TriggerVolume.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Level\配置物の種類</Filter>
+    <ClInclude Include="Game\h\Level\TriggerVolume.h">
+      <Filter>ヘッダーファイル\Game\h\Level\配置物の種類</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Level\StageEditor.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Level\StageEditor</Filter>
+    <ClInclude Include="Game\h\Level\StageEditor.h">
+      <Filter>ヘッダーファイル\Game\h\Level\StageEditor</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Level\EnemyTypeEditor.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Level\StageEditor</Filter>
+    <ClInclude Include="Game\h\Level\EnemyTypeEditor.h">
+      <Filter>ヘッダーファイル\Game\h\Level\StageEditor</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Level\StageEditorSelectionService.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Level\StageEditor</Filter>
+    <ClInclude Include="Game\h\Level\StageEditorSelectionService.h">
+      <Filter>ヘッダーファイル\Game\h\Level\StageEditor</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Level\StageEditorUiStyle.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Level\StageEditor</Filter>
+    <ClInclude Include="Game\h\Level\StageEditorUiStyle.h">
+      <Filter>ヘッダーファイル\Game\h\Level\StageEditor</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Level\StageEditorPanels.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Level\StageEditor\パネル</Filter>
+    <ClInclude Include="Game\h\Level\StageEditorPanels.h">
+      <Filter>ヘッダーファイル\Game\h\Level\StageEditor\パネル</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Level\StageEditorObjectPresets.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Level\StageEditor</Filter>
+    <ClInclude Include="Game\h\Level\StageEditorObjectPresets.h">
+      <Filter>ヘッダーファイル\Game\h\Level\StageEditor</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Level\StageEditorContentFactory.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Level\StageEditor</Filter>
+    <ClInclude Include="Game\h\Level\StageEditorContentFactory.h">
+      <Filter>ヘッダーファイル\Game\h\Level\StageEditor</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Level\StageEditorPrefabService.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Level\StageEditor</Filter>
+    <ClInclude Include="Game\h\Level\StageEditorPrefabService.h">
+      <Filter>ヘッダーファイル\Game\h\Level\StageEditor</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Level\StageEditorEventConnection.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Level\StageEditor</Filter>
+    <ClInclude Include="Game\h\Level\StageEditorEventConnection.h">
+      <Filter>ヘッダーファイル\Game\h\Level\StageEditor</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Level\ObjectKind.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Level\配置物の種類</Filter>
+    <ClInclude Include="Game\h\Level\ObjectKind.h">
+      <Filter>ヘッダーファイル\Game\h\Level\配置物の種類</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Level\GimmickMotion.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Level\配置物の種類</Filter>
+    <ClInclude Include="Game\h\Level\GimmickMotion.h">
+      <Filter>ヘッダーファイル\Game\h\Level\配置物の種類</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Level\EditorHistory.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Level\StageEditor</Filter>
+    <ClInclude Include="Game\h\Level\EditorHistory.h">
+      <Filter>ヘッダーファイル\Game\h\Level\StageEditor</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Level\StageEditorViewport.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Level\StageEditor</Filter>
+    <ClInclude Include="Game\h\Level\StageEditorViewport.h">
+      <Filter>ヘッダーファイル\Game\h\Level\StageEditor</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Scene\SceneEditor.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Scene\共通</Filter>
+    <ClInclude Include="Game\h\Scene\SceneEditor.h">
+      <Filter>ヘッダーファイル\Game\h\Scene\共通</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\UI\ScoreDisplay.h">
-      <Filter>ヘッダーファイル\Engine\game\h\UI\HUD</Filter>
+    <ClInclude Include="Game\h\UI\ScoreDisplay.h">
+      <Filter>ヘッダーファイル\Game\h\UI\HUD</Filter>
     </ClInclude>
     <ClInclude Include="Engine\graphics\h\Light\LightingMode.h">
       <Filter>ヘッダーファイル\Engine\graphics\h\Light</Filter>
@@ -1341,35 +1341,35 @@
     <ClInclude Include="Engine\graphics\h\Diagnostics\Logger.h">
       <Filter>ヘッダーファイル\Engine\graphics\h\Diagnostics</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Scene\SceneFactory.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Scene\共通</Filter>
+    <ClInclude Include="Game\h\Scene\SceneFactory.h">
+      <Filter>ヘッダーファイル\Game\h\Scene\共通</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Scene\SceneManager.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Scene\共通</Filter>
+    <ClInclude Include="Game\h\Scene\SceneManager.h">
+      <Filter>ヘッダーファイル\Game\h\Scene\共通</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Scene\SceneShared.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Scene\共通</Filter>
+    <ClInclude Include="Game\h\Scene\SceneShared.h">
+      <Filter>ヘッダーファイル\Game\h\Scene\共通</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\UI\DebugButton.h">
-      <Filter>ヘッダーファイル\Engine\game\h\UI\部品</Filter>
+    <ClInclude Include="Game\h\UI\DebugButton.h">
+      <Filter>ヘッダーファイル\Game\h\UI\部品</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\UI\GuidePanel.h">
-      <Filter>ヘッダーファイル\Engine\game\h\UI\部品</Filter>
+    <ClInclude Include="Game\h\UI\GuidePanel.h">
+      <Filter>ヘッダーファイル\Game\h\UI\部品</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\UI\StyleMeter.h">
-      <Filter>ヘッダーファイル\Engine\game\h\UI\HUD</Filter>
+    <ClInclude Include="Game\h\UI\StyleMeter.h">
+      <Filter>ヘッダーファイル\Game\h\UI\HUD</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\UI\ResultBackdrop.h">
-      <Filter>ヘッダーファイル\Engine\game\h\UI</Filter>
+    <ClInclude Include="Game\h\UI\ResultBackdrop.h">
+      <Filter>ヘッダーファイル\Game\h\UI</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\UI\ScoreManager.h">
-      <Filter>ヘッダーファイル\Engine\game\h\UI</Filter>
+    <ClInclude Include="Game\h\UI\ScoreManager.h">
+      <Filter>ヘッダーファイル\Game\h\UI</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Scene\OptionsScene.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Scene\画面</Filter>
+    <ClInclude Include="Game\h\Scene\OptionsScene.h">
+      <Filter>ヘッダーファイル\Game\h\Scene\画面</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Scene\TitleScene.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Scene\画面</Filter>
+    <ClInclude Include="Game\h\Scene\TitleScene.h">
+      <Filter>ヘッダーファイル\Game\h\Scene\画面</Filter>
     </ClInclude>
     <ClInclude Include="Engine\graphics\h\3D\BlendMode.h">
       <Filter>ヘッダーファイル\Engine\graphics\h\3D</Filter>
@@ -1377,8 +1377,8 @@
     <ClInclude Include="Engine\graphics\h\Camera\Camera.h">
       <Filter>ヘッダーファイル\Engine\graphics\h\Camera</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Util\DiagnosticsDraw.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Util</Filter>
+    <ClInclude Include="Game\h\Util\DiagnosticsDraw.h">
+      <Filter>ヘッダーファイル\Game\h\Util</Filter>
     </ClInclude>
     <ClInclude Include="Engine\graphics\h\Diagnostics\D3D12ResourceLeakChecker.h">
       <Filter>ヘッダーファイル\Engine\graphics\h\Diagnostics</Filter>
@@ -1586,8 +1586,8 @@
     <ClInclude Include="Engine\graphics\h\Effect\BloomEffect.h">
       <Filter>ヘッダーファイル\Engine\graphics\h\Effect\ポストエフェクト</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Util\AnimationStateMachine.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Util</Filter>
+    <ClInclude Include="Game\h\Util\AnimationStateMachine.h">
+      <Filter>ヘッダーファイル\Game\h\Util</Filter>
     </ClInclude>
     <ClInclude Include="Engine\graphics\h\Effect\OutlineEffect.h">
       <Filter>ヘッダーファイル\Engine\graphics\h\Effect\ポストエフェクト</Filter>
@@ -1595,26 +1595,26 @@
     <ClInclude Include="Engine\graphics\h\Effect\PipelineStateGuard.h">
       <Filter>ヘッダーファイル\Engine\graphics\h\Effect</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Effect\InputBuffer.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Effect</Filter>
+    <ClInclude Include="Game\h\Effect\InputBuffer.h">
+      <Filter>ヘッダーファイル\Game\h\Effect</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\UI\UIButton.h">
-      <Filter>ヘッダーファイル\Engine\game\h\UI\部品</Filter>
+    <ClInclude Include="Game\h\UI\UIButton.h">
+      <Filter>ヘッダーファイル\Game\h\UI\部品</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\UI\UIMenu.h">
-      <Filter>ヘッダーファイル\Engine\game\h\UI\部品</Filter>
+    <ClInclude Include="Game\h\UI\UIMenu.h">
+      <Filter>ヘッダーファイル\Game\h\UI\部品</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\UI\UILayout.h">
-      <Filter>ヘッダーファイル\Engine\game\h\UI\部品</Filter>
+    <ClInclude Include="Game\h\UI\UILayout.h">
+      <Filter>ヘッダーファイル\Game\h\UI\部品</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Player\RunData.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Player</Filter>
+    <ClInclude Include="Game\h\Player\RunData.h">
+      <Filter>ヘッダーファイル\Game\h\Player</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Scene\MapScene.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Scene\画面</Filter>
+    <ClInclude Include="Game\h\Scene\MapScene.h">
+      <Filter>ヘッダーファイル\Game\h\Scene\画面</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Scene\MapNodeInfo.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Scene\画面</Filter>
+    <ClInclude Include="Game\h\Scene\MapNodeInfo.h">
+      <Filter>ヘッダーファイル\Game\h\Scene\画面</Filter>
     </ClInclude>
     <ClInclude Include="Engine\graphics\h\Effect\SSAOEffect.h">
       <Filter>ヘッダーファイル\Engine\graphics\h\Effect\ポストエフェクト</Filter>
@@ -1796,72 +1796,72 @@
     </None>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Engine\game\cpp\Level\EditorGamePreview.cpp"><Filter>ソースファイル\Engine\game\cpp\Level\StageEditor</Filter></ClCompile>
-    <ClCompile Include="Engine\game\cpp\Scene\FloatingTitle.cpp"><Filter>ソースファイル\Engine\game\cpp\Scene\画面</Filter></ClCompile>
-    <ClCompile Include="Engine\game\cpp\Scene\GamePauseController.cpp"><Filter>ソースファイル\Engine\game\cpp\Scene\ゲームプレイ</Filter></ClCompile>
-    <ClCompile Include="Engine\game\cpp\Scene\PauseMenu.cpp"><Filter>ソースファイル\Engine\game\cpp\Scene\ゲームプレイ</Filter></ClCompile>
-    <ClCompile Include="Engine\game\cpp\Scene\ComboTrial.cpp"><Filter>ソースファイル\Engine\game\cpp\Scene\トレーニング</Filter></ClCompile>
-    <ClCompile Include="Engine\game\cpp\Scene\SceneTransitionFlow.cpp"><Filter>ソースファイル\Engine\game\cpp\Scene\共通</Filter></ClCompile>
-    <ClCompile Include="Engine\game\cpp\Scene\SceneTransitionOverlay.cpp"><Filter>ソースファイル\Engine\game\cpp\Scene\共通</Filter></ClCompile>
-    <ClCompile Include="Engine\game\cpp\Scene\TrainingWeaponPickups.cpp"><Filter>ソースファイル\Engine\game\cpp\Scene\トレーニング</Filter></ClCompile>
-    <ClCompile Include="Engine\game\cpp\UI\AwakenGaugeHud.cpp"><Filter>ソースファイル\Engine\game\cpp\UI\HUD</Filter></ClCompile>
-    <ClCompile Include="Engine\game\cpp\UI\TrainingHud.cpp"><Filter>ソースファイル\Engine\game\cpp\UI\HUD</Filter></ClCompile>
-    <ClCompile Include="Engine\game\cpp\UI\WeaponSlotHud.cpp"><Filter>ソースファイル\Engine\game\cpp\UI\HUD</Filter></ClCompile>
-    <ClInclude Include="Engine\game\h\Level\EditorGamePreview.h"><Filter>ヘッダーファイル\Engine\game\h\Level\StageEditor</Filter></ClInclude>
-    <ClInclude Include="Engine\game\h\Scene\FloatingTitle.h"><Filter>ヘッダーファイル\Engine\game\h\Scene\画面</Filter></ClInclude>
-    <ClInclude Include="Engine\game\h\Scene\GamePauseController.h"><Filter>ヘッダーファイル\Engine\game\h\Scene\ゲームプレイ</Filter></ClInclude>
-    <ClInclude Include="Engine\game\h\Scene\PauseMenu.h"><Filter>ヘッダーファイル\Engine\game\h\Scene\ゲームプレイ</Filter></ClInclude>
-    <ClInclude Include="Engine\game\h\Scene\ComboTrial.h"><Filter>ヘッダーファイル\Engine\game\h\Scene\トレーニング</Filter></ClInclude>
-    <ClInclude Include="Engine\game\h\Scene\SceneTransitionFlow.h"><Filter>ヘッダーファイル\Engine\game\h\Scene\共通</Filter></ClInclude>
-    <ClInclude Include="Engine\game\h\Scene\SceneTransitionOverlay.h"><Filter>ヘッダーファイル\Engine\game\h\Scene\共通</Filter></ClInclude>
-    <ClInclude Include="Engine\game\h\Scene\TrainingWeaponPickups.h"><Filter>ヘッダーファイル\Engine\game\h\Scene\トレーニング</Filter></ClInclude>
-    <ClInclude Include="Engine\game\h\UI\AwakenGaugeHud.h"><Filter>ヘッダーファイル\Engine\game\h\UI\HUD</Filter></ClInclude>
-    <ClInclude Include="Engine\game\h\UI\HudLayer.h"><Filter>ヘッダーファイル\Engine\game\h\UI\HUD</Filter></ClInclude>
-    <ClInclude Include="Engine\game\h\UI\TrainingHud.h"><Filter>ヘッダーファイル\Engine\game\h\UI\HUD</Filter></ClInclude>
-    <ClInclude Include="Engine\game\h\UI\WeaponSlotHud.h"><Filter>ヘッダーファイル\Engine\game\h\UI\HUD</Filter></ClInclude>
+    <ClCompile Include="Game\cpp\Level\EditorGamePreview.cpp"><Filter>ソースファイル\Game\cpp\Level\StageEditor</Filter></ClCompile>
+    <ClCompile Include="Game\cpp\Scene\FloatingTitle.cpp"><Filter>ソースファイル\Game\cpp\Scene\画面</Filter></ClCompile>
+    <ClCompile Include="Game\cpp\Scene\GamePauseController.cpp"><Filter>ソースファイル\Game\cpp\Scene\ゲームプレイ</Filter></ClCompile>
+    <ClCompile Include="Game\cpp\Scene\PauseMenu.cpp"><Filter>ソースファイル\Game\cpp\Scene\ゲームプレイ</Filter></ClCompile>
+    <ClCompile Include="Game\cpp\Scene\ComboTrial.cpp"><Filter>ソースファイル\Game\cpp\Scene\トレーニング</Filter></ClCompile>
+    <ClCompile Include="Game\cpp\Scene\SceneTransitionFlow.cpp"><Filter>ソースファイル\Game\cpp\Scene\共通</Filter></ClCompile>
+    <ClCompile Include="Game\cpp\Scene\SceneTransitionOverlay.cpp"><Filter>ソースファイル\Game\cpp\Scene\共通</Filter></ClCompile>
+    <ClCompile Include="Game\cpp\Scene\TrainingWeaponPickups.cpp"><Filter>ソースファイル\Game\cpp\Scene\トレーニング</Filter></ClCompile>
+    <ClCompile Include="Game\cpp\UI\AwakenGaugeHud.cpp"><Filter>ソースファイル\Game\cpp\UI\HUD</Filter></ClCompile>
+    <ClCompile Include="Game\cpp\UI\TrainingHud.cpp"><Filter>ソースファイル\Game\cpp\UI\HUD</Filter></ClCompile>
+    <ClCompile Include="Game\cpp\UI\WeaponSlotHud.cpp"><Filter>ソースファイル\Game\cpp\UI\HUD</Filter></ClCompile>
+    <ClInclude Include="Game\h\Level\EditorGamePreview.h"><Filter>ヘッダーファイル\Game\h\Level\StageEditor</Filter></ClInclude>
+    <ClInclude Include="Game\h\Scene\FloatingTitle.h"><Filter>ヘッダーファイル\Game\h\Scene\画面</Filter></ClInclude>
+    <ClInclude Include="Game\h\Scene\GamePauseController.h"><Filter>ヘッダーファイル\Game\h\Scene\ゲームプレイ</Filter></ClInclude>
+    <ClInclude Include="Game\h\Scene\PauseMenu.h"><Filter>ヘッダーファイル\Game\h\Scene\ゲームプレイ</Filter></ClInclude>
+    <ClInclude Include="Game\h\Scene\ComboTrial.h"><Filter>ヘッダーファイル\Game\h\Scene\トレーニング</Filter></ClInclude>
+    <ClInclude Include="Game\h\Scene\SceneTransitionFlow.h"><Filter>ヘッダーファイル\Game\h\Scene\共通</Filter></ClInclude>
+    <ClInclude Include="Game\h\Scene\SceneTransitionOverlay.h"><Filter>ヘッダーファイル\Game\h\Scene\共通</Filter></ClInclude>
+    <ClInclude Include="Game\h\Scene\TrainingWeaponPickups.h"><Filter>ヘッダーファイル\Game\h\Scene\トレーニング</Filter></ClInclude>
+    <ClInclude Include="Game\h\UI\AwakenGaugeHud.h"><Filter>ヘッダーファイル\Game\h\UI\HUD</Filter></ClInclude>
+    <ClInclude Include="Game\h\UI\HudLayer.h"><Filter>ヘッダーファイル\Game\h\UI\HUD</Filter></ClInclude>
+    <ClInclude Include="Game\h\UI\TrainingHud.h"><Filter>ヘッダーファイル\Game\h\UI\HUD</Filter></ClInclude>
+    <ClInclude Include="Game\h\UI\WeaponSlotHud.h"><Filter>ヘッダーファイル\Game\h\UI\HUD</Filter></ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Engine\game\cpp\Scene\GamePlaySceneParticles.cpp"><Filter>ソースファイル\Engine\game\cpp\Scene\ゲームプレイ</Filter></ClCompile>
+    <ClCompile Include="Game\cpp\Scene\GamePlaySceneParticles.cpp"><Filter>ソースファイル\Game\cpp\Scene\ゲームプレイ</Filter></ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Engine\game\cpp\Scene\GamePlaySceneEnemyAttacks.cpp"><Filter>ソースファイル\Engine\game\cpp\Scene\ゲームプレイ</Filter></ClCompile>
+    <ClCompile Include="Game\cpp\Scene\GamePlaySceneEnemyAttacks.cpp"><Filter>ソースファイル\Game\cpp\Scene\ゲームプレイ</Filter></ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Engine\game\cpp\Level\StageEditorRuntimeBehavior.cpp"><Filter>ソースファイル\Engine\game\cpp\Level\StageEditor</Filter></ClCompile>
+    <ClCompile Include="Game\cpp\Level\StageEditorRuntimeBehavior.cpp"><Filter>ソースファイル\Game\cpp\Level\StageEditor</Filter></ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Engine\game\cpp\Level\StageEditorRuntimeQueries.cpp"><Filter>ソースファイル\Engine\game\cpp\Level\StageEditor</Filter></ClCompile>
+    <ClCompile Include="Game\cpp\Level\StageEditorRuntimeQueries.cpp"><Filter>ソースファイル\Game\cpp\Level\StageEditor</Filter></ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Engine\game\cpp\Level\StageEditorEventPanels.cpp"><Filter>ソースファイル\Engine\game\cpp\Level\StageEditor\パネル</Filter></ClCompile>
+    <ClCompile Include="Game\cpp\Level\StageEditorEventPanels.cpp"><Filter>ソースファイル\Game\cpp\Level\StageEditor\パネル</Filter></ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Engine\game\cpp\Level\StageEditorWorkflowPanels.cpp"><Filter>ソースファイル\Engine\game\cpp\Level\StageEditor\パネル</Filter></ClCompile>
+    <ClCompile Include="Game\cpp\Level\StageEditorWorkflowPanels.cpp"><Filter>ソースファイル\Game\cpp\Level\StageEditor\パネル</Filter></ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Engine\game\cpp\Level\StageEditorPlacement.cpp"><Filter>ソースファイル\Engine\game\cpp\Level\StageEditor</Filter></ClCompile>
+    <ClCompile Include="Game\cpp\Level\StageEditorPlacement.cpp"><Filter>ソースファイル\Game\cpp\Level\StageEditor</Filter></ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Engine\game\cpp\Level\StageEditorHistory.cpp"><Filter>ソースファイル\Engine\game\cpp\Level\StageEditor</Filter></ClCompile>
+    <ClCompile Include="Game\cpp\Level\StageEditorHistory.cpp"><Filter>ソースファイル\Game\cpp\Level\StageEditor</Filter></ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Engine\game\cpp\Level\StageEditorGameplayInspector.cpp"><Filter>ソースファイル\Engine\game\cpp\Level\StageEditor\パネル</Filter></ClCompile>
+    <ClCompile Include="Game\cpp\Level\StageEditorGameplayInspector.cpp"><Filter>ソースファイル\Game\cpp\Level\StageEditor\パネル</Filter></ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Engine\game\cpp\Player\PlayerVisuals.cpp"><Filter>ソースファイル\Engine\game\cpp\Player</Filter></ClCompile>
+    <ClCompile Include="Game\cpp\Player\PlayerVisuals.cpp"><Filter>ソースファイル\Game\cpp\Player</Filter></ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Engine\game\cpp\Scene\BattleTestSceneFinisher.cpp"><Filter>ソースファイル\Engine\game\cpp\Scene\バトルテスト</Filter></ClCompile>
+    <ClCompile Include="Game\cpp\Scene\BattleTestSceneFinisher.cpp"><Filter>ソースファイル\Game\cpp\Scene\バトルテスト</Filter></ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Engine\game\cpp\Scripting\GraphEditorPalette.cpp"><Filter>ソースファイル\Engine\game\cpp\Scripting\グラフ</Filter></ClCompile>
+    <ClCompile Include="Game\cpp\Scripting\GraphEditorPalette.cpp"><Filter>ソースファイル\Game\cpp\Scripting\グラフ</Filter></ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Engine\game\cpp\Player\PlayerStatus.cpp"><Filter>ソースファイル\Engine\game\cpp\Player</Filter></ClCompile>
+    <ClCompile Include="Game\cpp\Player\PlayerStatus.cpp"><Filter>ソースファイル\Game\cpp\Player</Filter></ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Engine\game\cpp\Level\FallingFloorBehavior.cpp"><Filter>ソースファイル\Engine\game\cpp\Level\配置物の種類</Filter></ClCompile>
-    <ClInclude Include="Engine\game\h\Level\FallingFloorBehavior.h"><Filter>ヘッダーファイル\Engine\game\h\Level\配置物の種類</Filter></ClInclude>
+    <ClCompile Include="Game\cpp\Level\FallingFloorBehavior.cpp"><Filter>ソースファイル\Game\cpp\Level\配置物の種類</Filter></ClCompile>
+    <ClInclude Include="Game\h\Level\FallingFloorBehavior.h"><Filter>ヘッダーファイル\Game\h\Level\配置物の種類</Filter></ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="Resources\Config\combat_tuning.json">
@@ -1926,48 +1926,48 @@
     </None>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Engine\game\cpp\Scene\TitleSceneDemo.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Scene\画面</Filter>
+    <ClCompile Include="Game\cpp\Scene\TitleSceneDemo.cpp">
+      <Filter>ソースファイル\Game\cpp\Scene\画面</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Scene\TitleSceneDemoDummies.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Scene\画面</Filter>
+    <ClCompile Include="Game\cpp\Scene\TitleSceneDemoDummies.cpp">
+      <Filter>ソースファイル\Game\cpp\Scene\画面</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Scene\GamePlaySceneCamera.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Scene\ゲームプレイ</Filter>
+    <ClCompile Include="Game\cpp\Scene\GamePlaySceneCamera.cpp">
+      <Filter>ソースファイル\Game\cpp\Scene\ゲームプレイ</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Scene\SceneEditorPersistence.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Scene\共通</Filter>
+    <ClCompile Include="Game\cpp\Scene\SceneEditorPersistence.cpp">
+      <Filter>ソースファイル\Game\cpp\Scene\共通</Filter>
     </ClCompile>
-    <ClInclude Include="Engine\game\h\Level\ObjectKindSupport.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Level\配置物の種類</Filter>
+    <ClInclude Include="Game\h\Level\ObjectKindSupport.h">
+      <Filter>ヘッダーファイル\Game\h\Level\配置物の種類</Filter>
     </ClInclude>
-    <ClCompile Include="Engine\game\cpp\Level\ObjectKindMarkers.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Level\配置物の種類</Filter>
+    <ClCompile Include="Game\cpp\Level\ObjectKindMarkers.cpp">
+      <Filter>ソースファイル\Game\cpp\Level\配置物の種類</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\game\cpp\Level\ObjectKindRuntime.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Level\配置物の種類</Filter>
+    <ClCompile Include="Game\cpp\Level\ObjectKindRuntime.cpp">
+      <Filter>ソースファイル\Game\cpp\Level\配置物の種類</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="Engine\game\h\Collision\GroundSupport.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Collision</Filter>
+    <ClInclude Include="Game\h\Collision\GroundSupport.h">
+      <Filter>ヘッダーファイル\Game\h\Collision</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\game\h\Player\EnemySeparation.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Player\敵</Filter>
+    <ClInclude Include="Game\h\Player\EnemySeparation.h">
+      <Filter>ヘッダーファイル\Game\h\Player\敵</Filter>
     </ClInclude>
-    <ClCompile Include="Engine\game\cpp\Player\EnemySeparation.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Player\敵</Filter>
+    <ClCompile Include="Game\cpp\Player\EnemySeparation.cpp">
+      <Filter>ソースファイル\Game\cpp\Player\敵</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="Engine\game\h\Util\IPositionTarget.h">
-      <Filter>ヘッダーファイル\Engine\game\h\Util</Filter>
+    <ClInclude Include="Game\h\Util\IPositionTarget.h">
+      <Filter>ヘッダーファイル\Game\h\Util</Filter>
     </ClInclude>
     <ClInclude Include="Engine\graphics\h\Manager\ResourceAlignment.h">
       <Filter>ヘッダーファイル\Engine\graphics\h\Manager</Filter>
     </ClInclude>
-    <ClCompile Include="Engine\game\cpp\Player\EnemyEntityVisuals.cpp">
-      <Filter>ソースファイル\Engine\game\cpp\Player\敵</Filter>
+    <ClCompile Include="Game\cpp\Player\EnemyEntityVisuals.cpp">
+      <Filter>ソースファイル\Game\cpp\Player\敵</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
