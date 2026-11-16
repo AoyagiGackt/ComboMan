@@ -235,6 +235,8 @@ public:
      * @note 破壊時はシーン側がdestroyedをtrueにし、あわせてGameFlagsのbroken_<name>を立てること
      */
     std::vector<BreakableRef> GetBreakables();
+    /** @brief 開き始めた扉の足元を取り出し、通知を消費する */
+    std::vector<Vector3> ConsumeOpenedGatePositions();
 
     /**
      * @brief kind=="pickup"の回収状況を返す（HUDの x / y 表示用）
@@ -260,6 +262,8 @@ public:
      * @note ブロックの追加・移動・削除がそのまま次フレームの当たり判定に反映される
      */
     std::vector<engine::AABB> GetSolidColliders() const;
+    /** @brief 敵の体を除いた、壁と床だけの当たり判定の一覧を返す（技で動かす先が壁の中かを調べる時に使う） */
+    std::vector<engine::AABB> GetTerrainColliders() const;
 
     /**
      * @brief 編集UIが表示中か返す
@@ -336,6 +340,8 @@ private:
         float runtimeTimer = 0.0f; // 条件成立後の遅延と演出経過時間を保持する
         bool conditionWasMet = false;
         bool runtimeActive = true;
+        bool previousActivationFlag = false; // 前フレームの有効化フラグ
+        bool activationFlagInitialized = false; // フラグ履歴の初期化済み状態
         bool fallFloorWasSolid = true; // "fall"ギミック用: 直前フレームの床の有無（崩落/復帰の瞬間だけ砂ぼこりを出す判定に使う）
         bool healChanneling = false; // healer用: 詠唱（回復発動までのタメ）中かどうか
         int healChannelHpAtStart = 0; // healer用: 詠唱開始時のHP。詠唱中に減ったら被弾＝中断とみなす
@@ -398,6 +404,12 @@ private:
     float FindCorpseFloorY(const Vector3& position) const;
     /** @brief solid=trueの配置物のワールドAABB一覧（includeEnemyBodies=falseなら敵の体を除いた地形だけ） */
     std::vector<engine::AABB> CollectSolidColliders(bool includeEnemyBodies) const;
+    /** @brief 敵を倒す等の条件が成立するまで道を塞ぐ扉で、まだ条件が成立していないか */
+    static bool IsClosedGate(const ObjectDesc& desc);
+    /** @brief 敵を倒す等の条件が成立すると開く扉か（条件成立で消える当たり判定持ちのギミック） */
+    static bool IsGate(const ObjectDesc& desc);
+    /** @brief 閉じている扉の当たり判定を、ほかの当たり判定の上端まで伸ばす（カメラの移動範囲は変えない） */
+    static void ExtendGatesToStageTop(std::vector<engine::AABB>& colliders, const std::vector<size_t>& gateIndices);
 
     /** @brief 削除・Open()の再読み込み・破棄の前に、enemy_basic配置分をEnemyRegistryから解除する（ダングリングポインタ防止） */
     void UnregisterEnemyEntity(const ObjectEntry& entry);
@@ -413,6 +425,8 @@ private:
     void EvaluateEventConditions(float dt);
     /** @brief 有効化フラグと遅延から全配置物の実行状態を更新する */
     void UpdateRuntimeActivation(float dt);
+    /** @brief 扉の配置全体を囲む箱の下端中央を通知へ追加する */
+    void QueueOpenedGatePosition(const ObjectEntry& entry);
     /** @brief 実行中の配置物一件へ種別固有の更新を適用する */
     void UpdateRuntimeEntry(ObjectEntry& entry, engine::graphics::ParticleManager* pm,
         const Vector3& playerPos, float dt);
@@ -627,6 +641,7 @@ private:
     StageEditorViewport viewport_;
 
     std::vector<ObjectEntry> objects_;
+    std::vector<Vector3> openedGatePositions_; // 開き始めた扉の足元の通知
     std::vector<TriggerVolume> triggers_;
     std::vector<CheckpointDesc> checkpoints_;
 

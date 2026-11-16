@@ -206,6 +206,13 @@ void Player::HandleDodge(Input* input) {
         return;
     }
 
+    // ロックオン中に敵の方へ倒して回避を押したら、回避の代わりにワープする（パッドのボタン数を減らすため）
+    if (dodgeRequested && IsWarpChordHeld(input) && CanStartWarp()) {
+        dodgeBufferFrames_ = 0;
+        warpRequestedByDodge_ = true;
+        return;
+    }
+
     const bool blocked = inWater_ || finisherCharging_ || IsRampaging()
         || dodgeCooldown_ > 0.0f || warpActive_;
     if (blocked || !dodgeRequested) {
@@ -268,10 +275,10 @@ void Player::HandleWarp(Input* input) {
         return;
     }
 
-    const bool blocked = inWater_ || finisherCharging_ || IsRampaging()
-        || warpCooldown_ > 0.0f || dodgeActive_;
-    const bool hasGauge = isAwakened_ || awakenGauge_ >= Tuning().warpGaugeCost;
-    if (blocked || !hasGauge || !input->TriggerAction(Input::Action::kWarp)) {
+    // 専用ボタンか、回避ボタンとの組み合わせ（HandleDodge で受け付け済み）で始める
+    const bool requested = input->TriggerAction(Input::Action::kWarp) || warpRequestedByDodge_;
+    warpRequestedByDodge_ = false;
+    if (!requested || !CanStartWarp()) {
         return;
     }
 
@@ -291,12 +298,39 @@ void Player::HandleWarp(Input* input) {
     PlayAttackAnim(rig_->slashAnim, Tuning().warpAnimSpeed);
 }
 
+/** @brief 今ワープを始められるか（妨げる状態でなく、ゲージかクールタイムの条件を満たしているか） */
+bool Player::CanStartWarp() const {
+    const bool blocked = inWater_ || finisherCharging_ || IsRampaging()
+        || warpCooldown_ > 0.0f || dodgeActive_ || warpActive_;
+    const bool hasGauge = isAwakened_ || awakenGauge_ >= Tuning().warpGaugeCost;
+    return !blocked && hasGauge;
+}
+
+/** @brief ロックオンを押しながら、向いている方（ロック中は敵の方）へ移動入力しているか */
+bool Player::IsWarpChordHeld(Input* input) const {
+    if (!input->PushAction(Input::Action::kLockOn)) {
+        return false;
+    }
+    // 敵から離れる方向やニュートラルなら、普通の回避で逃げられるように残す
+    const float heldDirX = GetHeldMoveDirection(input);
+    return heldDirX * lastDirX_ > 0.0f;
+}
+
 /** @brief 攻撃モーションを頭から再生し、再生し切るまで状態遷移をロックする */
 void Player::PlayAttackAnim(const engine::graphics::Animation& anim, float speed) {
     rig_->object->SetAnimation(anim);
     rig_->object->SetAnimSpeed(speed);
     animState_ = &AttackAnim();
     attackAnimTimer_ = anim.duration / speed;
+}
+
+/** @brief 近接の段を始める（土台は構えの待機アニメにし、振りの動きは段ごとの加算モーションだけで付ける） */
+void Player::PlayMeleeStepAnim(const MeleeAttackDef& attack) {
+    // 加算モーションは combo_motion.json を作る時に、この待機アニメを同じ速さで頭から流した姿勢を基準にしている
+    rig_->object->SetAnimation(rig_->idleHoldAnim);
+    rig_->object->SetAnimSpeed(attack.animSpeed);
+    animState_ = &AttackAnim();
+    attackAnimTimer_ = attack.duration;
 }
 
 // ══════════════════════════════════════════════════════
@@ -445,7 +479,9 @@ void Player::ResolveBlockCollision(const std::vector<AABB>& blocks) {
             if (!otherOverlapXZ) {
                 continue;
             }
-            if (other.min.y < candidate.max.y + kHalf * 2.0f && other.max.y > candidate.max.y) {
+            // すぐ上に積まれたブロック（壁の継ぎ目）だけを見る。床から少し浮いた低いブロックの下でも床に立てないと、
+            // 床の中へ沈み、体が床に隠れて透明に見えたり埋まったりする
+            if (other.min.y <= candidate.max.y + kStackedBlockGap && other.max.y > candidate.max.y) {
                 return false;
             }
         }

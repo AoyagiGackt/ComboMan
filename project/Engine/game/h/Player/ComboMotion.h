@@ -125,6 +125,15 @@ public:
         clip_ = clip;
         time_ = normalizedTime;
     }
+    /**
+     * @brief 技の下に重ねる構えのクリップと効き具合を設定する
+     * @param stance 構えのクリップ（nullptrで掛けない）
+     * @param weight 効き具合（0〜1。技を振る間は薄める）
+     */
+    void SetStance(const MotionClip* stance, float weight) {
+        stance_ = stance;
+        stanceWeight_ = weight;
+    }
 
     /** @brief 設定されたクリップの各トラックを今の時刻で評価し、リグにあるボーンの差分回転を集める */
     void Collect(const engine::graphics::Skeleton& skeleton,
@@ -140,8 +149,14 @@ public:
     }
 
 private:
+    /** @brief クリップの各トラックを評価して差分回転の一覧へ足し、実際に掛けたトラック数を返す */
+    static int AppendClip(const MotionClip& clip, float time, float weight, const engine::graphics::Skeleton& skeleton,
+        size_t firstIndex, std::vector<engine::graphics::PoseLayerRotation>& out);
+
     const MotionClip* clip_ = nullptr;
     float time_ = 0.0f;
+    const MotionClip* stance_ = nullptr; ///< 技の下に重ねる構え（時刻0の姿勢だけを使う）
+    float stanceWeight_ = 0.0f; ///< 構えの効き具合（0〜1）
     // 確認用の数（ボーン名の食い違いなどで掛かっていない時に気付けるようにする）
     mutable int lastTrackCount_ = 0;
     mutable int lastAppliedCount_ = 0;

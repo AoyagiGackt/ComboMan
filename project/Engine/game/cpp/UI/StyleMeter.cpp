@@ -3,7 +3,6 @@
  * @brief スタイリッシュランク（D〜SSS）の採点処理とHUD描画（StyleMeter）の実装
  */
 #include "StyleMeter.h"
-#include "TextBufferCapacity.h"
 #include "Easing.h"
 #include "FontRenderer.h"
 #include "GameConstants.h"
@@ -13,9 +12,9 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
-#include <cstdio>
 #include <cstring>
 #include <limits>
+#include <string>
 
 namespace engine::game {
 namespace {
@@ -165,7 +164,7 @@ constexpr float kBestChainTimerGap = 6.0f;
 constexpr Vector2 kFinisherOffset = { -280.0f, 96.0f };
 constexpr float kFinisherScale = 2.7f;
 constexpr float kFinisherPopScale = 0.6f;
-constexpr const char* kFinisherText = "FINISH!";
+constexpr const wchar_t* kFinisherText = L"フィニッシュ!";
 
 } // namespace
 
@@ -336,20 +335,20 @@ void StyleMeter::UpdateHud(FontRenderer& font) {
     // ヒットチェーン数（加算の瞬間だけ少し大きく）
     float bestChainY = anchor.y + bestChainOffsetY;
     if (hitCount_ > 0) {
-        char buf[textBufferCapacity::kShortText];
-        std::snprintf(buf, sizeof(buf), hitCount_ >= hitHighlightCount ? "%d HITS!" : "%d HITS", hitCount_);
+        const std::wstring hitText = std::to_wstring(hitCount_)
+            + (hitCount_ >= hitHighlightCount ? L" ヒット!" : L" ヒット");
         const float scalePerHit = layout.Float("hit.scale_per_hit", kHitScalePerHit);
         const float maxGrowth = layout.Float("hit.max_growth", kHitScaleMaxGrowth);
         const float popScale = layout.Float("hit.pop_scale", kHitPopScale);
         const float chainScale = (std::min)(static_cast<float>(hitCount_) * scalePerHit, maxGrowth);
         float hs = hitScaleBase + chainScale + ((hitPopTimer_ > 0.0f)
             ? popScale * (1.0f - easing::EaseOutElastic(1.0f - hitPopTimer_ / hitPopSeconds)) : 0.0f);
-        float hw = FontRenderer::kCharW * hs * static_cast<float>(std::strlen(buf));
+        const float hw = FontRenderer::MeasureStringW(hitText, hs).x;
         Vector4 hitColor = hitCount_ >= hitHighlightCount
             ? layout.Color("hit.highlight_color", { kHitHighlightColor.x, kHitHighlightColor.y, kHitHighlightColor.z, 1.0f })
             : Vector4 { 1.0f, 1.0f, 1.0f, 1.0f };
         hitColor.w *= hudAlpha_;
-        font.DrawString(buf, anchor.x - hw, anchor.y + hitTextOffsetY, hs, hitColor);
+        font.DrawStringW(hitText, anchor.x - hw, anchor.y + hitTextOffsetY, hs, hitColor);
 
         // 文字の弾みに追従して直下に残り時間を表示する
         const Vector2 timerSize = layout.Vec2("hit.timer_bar_size", kHitTimerBarSize);
@@ -388,14 +387,13 @@ void StyleMeter::UpdateHud(FontRenderer& font) {
         color = { color.x + (1.0f - color.x) * flash, color.y + (1.0f - color.y) * flash,
             color.z + (1.0f - color.z) * flash,
             color.w * std::clamp(finisherTimer_ / tune.finisherFadeSeconds, 0.0f, 1.0f) };
-        const float width = FontRenderer::kCharW * finishScale * static_cast<float>(std::strlen(kFinisherText));
-        font.DrawString(kFinisherText, anchor.x + offset.x - width, anchor.y + offset.y, finishScale, color);
+        const float width = FontRenderer::MeasureStringW(kFinisherText, finishScale).x;
+        font.DrawStringW(kFinisherText, anchor.x + offset.x - width, anchor.y + offset.y, finishScale, color);
     }
     if (bestChain_ > 0) {
-        char buf[textBufferCapacity::kShortText];
-        std::snprintf(buf, sizeof(buf), "BEST %d", bestChain_);
-        float bw = FontRenderer::kCharW * bestChainScale * static_cast<float>(std::strlen(buf));
-        font.DrawString(buf, anchor.x - bw, bestChainY, bestChainScale,
+        const std::wstring bestText = L"最高 " + std::to_wstring(bestChain_) + L" 連続";
+        const float bw = FontRenderer::MeasureStringW(bestText, bestChainScale).x;
+        font.DrawStringW(bestText, anchor.x - bw, bestChainY, bestChainScale,
             { bestChainGray, bestChainGray, bestChainGray, hudAlpha_ * bestChainAlpha });
     }
 

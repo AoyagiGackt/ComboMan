@@ -33,8 +33,11 @@
 #include "StringUtility.h"
 #include "TextureManager.h"
 #include "UILayout.h"
+#include "MeleeCombo.h"
+#include "WeaponFinisherTuning.h"
 #include "WeaponManager.h"
 #include <algorithm>
+#include <cfloat>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -43,7 +46,6 @@ using namespace engine::graphics;
 
 namespace engine::game {
 namespace {
-constexpr float kWeaponStealPromptHalfWidth = 60.0f; // 文字列の見た目の半幅ぶんだけ左へずらして中央寄せする
 constexpr Vector4 kFinisherOverlayTint = { 0.0f, 0.0f, 0.05f, 0.0f }; // アルファはHitEffectLibrary::GetInstance()->SceneParticles().finisherOverlayAlpha
 
 // 以下は既定の配置（F2のエディタで動かした値は Resources/Config/UI/gameplay.json に保存される）
@@ -69,23 +71,19 @@ constexpr float kFatigueBlinkSpeed = 10.0f;
 constexpr float kFatigueBlinkMinAlpha = 0.45f;
 constexpr float kPercent = 100.0f;
 
-// 敵体力の数値表示
-constexpr Vector2 kEnemyHpTextPosition = { 460.0f, 10.0f };
-constexpr float kEnemyHpTextScale = 1.5f;
-constexpr Vector4 kEnemyHpTextColor = { 1.0f, 0.35f, 0.35f, 1.0f };
-
-// プレイヤーHPの数値表示（左下の武器スロットの真上）
-constexpr Vector2 kInfoPosition = { 24.0f, 600.0f };
+// プレイヤーHPの数値表示（HPバーの中の真ん中に、影を付けて重ねる）
 constexpr float kInfoScale = 1.5f;
-constexpr Vector4 kInfoColor = { 0.3f, 1.0f, 0.4f, 1.0f };
+constexpr Vector4 kInfoColor = { 1.0f, 1.0f, 1.0f, 1.0f };
+constexpr Vector4 kInfoShadowColor = { 0.0f, 0.0f, 0.0f, 0.85f };
+constexpr float kInfoShadowOffset = 2.0f;
 
 // HPバーの色（残量が減るほど緑から赤へ）
 constexpr float kHpBarGreenScale = 0.85f;
 constexpr float kHpBarGreenBase = 0.15f;
 constexpr float kEnemyHpBarAlpha = 0.9f;
 constexpr float kPlayerHpBarAlpha = 0.95f;
-constexpr Vector2 kPlayerHpBarPosition = { 24.0f, 570.0f };
-constexpr Vector2 kPlayerHpBarSize = { 200.0f, 16.0f };
+constexpr Vector2 kPlayerHpBarPosition = { 12.0f, 40.0f }; // 左上のステージ名の見出しの真下（下に置くとプレイヤーと重なって見えなくなる）
+constexpr Vector2 kPlayerHpBarSize = { 320.0f, 32.0f };
 constexpr Vector2 kEnemyHpBarSize = { 60.0f, 8.0f };
 constexpr float kEnemyHpBarRaise = 70.0f; // 敵の足元からバーまでの高さ（画面px）
 
@@ -106,16 +104,45 @@ constexpr Vector4 kGuideNextLauncherColor = { 1.0f, 0.85f, 0.25f, 1.0f };
 constexpr Vector4 kGuideFinishColor = { 1.0f, 0.42f, 0.16f, 1.0f };
 constexpr int kGuideOpenerSteps = 2; // この段数に達するまでは追撃を案内する
 
-// 本編の操作説明パネルの既定位置
+// ラスボス戦の操作説明パネルの既定位置
 constexpr Vector2 kGameplayControlsAnchor = { 1020.0f, 12.0f };
 
-// 武器回収の操作表示
+// 右上の短い操作の一覧（よく使う操作だけ。全部はポーズの操作説明で見せる）。位置は一覧の右端と上端（ランクとヒット数の下）
+constexpr Vector2 kShortControlsAnchor = { 1256.0f, 252.0f }; // ヒット数が一番大きくなった時の 最高 N 連続 の行（y=235 付近）より下
+constexpr float kShortControlsScale = 0.95f;
+constexpr float kShortControlsLineGap = 4.0f; // 行と行の間
+constexpr Vector4 kShortControlsKeyColor = { 1.0f, 0.85f, 0.3f, 1.0f }; // ボタン名（明るい床の上でも読めるよう黄色）
+constexpr Vector4 kShortControlsTextColor = { 0.95f, 0.95f, 0.95f, 1.0f }; // 操作の名前
+constexpr Vector4 kShortControlsPanelColor = { 0.0f, 0.0f, 0.0f, 0.55f }; // 文字の後ろに敷く板
+constexpr float kShortControlsPadding = 8.0f; // 板の文字のまわりの余白
+
+/** @brief 右上の短い操作の一覧の1行（ボタンと操作の名前） */
+struct ShortControl {
+    const wchar_t* key;
+    const wchar_t* label;
+};
+/** @brief 右上に出す操作（上から順に） */
+constexpr ShortControl kShortControls[] = {
+    { L"[{Attack}]", L"攻撃" },
+    { L"[{Jump}]", L"ジャンプ" },
+    { L"[{Dodge}]", L"回避" },
+    { L"[{Skill}]", L"固有技" },
+    { L"[{Shoot}]", L"射撃" },
+    { L"[{Pause}]", L"ポーズ・操作説明" },
+};
+
+// 文字を左右の中央にそろえる
+constexpr float kCenterFactor = 0.5f;
+
+// 武器回収の操作表示（届く距離の一番近い1体だけに出し、ほかは小さな印だけ）
 constexpr float kWeaponStealPromptScale = 1.3f;
 constexpr Vector4 kWeaponStealPromptColor = { 0.55f, 0.9f, 1.0f, 1.0f };
+constexpr float kWeaponStealMarkScale = 1.0f;
+constexpr Vector4 kWeaponStealMarkColor = { 0.55f, 0.9f, 1.0f, 0.7f };
+constexpr float kWeaponStealPromptHeight = 2.0f; // 武器の位置から上へ出す高さ（ロックオンの印 y+1.6 と重ならない）
 
 // ロックオンマーカー
 constexpr float kLockMarkerHeight = 1.6f;
-constexpr float kLockMarkerHalfWidth = 46.0f;
 constexpr float kLockMarkerScale = 1.3f;
 constexpr Vector4 kLockMarkerColor = { 1.0f, 0.35f, 0.2f, 1.0f };
 
@@ -142,7 +169,8 @@ void GamePlayScene::DrawHudSprites() {
     // 敵頭上のHPバー（BattleTestSceneのダミーHPバーと同じ描画順序位置はUpdateEnemyHpBars()が
     // DrawStyleUI()内で毎フレーム更新している）
     // ラスボスの体力は画面下のバーで見せるので、頭上には出さない
-    if (enemy_ && !enemy_->IsDefeated() && !finalBoss_.IsActive()) {
+    // 名乗りが済んだステージボスも、画面下のバーで見せる
+    if (enemy_ && !enemy_->IsDefeated() && !finalBoss_.IsActive() && !bossDirector_.IsEngaged()) {
         bossHpBarBg_->Draw();
         bossHpBarFg_->Draw();
     }
@@ -176,11 +204,13 @@ void GamePlayScene::DrawOverlaysAndUI() {
         DrawHudSprites();
         debugGameOverButton_.Draw();
         debugClearButton_.Draw();
-        debugFinalBossButton_.Draw();
     }
     // ラスボス戦の体力バー・黒帯・名乗り（演出の間も出す）
     if (!pauseMenu_.IsPaused() && !playerDefeat_.IsActive() && !clearTriggered_) {
         finalBoss_.DrawHud();
+        if (!finalBoss_.IsActive() && bossDirector_.IsEngaged()) {
+            stageBossHud_.Draw();
+        }
     }
     stageIntro_.Draw();
     playerDefeat_.Draw();
@@ -211,7 +241,7 @@ void GamePlayScene::DrawOverlaysAndUI() {
 
     if (pauseMenu_.IsPaused()) {
         pauseMenu_.Draw(input_);
-    } else if (!stageIntro_.IsPlaying() && !playerDefeat_.IsActive() && !clearTriggered_ && !stageGuide_.IsShowing()) {
+    } else if (!stageIntro_.IsPlaying() && !playerDefeat_.IsActive() && !clearTriggered_ && !stageGuide_.IsShowing() && ShowsStageGuideText()) {
         // ゲームプレイ UI テキスト（レベルJSONの案内文）
         GetStageEditor().DrawUIText(fontRenderer_);
     }
@@ -242,28 +272,28 @@ void GamePlayScene::DrawOverlaysAndUI() {
 // HUD描画
 // ══════════════════════════════════════════════════════
 
-/** @brief ラン中だけ、敵の残り体力などの周回用 HUD を描画する */
+/** @brief ラン中だけ、プレイヤーの体力の数値を描画する */
 void GamePlayScene::DrawRogueliteHUD() {
     auto* rd = RunData::GetInstance();
     if (!rd->IsRunActive()) {
         return;
     }
 
-    // 敵の残り体力を上部中央に数値で表示する
-    const int enemyHp = enemy_ ? enemy_->GetHp() : 0;
-    const int enemyMaxHp = enemy_ ? enemy_->GetMaxHp() : 0;
-    const std::wstring enemyHpText = L"ボス体力  "
-        + std::to_wstring(enemyHp) + L" / " + std::to_wstring(enemyMaxHp);
+    // ボスの体力は頭上のバーと、名乗った後の画面上のバーで見せる
     UILayout& layout = UILayout::Get(kLayoutName);
-    const Vector2 enemyHpPosition = layout.Pos("enemy_hp.pos", kEnemyHpTextPosition);
-    fontRenderer_.DrawStringW(enemyHpText, enemyHpPosition.x, enemyHpPosition.y,
-        layout.Float("enemy_hp.scale", kEnemyHpTextScale), layout.Color("enemy_hp.color", kEnemyHpTextColor));
 
-    // プレイヤーHPは左上だと武器一覧パネルと被るため、左下の武器スロットHUDの真上に置く
-    std::string info = "HP:" + std::to_string(rd->GetHp()) + "/" + std::to_string(rd->GetMaxHp());
-    const Vector2 infoPosition = layout.Pos("info.pos", kInfoPosition);
-    fontRenderer_.DrawString(info.c_str(), infoPosition.x, infoPosition.y,
-        layout.Float("info.scale", kInfoScale), layout.Color("info.color", kInfoColor));
+    // プレイヤーHPの数値は、左上のHPバーの中の真ん中に重ねる（バーと数字を別々に探さなくて済むように）
+    const std::wstring info = L"HP " + std::to_wstring(rd->GetHp()) + L" / " + std::to_wstring(rd->GetMaxHp());
+    const Vector2 barPosition = layout.Pos("player_hp_bar.pos", kPlayerHpBarPosition);
+    const Vector2 barSize = layout.Vec2("player_hp_bar.size", kPlayerHpBarSize);
+    const float scale = layout.Float("info.scale", kInfoScale);
+    const Vector2 textSize = FontRenderer::MeasureStringW(info, scale);
+    constexpr float kHalf = 0.5f;
+    const float textX = barPosition.x + (barSize.x - textSize.x) * kHalf;
+    const float textY = barPosition.y + (barSize.y - textSize.y) * kHalf;
+    // 緑でも赤でも読めるよう、黒い影を先に描いてから白で重ねる
+    fontRenderer_.DrawStringW(info, textX + kInfoShadowOffset, textY + kInfoShadowOffset, scale, kInfoShadowColor);
+    fontRenderer_.DrawStringW(info, textX, textY, scale, layout.Color("info.color", kInfoColor));
 }
 
 /** @brief ボス・道中の武器敵の頭上HPバーの位置と色を更新する（BattleTestSceneのダミーHPバーと同じ体裁） */
@@ -295,7 +325,7 @@ void GamePlayScene::UpdateEnemyHpBars() {
     }
 }
 
-/** @brief 左下のプレイヤーHPゲージの位置と色を更新する */
+/** @brief 左上のプレイヤーHPゲージの位置と色を更新する */
 void GamePlayScene::UpdatePlayerHpBar() {
     UILayout& layout = UILayout::Get(kLayoutName);
     const float hpBarGreenScale = layout.Float("hp_bar.green_scale", kHpBarGreenScale);
@@ -324,7 +354,6 @@ void GamePlayScene::UpdatePlayerHpBar() {
 void GamePlayScene::DrawStyleUI() {
     // 表示位置・大きさ・色はすべて UI レイアウトから読む（F2 で調整できる）
     UILayout& layout = UILayout::Get(kLayoutName);
-    const float weaponStealPromptHalfWidth = layout.Float("steal_prompt.half_width", kWeaponStealPromptHalfWidth);
     const float guideTitleScale = layout.Float("combo_guide.title_scale", kGuideTitleScale);
     const Vector4 guideTitleColor = layout.Color("combo_guide.title_color", kGuideTitleColor);
     const float guideRouteOffsetY = layout.Float("combo_guide.route_offset_y", kGuideRouteOffsetY);
@@ -340,7 +369,6 @@ void GamePlayScene::DrawStyleUI() {
     const Vector4 guideFinishColor = layout.Color("combo_guide.finish_color", kGuideFinishColor);
     const float weaponStealPromptScale = layout.Float("steal_prompt.scale", kWeaponStealPromptScale);
     const Vector4 weaponStealPromptColor = layout.Color("steal_prompt.color", kWeaponStealPromptColor);
-    const float lockMarkerHalfWidth = layout.Float("lock_marker.half_width", kLockMarkerHalfWidth);
     const float lockMarkerScale = layout.Float("lock_marker.scale", kLockMarkerScale);
     const Vector4 lockMarkerColor = layout.Color("lock_marker.color", kLockMarkerColor);
     // 文字を積み直し、HPバー・ステージ案内・ラン情報・スタイルランクを更新する
@@ -357,8 +385,6 @@ void GamePlayScene::DrawStyleUI() {
     debugGameOverButton_.QueueText(fontRenderer_);
     debugClearButton_.RefreshLayout();
     debugClearButton_.QueueText(fontRenderer_);
-    debugFinalBossButton_.RefreshLayout();
-    debugFinalBossButton_.QueueText(fontRenderer_);
     styleRankHud_.UpdateHud(fontRenderer_); // 右上のスタイリッシュランク（BattleTestSceneと同じ体裁）
 
     // 基本ルートは常時見せ、コンボ開始後は現在地点と次の入力へ表示を切り替える。
@@ -371,13 +397,19 @@ void GamePlayScene::DrawStyleUI() {
         const bool chainActive = styleRankHud_.GetHitCount() > 0 || player_->IsMeleeAttacking();
         const int step = (std::max)(player_->GetComboStep(), 1);
         const int maxStep = (std::max)(player_->GetComboMax(), 1);
+        // 打ち上げて空中へ行く武器と、地上の締めで戦う武器で案内を分ける（締めの説明は weapon_finishers.json の guide）
+        const WeaponType weaponType = WeaponManager::GetInstance()->GetCurrent().type;
+        const bool hasLauncher = GetMeleeComboSet(weaponType).launcher != nullptr;
+        const std::wstring finisherGuide = StringUtility::ConvertString(WeaponFinisherTuning::Get(weaponType).guide);
         if (!chainActive) {
             fontRenderer_.DrawStringW(L"推奨コンボルート",
                 guideX, guideY, guideTitleScale, guideTitleColor);
-            fontRenderer_.DrawStringW(finalBoss_.ExpandPrompts(L"[{Attack}] x2  >  [{Down}+{Attack}] 打ち上げ  >  [{Jump}] ジャンプ  >  [{Attack}] 空中追撃  >  [{Shoot}] 射撃"),
-                guideX, guideY + guideRouteOffsetY, guideRouteScale, guideRouteColor);
+            const std::wstring route = hasLauncher
+                ? finalBoss_.ExpandPrompts(L"[{Attack}] x2  >  [{Down}+{Attack}] 打ち上げ  >  [{Jump}] ジャンプ  >  [{Attack}] 空中追撃  >  [{Shoot}] 射撃")
+                : finalBoss_.ExpandPrompts(L"[{Attack}] 連打  >  ") + finisherGuide + finalBoss_.ExpandPrompts(L"  >  [{Skill}] 固有技  >  [{Shoot}] 射撃");
+            fontRenderer_.DrawStringW(route, guideX, guideY + guideRouteOffsetY, guideRouteScale, guideRouteColor);
         } else {
-            std::wstring progress = L"COMBO  ";
+            std::wstring progress = L"コンボ  ";
             for (int i = 1; i <= maxStep; ++i) {
                 progress += i <= step ? L"● " : L"○ ";
             }
@@ -389,34 +421,39 @@ void GamePlayScene::DrawStyleUI() {
                 int step;
                 int maxStep;
             };
-            /** @brief 次の行動の案内文と表示条件の組 */
+            /** @brief 次の行動の案内文と表示条件の組（打ち上げを持たない武器は noLauncherText を出す） */
             struct NextHint {
                 bool (*applies)(const GuideState&);
                 const wchar_t* text;
+                const wchar_t* noLauncherText;
                 Vector4 color;
             };
             const NextHint kNextHints[] = {
                 { [](const GuideState& g) {
                     return g.airborne;
                 },
-                    L"NEXT  [{Attack}] 空中追撃   [{Shoot}] 射撃   [{Skill}] 固有技", guideNextAirColor },
+                    L"次  [{Attack}] 空中追撃   [{Shoot}] 射撃   [{Skill}] 固有技",
+                    L"次  [{Attack}] 空中追撃   [{Shoot}] 射撃   [{Skill}] 固有技", guideNextAirColor },
                 { [](const GuideState& g) {
                     return g.step < kGuideOpenerSteps;
                 },
-                    L"NEXT  [{Attack}] もう一撃   または  [{Down}+{Attack}] 打ち上げ", guideNextOpenerColor },
+                    L"次  [{Attack}] もう一撃   または  [{Down}+{Attack}] 打ち上げ",
+                    L"次  [{Attack}] もう一撃", guideNextOpenerColor },
                 { [](const GuideState& g) {
                     return g.step < g.maxStep;
                 },
-                    L"NEXT  [{Down}+{Attack}] 打ち上げ   [{Slot}] 武器切替", guideNextLauncherColor },
+                    L"次  [{Down}+{Attack}] 打ち上げ   [{Slot}] 武器切替",
+                    L"次  [{Attack}] 締めへ   [{Slot}] 武器切替", guideNextLauncherColor },
                 { [](const GuideState&) {
                     return true;
                 },
-                    L"FINISH!   [{Down}+{Attack}] 打ち上げ   [{Slot}] 別武器へ", guideFinishColor },
+                    L"締め!   [{Down}+{Attack}] 打ち上げ   [{Slot}] 別武器へ",
+                    L"締め!   [{Slot}] 別武器へ", guideFinishColor },
             };
             const GuideState state = { !player_->IsOnGround(), step, maxStep };
             for (const NextHint& hint : kNextHints) {
                 if (hint.applies(state)) {
-                    fontRenderer_.DrawStringW(finalBoss_.ExpandPrompts(hint.text),
+                    fontRenderer_.DrawStringW(finalBoss_.ExpandPrompts(hasLauncher ? hint.text : hint.noLauncherText),
                         guideX, guideY + guideNextOffsetY, guideNextScale, hint.color);
                     break;
                 }
@@ -432,28 +469,11 @@ void GamePlayScene::DrawStyleUI() {
         sceneShared::DrawControlsPanel(fontRenderer_, layout.Pos("controls.pos", kGameplayControlsAnchor),
             L"-- " + finalBoss_.ControlsTitle() + L" --", finalBoss_.ControlsRows());
     } else {
-        sceneShared::DrawControlsHud(fontRenderer_,
-            layout.Pos("controls.pos", kGameplayControlsAnchor), L": ステージを進む");
+        // 右上のランクの下に、よく使う操作だけを短く出す（全部はポーズの操作説明で見せる）
+        DrawShortControls();
     }
     hud_.QueueText(fontRenderer_);
-    // 倒した敵の頭上に武器回収の操作を出す（死んだかどうか・奪えるかが遠目にも分かるように）
-    constexpr float kWeaponStealPromptHeight = 2.0f; // ロックオンマーカー（y+1.6）と重ならない高さ
-    auto drawWeaponStealPrompt = [&](const Vector3& enemyPos) {
-        const Vector3& cam = camera_->GetTranslate();
-        float sx, sy;
-        sceneShared::WorldToScreen(enemyPos.x, enemyPos.y + kWeaponStealPromptHeight, cam.x, cam.y, sx, sy);
-        fontRenderer_.DrawStringW(input_->ExpandPrompts(L"[{Steal}] 武器を回収"), sx - weaponStealPromptHalfWidth, sy, weaponStealPromptScale,
-            weaponStealPromptColor);
-    };
-    // ボスと道中の敵のうち、倒れて武器を奪える敵の頭上に出す
-    if (enemy_ && enemy_->IsDefeated() && !weaponStealTriggered_ && !mainWeaponAbsorbing_) {
-        drawWeaponStealPrompt(enemy_->GetWeaponPickupPosition());
-    }
-    for (const auto& weaponEnemy : weaponEnemies_) {
-        if (weaponEnemy.hasWeapon && weaponEnemy.enemy->IsDefeated() && !weaponEnemy.weaponAcquired && !weaponEnemy.absorbing) {
-            drawWeaponStealPrompt(weaponEnemy.enemy->GetWeaponPickupPosition());
-        }
-    }
+    DrawWeaponStealPrompts(weaponStealPromptScale, weaponStealPromptColor);
 
     // ── ロックオン中の対象にマーカーを出す ────────────────────────
     if (lockedEnemy_ != nullptr) {
@@ -461,7 +481,9 @@ void GamePlayScene::DrawStyleUI() {
         const Vector3& cam = camera_->GetTranslate();
         float sx, sy;
         sceneShared::WorldToScreen(tpos.x, tpos.y + kLockMarkerHeight, cam.x, cam.y, sx, sy);
-        fontRenderer_.DrawString("v LOCK v", sx - lockMarkerHalfWidth, sy, lockMarkerScale, lockMarkerColor);
+        const std::wstring lockText = L"▼ ロック ▼";
+        fontRenderer_.DrawStringW(lockText, sx - FontRenderer::MeasureStringW(lockText, lockMarkerScale).x * kCenterFactor, sy,
+            lockMarkerScale, lockMarkerColor);
     }
 
     // スロットが満杯の時の武器交換画面
@@ -574,6 +596,107 @@ void GamePlayScene::DrawStageGuide() {
     fontRenderer_.DrawStringW(coreCount, counterPosition.x, counterPosition.y,
         layout.Float("pickup_counter.scale", kPickupCounterScale), layout.Color("pickup_counter.color", kPickupCounterColor));
 }
+/** @brief 今奪える武器を全部集める（ボスと道中の敵で、奪える距離が違う） */
+std::vector<GamePlayScene::StealTarget> GamePlayScene::CollectStealTargets() const {
+    std::vector<StealTarget> targets;
+    if (enemy_ && enemy_->IsDefeated() && !weaponStealTriggered_ && !mainWeaponAbsorbing_ && !finisherActive_ && !enemySlice_.IsActive()) {
+        targets.push_back({ enemy_, enemy_->GetWeaponPickupPosition(), CombatTune().weaponAbsorbRange });
+    }
+    for (const auto& weaponEnemy : weaponEnemies_) {
+        if (weaponEnemy.hasWeapon && weaponEnemy.enemy->IsDefeated() && !weaponEnemy.weaponAcquired && !weaponEnemy.absorbing) {
+            targets.push_back({ weaponEnemy.enemy, weaponEnemy.enemy->GetWeaponPickupPosition(), CombatTune().absorbRange });
+        }
+    }
+    return targets;
+}
+
+/** @brief 届く距離の中で一番近いものの番号を返す（無ければ targets.size()） */
+size_t GamePlayScene::FindNearestStealTarget(const std::vector<StealTarget>& targets) const {
+    const Vector3& playerPosition = player_->GetPosition();
+    size_t nearest = targets.size();
+    float nearestDistanceSq = FLT_MAX;
+    for (size_t i = 0; i < targets.size(); ++i) {
+        const float distanceSq = DistanceSquaredXY(playerPosition, targets[i].position);
+        if (distanceSq <= targets[i].range * targets[i].range && distanceSq < nearestDistanceSq) {
+            nearestDistanceSq = distanceSq;
+            nearest = i;
+        }
+    }
+    return nearest;
+}
+
+/** @brief このフレームに奪う相手を1体だけ決める（1回押して2体から同時に奪わないように） */
+void GamePlayScene::SelectStealTarget() {
+    const std::vector<StealTarget> targets = CollectStealTargets();
+    const size_t nearest = FindNearestStealTarget(targets);
+    selectedStealOwner_ = nearest < targets.size() ? targets[nearest].owner : nullptr;
+}
+
+/** @brief レベルに置いた案内文を出すか（操作を覚える1面だけ。ランの外のエディタのテストプレイでは、どのステージでも出す） */
+bool GamePlayScene::ShowsStageGuideText() const {
+    const RunData* runData = RunData::GetInstance();
+    return !runData->IsRunActive() || runData->GetPlayFloor() == 0;
+}
+
+/** @brief 右上のランクの下に、よく使う操作だけの短い一覧を出す（ボタン名は最後に使った機器の表記） */
+void GamePlayScene::DrawShortControls() {
+    UILayout& layout = UILayout::Get(kLayoutName);
+    const float scale = layout.Float("short_controls.scale", kShortControlsScale);
+    const Vector2 anchor = layout.Pos("short_controls.pos", kShortControlsAnchor);
+    const Vector4 keyColor = layout.Color("short_controls.key_color", kShortControlsKeyColor);
+    const Vector4 textColor = layout.Color("short_controls.text_color", kShortControlsTextColor);
+    // ボタン名の列の幅をそろえ、操作の名前を同じ位置から始める
+    std::vector<std::wstring> keys;
+    float keyWidth = 0.0f;
+    float labelWidth = 0.0f;
+    for (const ShortControl& control : kShortControls) {
+        keys.push_back(input_->ExpandPrompts(control.key) + L" ");
+        keyWidth = (std::max)(keyWidth, FontRenderer::MeasureStringW(keys.back(), scale).x);
+        labelWidth = (std::max)(labelWidth, FontRenderer::MeasureStringW(control.label, scale).x);
+    }
+    const float lineHeight = FontRenderer::kCharH * scale + kShortControlsLineGap;
+    const float width = keyWidth + labelWidth;
+    const float height = lineHeight * static_cast<float>(keys.size()) - kShortControlsLineGap;
+    // 右端と上端を合わせ、後ろに暗い板を敷いてから1行ずつ積む
+    const float left = anchor.x - width;
+    const float top = anchor.y;
+    fontRenderer_.DrawPanel(left - kShortControlsPadding, top - kShortControlsPadding, width + kShortControlsPadding * 2.0f,
+        height + kShortControlsPadding * 2.0f, layout.Color("short_controls.panel_color", kShortControlsPanelColor));
+    for (size_t i = 0; i < keys.size(); ++i) {
+        const float y = top + lineHeight * static_cast<float>(i);
+        fontRenderer_.DrawStringW(keys[i], left, y, scale, keyColor);
+        fontRenderer_.DrawStringW(kShortControls[i].label, left + keyWidth, y, scale, textColor);
+    }
+}
+
+/** @brief 奪える武器に印を出し、届く距離の一番近い1つだけに回収の操作を出す */
+void GamePlayScene::DrawWeaponStealPrompts(float promptScale, const Vector4& promptColor) {
+    UILayout& layout = UILayout::Get(kLayoutName);
+    const float markScale = layout.Float("steal_mark.scale", kWeaponStealMarkScale);
+    const Vector4 markColor = layout.Color("steal_mark.color", kWeaponStealMarkColor);
+    // 押せば奪えるもの（距離の中）のうち、一番近いものを選ぶ
+    const std::vector<StealTarget> targets = CollectStealTargets();
+    const size_t nearest = FindNearestStealTarget(targets);
+    // 選んだものには操作を、ほかは小さな印だけを、武器の上へ中央そろえで出す
+    const Vector3& cam = camera_->GetTranslate();
+    const std::wstring prompt = input_->ExpandPrompts(L"[{Steal}] 武器を回収");
+    const std::wstring mark = L"▼";
+    for (size_t i = 0; i < targets.size(); ++i) {
+        // 闘技場では専用の投影を使い、横スクロール用の印との重複を避ける。
+        if (finalBoss_.UsesArenaCamera()) {
+            DrawArenaWeaponStealPrompt(targets[i].position, i == nearest, promptScale, promptColor);
+            continue;
+        }
+        float sx = 0.0f;
+        float sy = 0.0f;
+        sceneShared::WorldToScreen(targets[i].position.x, targets[i].position.y + kWeaponStealPromptHeight, cam.x, cam.y, sx, sy);
+        const bool selected = i == nearest;
+        const std::wstring& text = selected ? prompt : mark;
+        const float scale = selected ? promptScale : markScale;
+        fontRenderer_.DrawStringW(text, sx - FontRenderer::MeasureStringW(text, scale).x * kCenterFactor, sy, scale,
+            selected ? promptColor : markColor);
+    }
+}
 /** @brief 同じ武器で当て続けて効きが落ちている時に、持ち替えを促す警告を出す */
 void GamePlayScene::DrawWeaponFatigueWarning() {
     UILayout& layout = UILayout::Get(kLayoutName);
@@ -607,8 +730,10 @@ void GamePlayScene::DrawWeaponFatigueWarning() {
     const int gunIndex = GunFatigueIndex();
     const bool suggestGun = gunIndex != lastFatigueIndex_ && gunIndex < static_cast<int>(weaponFatigue_.size())
         && (bestSlot < 0 || weaponFatigue_[gunIndex] < bestFatigue);
+    // 押す入力は最後に使った機器の表記にし、持ち替え先の武器の名前も添える
     const std::wstring suggestion = (!suggestGun && bestSlot >= 0)
-        ? L"[" + std::to_wstring(bestSlot + 1) + L"] に持ち替えろ"
+        ? input_->ExpandPrompts(L"[{Slot" + std::to_wstring(bestSlot + 1) + L"}] ")
+            + WeaponTypeLabel(wm->GetList()[wm->GetSlotWeaponIndex(bestSlot)].type) + L"に持ち替えろ"
         : input_->ExpandPrompts(L"[{Shoot}] 射撃を混ぜろ");
     // 強い警告は点滅させ、見出しと 威力% と勧める操作 を2行で出す
     const Vector2 pos = layout.Pos("fatigue.pos", kFatigueWarningPosition);
@@ -617,8 +742,7 @@ void GamePlayScene::DrawWeaponFatigueWarning() {
         const float blink = 0.5f + 0.5f * std::sin(floorElapsedSeconds_ * kFatigueBlinkSpeed);
         color.w = kFatigueBlinkMinAlpha + (1.0f - kFatigueBlinkMinAlpha) * blink;
     }
-    // 各行の実測幅で中央をそろえる。
-    constexpr float kCenterFactor = 0.5f;
+    // 各行の実測幅で中央をそろえる
     const std::wstring title = severe ? L"同じ武器ではもう効かない!" : L"同じ武器で効きが落ちてきた";
     const int percent = static_cast<int>(std::round(mult * kPercent));
     const std::wstring detail = L"威力 " + std::to_wstring(percent) + L"%    " + suggestion;
@@ -651,7 +775,6 @@ void GamePlayScene::DrawScriptMessage() {
     Vector4 color = layout.Color("script_message.color", kScriptMessageColor);
     color.w *= alpha;
     // 影は少し右下にずらすため、中央揃えの位置を同じだけずらした文字で描く
-    constexpr float kCenterFactor = 0.5f;
     const float width = FontRenderer::MeasureStringW(scriptMessage_, scale).x;
     const float x = gameConstants::kScreenCenterX - width * kCenterFactor;
     fontRenderer_.DrawStringW(scriptMessage_, x + kScriptMessageShadowOffset, y + kScriptMessageShadowOffset, scale, shadow);

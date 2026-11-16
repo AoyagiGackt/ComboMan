@@ -12,6 +12,7 @@
 #include "SceneShared.h"
 #include "SlashMark.h"
 #include "SpaceDistortionEffect.h"
+#include <algorithm>
 #include <cmath>
 
 namespace engine::game::finisherEffects {
@@ -61,7 +62,8 @@ void EmitReleaseBlades(engine::graphics::BladeFlashEffect& blades, engine::graph
 }
 
 /** @brief 溜めた斬撃線を白く光らせてから消し、center を通る太く短い斬撃線を重ねる */
-void SpawnReleaseSlashes(std::mt19937& rng, const Vector3& center, const Vector3& cameraPos) {
+void SpawnReleaseSlashes(std::mt19937& rng, const Vector3& center, const Vector3& cameraPos,
+    std::vector<BeatSlash>* released) {
     const auto& visuals = HitEffectLibrary::GetInstance()->FinisherVisuals();
     SlashMark::GetInstance()->FlashAll(visuals.slashFlashColor, visuals.slashFlashSeconds);
     std::uniform_real_distribution<float> angleDist(0.0f, gameConstants::kTwoPi);
@@ -69,6 +71,9 @@ void SpawnReleaseSlashes(std::mt19937& rng, const Vector3& center, const Vector3
     for (int i = 0; i < visuals.releaseSlashCount; ++i) {
         const float ang = angleDist(rng);
         const Vector2 dir = { std::cos(ang), std::sin(ang) };
+        if (released != nullptr) {
+            released->push_back({ { center.x, center.y }, ang, HitEffectLibrary::GetInstance()->SceneParticles().finisherSlashRadius });
+        }
         sceneShared::SpawnSlashMarkWorld(
             { center.x - dir.x * HitEffectLibrary::GetInstance()->SceneParticles().finisherSlashRadius,
                 center.y - dir.y * HitEffectLibrary::GetInstance()->SceneParticles().finisherSlashRadius },
@@ -89,6 +94,23 @@ void StartShatterAt(engine::graphics::GlassShatterEffect& shatter, const engine:
     shatter.Start();
 }
 
+/** @brief 斬撃線を画面の斬線へ写して割る線にし、そこから画面が割れ落ちる演出を始める */
+void StartSlashShatterAt(engine::graphics::GlassShatterEffect& shatter, const engine::graphics::Camera& camera,
+    const Vector3& world, const std::vector<BeatSlash>& slashes) {
+    std::vector<engine::graphics::GlassShatterEffect::CutLine> lines;
+    for (const BeatSlash& slash : slashes) {
+        Vector2 uv;
+        if (!ProjectToUv(camera, { slash.center.x, slash.center.y, world.z }, uv)) {
+            continue;
+        }
+        // ワールドは上が +Y、画面は下が +Y なので、傾きは向きを反転して渡す
+        lines.push_back({ uv.x, uv.y, -slash.angle });
+    }
+    shatter.SetCutLines(lines);
+    shatter.SetImpactPoints({});
+    StartShatterAt(shatter, camera, world);
+}
+
 /** @brief 行ベクトルの射影規約に従ってUVを求め、透視除算できない位置を除外する */
 bool ProjectToUv(const engine::graphics::Camera& camera, const Vector3& world, Vector2& uv) {
     // 行ベクトル規約  clip = world * VP
@@ -98,7 +120,8 @@ bool ProjectToUv(const engine::graphics::Camera& camera, const Vector3& world, V
     const float cw = world.x * vp.m[0][3] + world.y * vp.m[1][3] + world.z * vp.m[2][3] + vp.m[3][3];
     if (cw > kMinClipW) {
         // NDC は上が +Y、UV は下が +V なので Y だけ反転する
-        uv = { cx / cw * kNdcToUvScale + kNdcToUvScale, kNdcToUvScale - cy / cw * kNdcToUvScale };
+        // 中心が画面の外（連撃で高く打ち上がった敵など）だと、割れや歪みが画面ごと上へ引っ張られて見えるので、画面の中に収める
+        uv = { std::clamp(cx / cw * kNdcToUvScale + kNdcToUvScale, 0.0f, 1.0f), std::clamp(kNdcToUvScale - cy / cw * kNdcToUvScale, 0.0f, 1.0f) };
         return true;
     }
     return false;

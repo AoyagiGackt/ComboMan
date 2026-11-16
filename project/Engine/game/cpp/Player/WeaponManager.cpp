@@ -97,10 +97,9 @@ WeaponManager* WeaponManager::GetInstance() {
     return &sInstance;
 }
 
-/** @brief 画面に出す武器名を返す（日本語のスタイル名。未設定の武器だけ内部名で代用する） */
+/** @brief 画面に出す武器名を返す（剣・槍などの武器の種類の名前） */
 std::wstring WeaponManager::GetDisplayName(const WeaponData& data) {
-    // 英語の内部名が日本語の表示に混ざらないよう、日本語名があればそちらを優先する
-    return data.styleNameJp.empty() ? StringUtility::ConvertString(data.name) : data.styleNameJp;
+    return WeaponTypeLabel(data.type);
 }
 
 /** @brief weapons.json を読み込んで武器の一覧を作る */
@@ -150,7 +149,6 @@ WeaponManager::WeaponManager() {
             continue;
         }
         ReadJsonFields(w, kWeaponFields, data);
-        data.styleNameJp = StringUtility::ConvertString(w.value("styleNameJp", ""));
         data.commands = ParseCommands(w.value("commands", nlohmann::json::array()));
         ReadJsonFields(w.value("awakened", nlohmann::json::object()), kAwakenedFields, data.awakened);
         // 読んだ値を使える範囲に収める
@@ -247,6 +245,14 @@ void WeaponManager::SelectUnlockedInCurrentSlot(int direction) {
         }
         if (selectedSlot_ < 0 || selectedSlot_ >= static_cast<int>(slots_.size())) {
             selectedSlot_ = 0;
+        }
+        // ほかの枠に入っている武器は選ばない（同じ武器が2つの枠に並ばないように）
+        bool inOtherSlot = false;
+        for (int slot = 0; slot < static_cast<int>(slots_.size()); ++slot) {
+            inOtherSlot = inOtherSlot || (slot != selectedSlot_ && slots_[slot] == candidate);
+        }
+        if (inOtherSlot) {
+            continue;
         }
         index_ = candidate;
         slots_[selectedSlot_] = candidate;

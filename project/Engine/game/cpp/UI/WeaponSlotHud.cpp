@@ -7,6 +7,7 @@
 #include "DirectXCommon.h"
 #include "FontRenderer.h"
 #include "GameConstants.h"
+#include "Input.h"
 #include "ModelManager.h"
 #include "SceneShared.h"
 #include "SpriteCommon.h"
@@ -73,8 +74,17 @@ constexpr Vector4 kLockedMarkColor = { 0.6f, 0.6f, 0.6f, 0.9f };
 constexpr Vector2 kSlotNumberOffset = { 4.0f, 3.0f };
 constexpr float kSlotNumberScale = 0.9f;
 constexpr Vector4 kSlotNumberColor = { 0.95f, 0.9f, 0.75f, 1.0f };
-constexpr Vector2 kGunLabelOffset = { 10.0f, 60.0f };
-constexpr float kGunLabelScale = 1.0f;
+constexpr float kWeaponNameOffsetY = 60.0f; // 枠の上端から、枠の下に出す武器の名前までの高さ
+constexpr float kWeaponNameScale = 0.85f;
+constexpr Vector4 kWeaponNameColor = { 1.0f, 0.85f, 0.3f, 1.0f }; // 明るい床の上でも読めるよう、白ではなく黄色にする
+constexpr Vector4 kActiveWeaponNameColor = { 0.55f, 0.95f, 1.0f, 1.0f }; // 持っている武器の名前
+constexpr Vector4 kWeaponNamePanelColor = { 0.0f, 0.0f, 0.0f, 0.6f }; // 名前の後ろに敷く板
+constexpr float kWeaponNamePadding = 3.0f; // 板の文字のまわりの余白
+constexpr float kCenterFactor = 0.5f; // 枠の中央にそろえる
+constexpr float kGunLabelScale = 0.85f;
+
+/** @brief 枠ごとの切り替えの入力の名前（Input の {Slot1}〜{Slot3}） */
+constexpr const wchar_t* kSlotPrompts[] = { L"{Slot1}", L"{Slot2}", L"{Slot3}" };
 }
 
 /** @brief 武器スロットのスプライトとアイコンを用意する */
@@ -307,21 +317,44 @@ void WeaponSlotHud::QueueText(FontRenderer& font) const {
     const Vector2 numberOffset = layout.Vec2("weapon_slots.number_offset", kSlotNumberOffset);
     const float numberScale = layout.Float("weapon_slots.number_scale", kSlotNumberScale);
     const Vector4 numberColor = layout.Color("weapon_slots.number_color", kSlotNumberColor);
-    const Vector2 gunLabelOffset = layout.Vec2("weapon_slots.gun_label_offset", kGunLabelOffset);
+    const float size = layout.Float("weapon_slots.size", kSlotSize);
+    const float nameOffsetY = layout.Float("weapon_slots.name_offset_y", kWeaponNameOffsetY);
+    const float nameScale = layout.Float("weapon_slots.name_scale", kWeaponNameScale);
+    const Vector4 nameColor = layout.Color("weapon_slots.name_color", kWeaponNameColor);
+    const Vector4 activeNameColor = layout.Color("weapon_slots.active_name_color", kActiveWeaponNameColor);
     const float gunLabelScale = layout.Float("weapon_slots.gun_label_scale", kGunLabelScale);
     const Vector4 gunIconColor = layout.Color("weapon_slots.gun_icon_color", kGunIconColor);
+    const Input* input = Input::GetCurrent();
+    const auto& list = weapons_->GetList();
+    // 枠の下に文字を中央そろえで出す
+    const Vector4 namePanelColor = layout.Color("weapon_slots.name_panel_color", kWeaponNamePanelColor);
+    const auto drawBelow = [&](const std::wstring& text, const Vector2& framePosition, const Vector4& color) {
+        const Vector2 textSize = FontRenderer::MeasureStringW(text, nameScale);
+        const float x = framePosition.x + (size - textSize.x) * kCenterFactor;
+        const float y = framePosition.y + nameOffsetY;
+        // 後ろに暗い板を敷いて、明るい床の上でも読めるようにする
+        font.DrawPanel(x - kWeaponNamePadding, y - kWeaponNamePadding, textSize.x + kWeaponNamePadding * 2.0f,
+            textSize.y + kWeaponNamePadding * 2.0f, namePanelColor);
+        font.DrawStringW(text, x, y, nameScale, color);
+    };
     for (int i = 0; i < kSlotCount; ++i) {
         const int index = weapons_->GetSlotWeaponIndex(i);
-        if (index < 0 || !weapons_->IsUnlocked(index)) {
+        const bool unlocked = index >= 0 && index < static_cast<int>(list.size()) && weapons_->IsUnlocked(index);
+        if (!unlocked) {
             font.DrawStringW(L"?", slots_[i].position.x + lockedMarkOffset.x, slots_[i].position.y + lockedMarkOffset.y,
                 lockedMarkScale, lockedMarkColor);
+        } else {
+            // 何の武器かが分かるように、枠の下に種類の名前を出す（持っている枠は明るく）
+            const bool active = i == weapons_->GetSelectedSlot();
+            drawBelow(WeaponTypeLabel(list[index].type), slots_[i].position, active ? activeNameColor : nameColor);
         }
-        if (showNumbers_) {
-            font.DrawString(std::to_string(i + 1), slots_[i].position.x + numberOffset.x, slots_[i].position.y + numberOffset.y,
-                numberScale, numberColor);
+        // 切り替えの入力は、最後に使った機器の表記で枠の左上に出す
+        if (input != nullptr) {
+            font.DrawStringW(input->ExpandPrompts(kSlotPrompts[i]), slots_[i].position.x + numberOffset.x,
+                slots_[i].position.y + numberOffset.y, numberScale, numberColor);
         }
     }
-    font.DrawString("GUN", gunPosition_.x + gunLabelOffset.x, gunPosition_.y + gunLabelOffset.y, gunLabelScale, gunIconColor);
+    drawBelow(L"銃", gunPosition_, gunIconColor);
 }
 /** @brief 武器スロットを描画する */
 void WeaponSlotHud::Draw() {

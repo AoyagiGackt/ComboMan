@@ -113,6 +113,7 @@ void GamePlayScene::UpdateFinisherSlash(float dt) {
     if (finisherLineIdx_ < CombatTune().finisherSlashLines) {
         // カメラ視界全体にランダムな位置を高速で斬り刻む
         const finisherEffects::BeatSlash slash = finisherEffects::SpawnBeatSlash(rng_, camera_->GetTranslate(), finisherLineIdx_);
+        finisherSlashes_.push_back(slash);
 
         // 1本ごとに画面内の敵すべてへ実際にヒットさせ、空中に拘束し続ける
         for (EnemyEntity* target : CollectOnScreenEnemies()) {
@@ -165,13 +166,13 @@ void GamePlayScene::UpdateFinisherSlash(float dt) {
     // 解放の瞬間 刃の一斉放出と空間歪みの最大化
     finisherEffects::EmitReleaseBlades(bladeFlash_, spaceWarp_, epos);
 
-    // 白閃光とともに暗転+斬撃線ごと凍った画面を敵位置から砕き、素の世界を見せる
-    ScreenFlash::GetInstance()->Request(visuals.releaseFlashColor, visuals.releaseFlashSeconds);
-    finisherEffects::StartShatterAt(finisherShatter_, *camera_, epos);
-    gameSounds::Play(SoundCue::kGlassShatter);
-
     // 溜めた斬撃線を一斉に白く光らせてから消し、太く短い閃光の斬撃線を重ねる
-    finisherEffects::SpawnReleaseSlashes(rng_, epos, camera_->GetTranslate());
+    finisherEffects::SpawnReleaseSlashes(rng_, epos, camera_->GetTranslate(), &finisherSlashes_);
+
+    // 白閃光とともに、刻んだ斬撃線ごと凍った画面をその線に沿って割り落とし、素の世界を見せる
+    ScreenFlash::GetInstance()->Request(visuals.releaseFlashColor, visuals.releaseFlashSeconds);
+    finisherEffects::StartSlashShatterAt(finisherShatter_, *camera_, epos, finisherSlashes_);
+    gameSounds::Play(SoundCue::kGlassShatter);
 
     sceneShared::EmitFinisherRelease(pm_, "hit_ring", "hit_spark", epos);
 }
@@ -190,7 +191,11 @@ void GamePlayScene::CheckClearCondition() {
         const float dx = ppos.x - epos.x;
         const float dy = ppos.y - epos.y;
         if (!mainWeaponAbsorbing_ && dx * dx + dy * dy <= CombatTune().weaponAbsorbRange * CombatTune().weaponAbsorbRange
-            && input_->TriggerAction(Input::Action::kSteal)) {
+            && IsSelectedStealTarget(enemy_) && input_->TriggerAction(Input::Action::kSteal)) {
+            // 膝をついたボスには、歩み寄って武器を抜き取り、その武器でとどめを刺す
+            if (TryStartBossExecution()) {
+                return;
+            }
             mainWeaponAbsorbing_ = true;
             mainWeaponAbsorbTimer_ = CombatTune().weaponAbsorbDuration;
             player_->PlayStealStab();
@@ -218,14 +223,7 @@ void GamePlayScene::CheckClearCondition() {
                 enemy_->RefreshVisualTransforms();
             }
             if (mainWeaponAbsorbTimer_ <= 0.0f) {
-                weaponStealTriggered_ = true;
-                enemy_->SetVisible(false);
-                // ボスの配置物に設定された武器を奪う（未設定ならgame_rules.jsonの既定）。あわせてボス技を習得する
-                const WeaponManager::AcquireResult acquired = WeaponManager::GetInstance()->Acquire(bossWeaponType_);
-                ApplyWeaponAcquireResult(acquired);
-                // ボスの武器は次のステージの専用の壁を壊す鍵になるため、交換画面が出ても破棄させない
-                pendingWeaponMandatory_ = WeaponManager::GetInstance()->HasPendingWeapon();
-                RunData::GetInstance()->AddBossTechnique(rules.bossTechnique);
+                CompleteBossWeaponSteal();
             }
         }
     }
@@ -314,33 +312,29 @@ void GamePlayScene::DrawClearResultScreen(bool withRunResult) {
     // 本編HUDと同じレイアウト（Resources/Config/UI/gameplay.json）の result グループで調整する
     fontRenderer_.Reset();
     UILayout& layout = UILayout::Get("gameplay");
-    auto drawResultText = [&](const char* text, const char* key, const Vector2& position, float scale, const Vector4& color) {
+    // 日本語の結果表示を共通の配置設定で描画予約する。
+    auto drawResultText = [&](const std::wstring& text, const char* key, const Vector2& position, float scale, const Vector4& color) {
         const std::string group = std::string("result.") + key;
         const Vector2 p = layout.Pos(group + "_pos", position);
-        fontRenderer_.DrawString(text, p.x, p.y, layout.Float(group + "_scale", scale), layout.Color(group + "_color", color));
+        fontRenderer_.DrawStringW(text, p.x, p.y, layout.Float(group + "_scale", scale), layout.Color(group + "_color", color));
     };
     // ランクの大きな透かしは、結果の文字より奥に見えるよう先に積む
     if (withRunResult) {
         resultBackdrop_.QueueWatermark(fontRenderer_, RunData::CalcRank(peakStyle_));
     }
-    drawResultText("CLEAR!", "title", kClearTitlePosition, kClearTitleScale, kClearTitleColor);
+    drawResultText(L"クリア!", "title", kClearTitlePosition, kClearTitleScale, kClearTitleColor);
     if (withRunResult) {
-        drawResultText("Style:", "style_label", kStyleLabelPosition, kStyleLabelScale, kStyleLabelColor);
-        drawResultText(RunData::CalcRank(peakStyle_), "rank", kRankPosition, kRankScale, kRankColor);
-        char scoreBuf[textBufferCapacity::kShortText];
-        snprintf(scoreBuf, sizeof(scoreBuf), "+%d pts", lastScore_);
-        drawResultText(scoreBuf, "score", kScorePosition, kScoreScale, kScoreColor);
+        drawResultText(L"評価", "style_label", kStyleLabelPosition, kStyleLabelScale, kStyleLabelColor);
+        const std::string rank = RunData::CalcRank(peakStyle_);
+        drawResultText(std::wstring(rank.begin(), rank.end()), "rank", kRankPosition, kRankScale, kRankColor);
+        drawResultText(L"+" + std::to_wstring(lastScore_) + L" 点", "score", kScorePosition, kScoreScale, kScoreColor);
         // エネルギーコアがあるステージでは集めた数を出し、全部集めていればボーナスも出す
         if (lastPickupTotal_ > kNoPickups) {
-            char coreBuf[textBufferCapacity::kShortText];
-            snprintf(coreBuf, sizeof(coreBuf), "CORES %d / %d", lastPickupCollected_, lastPickupTotal_);
-            drawResultText(coreBuf, "pickup_count", kPickupCountPosition, kPickupBonusScale,
+            drawResultText(L"コア " + std::to_wstring(lastPickupCollected_) + L" / " + std::to_wstring(lastPickupTotal_), "pickup_count", kPickupCountPosition, kPickupBonusScale,
                 lastPickupBonus_ > kNoPickupBonus ? kPickupBonusColor : kPickupCountColor);
         }
         if (lastPickupBonus_ > kNoPickupBonus) {
-            char bonusBuf[textBufferCapacity::kShortText];
-            snprintf(bonusBuf, sizeof(bonusBuf), "ALL CORES BONUS +%d", lastPickupBonus_);
-            drawResultText(bonusBuf, "pickup_bonus", kPickupBonusPosition, kPickupBonusScale, kPickupBonusColor);
+            drawResultText(L"全コア獲得ボーナス +" + std::to_wstring(lastPickupBonus_), "pickup_bonus", kPickupBonusPosition, kPickupBonusScale, kPickupBonusColor);
         }
     }
     fontRenderer_.Draw();
@@ -366,6 +360,14 @@ void GamePlayScene::DrawWorldAndActors() {
 
     // HUDより前にエディタ管理の配置物（収集物・壊せる物を含む）を描画し、BaseScene側の二重描画を抑止する
     GetStageEditor().DrawObjects();
+
+    // 攻撃で吹き飛ばした爆弾
+    SetupModelRenderState();
+    kickedBombs_.Draw();
+    thrownWeapons_.Draw();
+
+    player_->Draw();
+    // 覚醒中の残像は半透明なので、本体の後に重ねる（先に描くと重なった所の本体が隠れて透明に見える）
     if (!ghostTrail_.empty()) {
         SetupModelRenderState();
         ghostObject_->SetModel(player_->GetModel()); // 覚醒フォーム切り替えに残像の見た目を追従させる
@@ -377,8 +379,6 @@ void GamePlayScene::DrawWorldAndActors() {
             ghostObject_->Draw();
         }
     }
-
-    player_->Draw();
     // ラスボス戦の闘技場・黒い分身・撃ち出す剣
     finalBoss_.Draw3D();
     // weaponEnemies_/enemy_の描画自体はStageEditor所有のためGetStageEditor().DrawObjects()

@@ -18,6 +18,8 @@ enum class SoundCue {
     kFinisherBeat, ///< フィニッシャーの斬撃を1本入れた
     kFinisherRelease, ///< フィニッシャーの溜めた斬撃を解き放った
     kGlassShatter, ///< 画面がガラスのように割れた
+    kExplosion, ///< 爆風を伴う物が爆発した
+    kRubble, ///< 壁などが崩れた
     kCount
 };
 

@@ -105,6 +105,15 @@ void StageEditor::UpdateRuntimeActivation(float dt) {
     // 対象ごとの遅延を評価する。有効化は成立後に待ち、無効化は成立後も遅延中だけ維持する
     for (auto& entry : objects_) {
         const ObjectDesc& desc = entry.desc;
+        // フラグの立ち上がりを遅延より先に検出し、扉の揺れ始めを通知する
+        const bool currentFlag = !desc.activationFlag.empty()
+            && GameFlags::GetInstance()->GetFlag(desc.activationFlag);
+        if (entry.activationFlagInitialized && !entry.previousActivationFlag && currentFlag
+            && desc.enabled && IsGate(desc) && entry.enabledOverride < 0) {
+            QueueOpenedGatePosition(entry);
+        }
+        entry.previousActivationFlag = currentFlag;
+        entry.activationFlagInitialized = true;
         if (!desc.enabled) {
             entry.runtimeActive = false;
             continue;
@@ -126,7 +135,7 @@ void StageEditor::UpdateRuntimeActivation(float dt) {
             continue;
         }
         // フラグが立っている間だけタイマーを進め、遅延を過ぎたかで有効/無効を決める
-        const bool flagValue = GameFlags::GetInstance()->GetFlag(desc.activationFlag);
+        const bool flagValue = currentFlag;
         if (flagValue) {
             entry.runtimeTimer += dt;
         } else {

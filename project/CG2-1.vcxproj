@@ -171,6 +171,16 @@
     <ClCompile Include="Engine\game\cpp\UI\CommandListView.cpp" />
     <ClCompile Include="Engine\game\cpp\Effect\SlashMark.cpp" />
     <ClCompile Include="Engine\game\cpp\Effect\GameSounds.cpp" />
+    <ClCompile Include="Engine\game\cpp\Effect\KickedBombPool.cpp" />
+    <ClCompile Include="Engine\game\cpp\Effect\ThrownWeaponPool.cpp" />
+    <ClCompile Include="Engine\game\cpp\Scripting\WeaponFinisherTuning.cpp" />
+    <ClCompile Include="Engine\game\cpp\Scripting\MonsterTraitTuning.cpp" />
+    <ClCompile Include="Engine\game\cpp\Scene\GamePlaySceneBombs.cpp" />
+    <ClCompile Include="Engine\game\cpp\Scene\GamePlaySceneFinishers.cpp" />
+    <ClCompile Include="Engine\game\cpp\Scene\GamePlaySceneMonsters.cpp" />
+    <ClCompile Include="Engine\game\cpp\Scene\GamePlaySceneBoss.cpp" />
+    <ClCompile Include="Engine\game\cpp\Scene\GamePlaySceneExecution.cpp" />
+    <ClCompile Include="Engine\game\cpp\Scene\BossBattleDirector.cpp" />
     <ClCompile Include="Engine\game\cpp\Effect\SoundAssignEditor.cpp" />
     <ClCompile Include="Engine\game\cpp\Effect\ElementEffect.cpp" />
     <ClCompile Include="Engine\game\cpp\Scene\GamePlayScene.cpp" />
@@ -253,6 +263,8 @@
     <ClCompile Include="Engine\game\cpp\Scene\TitleScene.cpp" />
     <ClCompile Include="Engine\game\cpp\Scene\PlayerDefeat.cpp" />
     <ClCompile Include="Engine\game\cpp\Scene\PlayerDefeatTuning.cpp" />
+    <ClCompile Include="Engine\game\cpp\Scene\BossExecution.cpp" />
+    <ClCompile Include="Engine\game\cpp\Scene\BossExecutionTuning.cpp" />
     <ClCompile Include="Engine\game\cpp\Scene\ClearFinish.cpp" />
     <ClCompile Include="Engine\game\cpp\Scene\FinalBossArena.cpp" />
     <ClCompile Include="Engine\game\cpp\Scene\FinalBossBody.cpp" />
@@ -763,6 +775,8 @@
     <ClInclude Include="Engine\game\h\Scene\TitleDemoTuning.h" />
     <ClInclude Include="Engine\game\h\Scene\PlayerDefeat.h" />
     <ClInclude Include="Engine\game\h\Scene\PlayerDefeatTuning.h" />
+    <ClInclude Include="Engine\game\h\Scene\BossExecution.h" />
+    <ClInclude Include="Engine\game\h\Scene\BossExecutionTuning.h" />
     <ClInclude Include="Engine\game\h\Scene\ClearFinish.h" />
     <ClInclude Include="Engine\game\h\Scene\FinalBossArena.h" />
     <ClInclude Include="Engine\game\h\Scene\FinalBossBattle.h" />
@@ -785,6 +799,11 @@
     <ClInclude Include="Engine\game\h\UI\CommandListView.h" />
     <ClInclude Include="Engine\game\h\Effect\SlashMark.h" />
     <ClInclude Include="Engine\game\h\Effect\GameSounds.h" />
+    <ClInclude Include="Engine\game\h\Effect\KickedBombPool.h" />
+    <ClInclude Include="Engine\game\h\Effect\ThrownWeaponPool.h" />
+    <ClInclude Include="Engine\game\h\Scripting\WeaponFinisherTuning.h" />
+    <ClInclude Include="Engine\game\h\Scripting\MonsterTraitTuning.h" />
+    <ClInclude Include="Engine\game\h\Scene\BossBattleDirector.h" />
     <ClInclude Include="Engine\game\h\Effect\SoundAssignEditor.h" />
     <ClInclude Include="Engine\game\h\Effect\ElementEffect.h" />
     <ClInclude Include="Engine\game\h\Effect\Easing.h" />

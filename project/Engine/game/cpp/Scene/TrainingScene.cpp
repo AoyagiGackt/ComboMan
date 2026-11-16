@@ -135,7 +135,7 @@ void TrainingScene::InitializeHudAndEffects() {
 void TrainingScene::InitializeWeaponSlotHud() {
     hud_.Add(std::make_unique<TrainingHud>());
     hud_.Add(std::make_unique<AwakenGaugeHud>());
-    hud_.Add(std::make_unique<WeaponSlotHud>(true));
+    hud_.Add(std::make_unique<WeaponSlotHud>());
     hud_.Initialize({ *spriteCommon_, *modelCommon_, *dxCommon_, *weaponManager_ });
     UpdateWeaponSlotHud();
 }

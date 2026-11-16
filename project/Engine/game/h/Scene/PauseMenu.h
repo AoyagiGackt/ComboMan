@@ -1,6 +1,6 @@
 /**
  * @file PauseMenu.h
- * @brief プレイ中のシーンで共通に使う一時停止画面（再開・音量・オートコンボ・コマンド表・コンボ練習・退出の確認）を定義するファイル
+ * @brief プレイ中のシーンで共通に使う一時停止画面（再開・音量・オートコンボ・操作説明・コマンド表・コンボ練習・退出の確認）を定義するファイル
  */
 #pragma once
 #include "CommandListView.h"
@@ -92,10 +92,12 @@ private:
     class IPage;
     class MenuPage;
     class CommandListPage;
+    class ControlsPage;
     class ComboTrialPage;
     class ConfirmExitPage;
     static const IPage& Menu();
     static const IPage& CommandList();
+    static const IPage& Controls();
     static const IPage& ComboTrialList();
     static const IPage& ConfirmExit();
 
@@ -105,6 +107,7 @@ private:
         kBgmVolume,
         kSeVolume,
         kAutoCombo,
+        kControls,
         kCommandList,
         kComboTrial,
         kExit,
@@ -124,6 +127,8 @@ private:
     void UpdateMenu(engine::Input* input);
     /** @brief メニューページの描画（項目・現在値・見出し） */
     void DrawMenu();
+    /** @brief 操作説明のページの描画（見出しと、ボタンごとの操作の一覧） */
+    void DrawControls();
 
     GamePauseController controller_;
     const IPage* page_ = nullptr;

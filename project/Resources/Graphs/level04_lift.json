@@ -1,0 +1,82 @@
+{
+  "comments": {
+    "c0": {
+      "text": "上下に動く足場（フラグ s4_lift で開始）。s4_lift を床の高さと宝物庫の高さの間で往復させる。MoveObject は動かし始めるだけなので、動く時間＋止まる時間を Wait で待つ。下の位置は y=1.0（床から浮かせて、下を歩いて通れるようにしている）",
+      "x": -20,
+      "y": -120,
+      "w": 760,
+      "h": 90,
+      "colorR": 0.4,
+      "colorG": 0.7,
+      "colorB": 1
+    }
+  },
+  "start": "n_msg",
+  "nodes": {
+    "n_msg": {
+      "type": "ShowMessage",
+      "params": {
+        "text": "足場が動いている。上の宝物庫へ行けそうだ",
+        "seconds": 2
+      },
+      "next": "n_loop",
+      "editorX": 0,
+      "editorY": 0
+    },
+    "n_loop": {
+      "type": "Repeat",
+      "params": {
+        "count": 0,
+        "interval": 0.1
+      },
+      "nextTrue": "n_up",
+      "nextFalse": "",
+      "editorX": 260,
+      "editorY": 0
+    },
+    "n_up": {
+      "type": "MoveObject",
+      "params": {
+        "target": "s4_lift",
+        "x": 42.3,
+        "y": 4.45,
+        "z": 0,
+        "seconds": 2
+      },
+      "next": "n_wait_up",
+      "editorX": 520,
+      "editorY": 0
+    },
+    "n_wait_up": {
+      "type": "Wait",
+      "params": {
+        "seconds": 3.5
+      },
+      "next": "n_down",
+      "editorX": 780,
+      "editorY": 0
+    },
+    "n_down": {
+      "type": "MoveObject",
+      "params": {
+        "target": "s4_lift",
+        "x": 42.3,
+        "y": 1,
+        "z": 0,
+        "seconds": 2
+      },
+      "next": "n_wait_down",
+      "editorX": 1040,
+      "editorY": 0
+    },
+    "n_wait_down": {
+      "type": "Wait",
+      "params": {
+        "seconds": 3.5
+      },
+      "next": "n_loop",
+      "editorX": 1300,
+      "editorY": 0
+    }
+  }
+}

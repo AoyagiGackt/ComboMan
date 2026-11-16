@@ -1,0 +1,125 @@
+{
+  "comments": {
+    "c0": {
+      "text": "落石の罠（フラグ s4_rockfall で開始）。知らせてから少し待って岩 s4_rock を落とし、揺れと輪を出す。落ちた所に立っていれば2ダメージ。1.5秒後に岩を消す。岩はプレイヤーより少し奥（z=0.9）に置き、落ちた所に立っていても岩の中に隠れないようにしている",
+      "x": -20,
+      "y": -120,
+      "w": 760,
+      "h": 90,
+      "colorR": 1,
+      "colorG": 0.6,
+      "colorB": 0.3
+    }
+  },
+  "start": "n_msg",
+  "nodes": {
+    "n_msg": {
+      "type": "ShowMessage",
+      "params": {
+        "text": "上だ! 岩が落ちてくる!",
+        "seconds": 1.2
+      },
+      "next": "n_wait",
+      "editorX": 0,
+      "editorY": 0
+    },
+    "n_wait": {
+      "type": "Wait",
+      "params": {
+        "seconds": 0.7
+      },
+      "next": "n_drop",
+      "editorX": 260,
+      "editorY": 0
+    },
+    "n_drop": {
+      "type": "MoveObject",
+      "params": {
+        "target": "s4_rock",
+        "x": 45,
+        "y": 0.15,
+        "z": 0.9,
+        "seconds": 0.3
+      },
+      "next": "n_land",
+      "editorX": 520,
+      "editorY": 0
+    },
+    "n_land": {
+      "type": "Wait",
+      "params": {
+        "seconds": 0.3
+      },
+      "next": "n_shake",
+      "editorX": 780,
+      "editorY": 0
+    },
+    "n_shake": {
+      "type": "ShakeCamera",
+      "params": {
+        "amount": 0.4,
+        "seconds": 0.3
+      },
+      "next": "n_ring",
+      "editorX": 1040,
+      "editorY": 0
+    },
+    "n_ring": {
+      "type": "EmitRing",
+      "params": {
+        "group": "hit_ring",
+        "x": 45,
+        "y": 0,
+        "z": 0,
+        "radius": 2,
+        "r": 1,
+        "g": 0.6,
+        "b": 0.3
+      },
+      "next": "n_hit",
+      "editorX": 1300,
+      "editorY": 0
+    },
+    "n_hit": {
+      "type": "IfPlayerInArea",
+      "params": {
+        "x": 45,
+        "y": 0.4,
+        "width": 1.8,
+        "height": 2.5
+      },
+      "nextTrue": "n_damage",
+      "nextFalse": "n_linger",
+      "editorX": 1560,
+      "editorY": 0
+    },
+    "n_damage": {
+      "type": "DamagePlayer",
+      "params": {
+        "amount": 2
+      },
+      "next": "n_linger",
+      "editorX": 1820,
+      "editorY": -60
+    },
+    "n_linger": {
+      "type": "Wait",
+      "params": {
+        "seconds": 1.5
+      },
+      "next": "n_hide",
+      "editorX": 2080,
+      "editorY": 0
+    },
+    "n_hide": {
+      "type": "SetObjectEnabled",
+      "params": {
+        "target": "s4_rock",
+        "enabled": false
+      },
+      "next": "",
+      "editorX": 2340,
+      "editorY": 0
+    }
+  }
+}

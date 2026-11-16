@@ -20,33 +20,57 @@ enum class WeaponType { kSword,
 /** @brief WeaponType の要素数（種別ごとの表はこの長さで WeaponType の並び順に持つ） */
 inline constexpr std::size_t kWeaponTypeCount = static_cast<std::size_t>(WeaponType::kAxe) + 1;
 
+/** @brief 近接武器種と設定ファイル内の識別名の対応 */
+struct NamedWeaponType {
+    const char* name;
+    WeaponType type;
+    const wchar_t* label; ///< 画面に出す日本語の名前
+};
+
+/** @brief 武器種別名の一覧（weapons.jsonの"type"・レベルJSONのweaponType・game_rules.jsonと同じ文字列規約） */
+inline constexpr NamedWeaponType kWeaponTypeNames[] = {
+    { "Sword", WeaponType::kSword, L"剣" },
+    { "Spear", WeaponType::kSpear, L"槍" },
+    { "Hammer", WeaponType::kHammer, L"ハンマー" },
+    { "Dagger", WeaponType::kDagger, L"短剣" },
+    { "Ball", WeaponType::kBall, L"ボール" },
+    { "Greatsword", WeaponType::kGreatsword, L"大剣" },
+    { "Scythe", WeaponType::kScythe, L"鎌" },
+    { "Axe", WeaponType::kAxe, L"斧" },
+};
+
 /**
- * @brief 武器種別名（weapons.jsonの"type"・レベルJSONのweaponType・game_rules.jsonと同じ文字列規約）をWeaponTypeへ変換する
+ * @brief 武器種別名をWeaponTypeへ変換する
  * @param type "Sword" "Spear" "Hammer" "Dagger" "Ball" "Greatsword" "Scythe" "Axe" のいずれか
  * @return 対応する種別。未知の文字列はSword
  */
 inline WeaponType ParseWeaponTypeName(const std::string& type) {
-    /** @brief 近接武器種と設定ファイル内の識別名の対応 */
-    struct NamedWeaponType {
-        const char* name;
-        WeaponType type;
-    };
-    static constexpr NamedWeaponType kNames[] = {
-        { "Sword", WeaponType::kSword },
-        { "Spear", WeaponType::kSpear },
-        { "Hammer", WeaponType::kHammer },
-        { "Dagger", WeaponType::kDagger },
-        { "Ball", WeaponType::kBall },
-        { "Greatsword", WeaponType::kGreatsword },
-        { "Scythe", WeaponType::kScythe },
-        { "Axe", WeaponType::kAxe },
-    };
-    for (const NamedWeaponType& entry : kNames) {
+    for (const NamedWeaponType& entry : kWeaponTypeNames) {
         if (type == entry.name) {
             return entry.type;
         }
     }
     return WeaponType::kSword;
+}
+
+/** @brief WeaponTypeを武器種別名へ変換する（ParseWeaponTypeName の逆） */
+inline const char* WeaponTypeName(WeaponType type) {
+    for (const NamedWeaponType& entry : kWeaponTypeNames) {
+        if (type == entry.type) {
+            return entry.name;
+        }
+    }
+    return kWeaponTypeNames[0].name;
+}
+
+/** @brief WeaponTypeを画面に出す日本語の名前へ変換する（剣・槍など） */
+inline const wchar_t* WeaponTypeLabel(WeaponType type) {
+    for (const NamedWeaponType& entry : kWeaponTypeNames) {
+        if (type == entry.type) {
+            return entry.label;
+        }
+    }
+    return kWeaponTypeNames[0].label;
 }
 
 /** @brief 操作説明HUDに表示する1コマンドぶんのキー表示と説明 */
@@ -69,7 +93,6 @@ struct AwakenedWeaponMods {
 /** @brief 1スタイルぶんの近接武器データ */
 struct WeaponData {
     std::string name;
-    std::wstring styleNameJp; ///< 画面に出すスタイル名（日本語）
     WeaponType type;
     float damage;
     float range;

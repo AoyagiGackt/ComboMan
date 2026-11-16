@@ -1,0 +1,109 @@
+{
+  "_comment": "武器ごとの締めの動作。地上コンボの最後の段が当たった瞬間に出す。launcher=下＋攻撃の打ち上げ技を使うか（false の武器は空中へは行かず、地上の締めで戦う。読むのは起動時だけ） action=動作の種類（none=何もしない warpBehind=前の一番近い敵の背後へ回り込む thrust=前へ長く突いて横へ突き飛ばす shockwave=地面を叩いて周りを衝撃波で崩す slamDown=前へ振り下ろして浮いた敵を地面へ叩きつけ、地上の敵は長く止める pullSpin=回りながら周りの敵を手元へ引き寄せる throw=投げて貫通して戻ってくる） guide=コンボ案内に出す説明 damageMult=武器の威力に掛ける倍率 length=前へ届く長さ radius=届く半径（回り込みは相手を探す距離） halfHeight=上下に届く半分の高さ knockX=横へ飛ばす強さ（敵の速さはこの0.3倍） knockY=上へ浮かせる強さ（0.08を超えると浮く） slamSpeed=地面へ叩きつける速さ stunSeconds=当たった敵を止める秒数 offset=回り込んだ時に敵から離れる距離・引き寄せた敵を置く距離 throw=投げる武器（speed=速さ distance=行きの距離 spinSpeed=回る速さ hitRadius=当たる半径 maxSeconds=消えるまでの秒数 scale=大きさ） effects=hit_effects.json のレシピ名（impact=揺れと止め ring=輪 sparks=火花）。ボスはひるんでいない間は飛ばず止まらず、ダメージだけ入る",
+  "weapons": {
+    "Sword": {
+      "launcher": true,
+      "action": "none",
+      "guide": "下＋攻撃で打ち上げて、空中で斬り刻む"
+    },
+    "Dagger": {
+      "launcher": true,
+      "action": "warpBehind",
+      "guide": "締めで敵の背後へ回り込み、打ち上げて空中へ",
+      "damageMult": 1.2,
+      "radius": 5,
+      "halfHeight": 1.5,
+      "offset": 1.4,
+      "stunSeconds": 0.6,
+      "effects": {
+        "impact": "bomb_kick",
+        "ring": "boss_dash_warning",
+        "sparks": "boss_dash_trail"
+      }
+    },
+    "Spear": {
+      "launcher": false,
+      "action": "thrust",
+      "guide": "締めで前へ長く突き、横へ突き飛ばす",
+      "damageMult": 1.6,
+      "length": 5.5,
+      "halfHeight": 0.9,
+      "knockX": 1.8,
+      "knockY": 0,
+      "stunSeconds": 0.4,
+      "effects": {
+        "impact": "combo_finisher",
+        "ring": "bullet_hit",
+        "sparks": "boss_charge_trail"
+      }
+    },
+    "Hammer": {
+      "launcher": false,
+      "action": "shockwave",
+      "guide": "締めで地面を叩き、周りを衝撃波で崩す",
+      "damageMult": 1.3,
+      "radius": 4.5,
+      "halfHeight": 1.2,
+      "knockX": 0.5,
+      "knockY": 0.25,
+      "stunSeconds": 0.8,
+      "effects": {
+        "impact": "boss_slam",
+        "ring": "boss_slam_outer",
+        "sparks": "gate_dust"
+      }
+    },
+    "Greatsword": {
+      "launcher": false,
+      "action": "slamDown",
+      "guide": "締めで振り下ろし、浮いた敵は地面へ叩きつける",
+      "damageMult": 2,
+      "length": 3.5,
+      "halfHeight": 2.5,
+      "slamSpeed": 0.6,
+      "stunSeconds": 1.2,
+      "effects": {
+        "impact": "boss_slam",
+        "ring": "boss_slam_inner",
+        "sparks": "boss_slam"
+      }
+    },
+    "Scythe": {
+      "launcher": false,
+      "action": "pullSpin",
+      "guide": "締めで回りながら、周りの敵を手元へ引き寄せる",
+      "damageMult": 1,
+      "radius": 5,
+      "halfHeight": 1.5,
+      "offset": 1.2,
+      "stunSeconds": 0.7,
+      "effects": {
+        "impact": "combo_finisher",
+        "ring": "boss_roar",
+        "sparks": "defeat"
+      }
+    },
+    "Axe": {
+      "launcher": false,
+      "action": "throw",
+      "guide": "締めで斧を投げ、貫通して戻ってくる",
+      "damageMult": 0.9,
+      "knockX": 0.8,
+      "knockY": 0,
+      "stunSeconds": 0.3,
+      "throw": {
+        "speed": 16,
+        "distance": 7,
+        "spinSpeed": 18,
+        "hitRadius": 0.8,
+        "maxSeconds": 3,
+        "scale": 0.5
+      },
+      "effects": {
+        "impact": "bomb_kick",
+        "ring": "",
+        "sparks": "player_hit"
+      }
+    }
+  }
+}

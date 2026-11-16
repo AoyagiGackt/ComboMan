@@ -1,0 +1,37 @@
+{
+  "comments": {
+    "c0": {
+      "text": "区画Dに入った瞬間（フラグ s4_zone_d）に走る。前の区画の案内文を消す",
+      "x": -20,
+      "y": -120,
+      "w": 560,
+      "h": 90,
+      "colorR": 0.9,
+      "colorG": 0.85,
+      "colorB": 0.3
+    }
+  },
+  "start": "n_hide_0",
+  "nodes": {
+    "n_hide_0": {
+      "type": "SetObjectEnabled",
+      "params": {
+        "target": "guide_s4_b",
+        "enabled": false
+      },
+      "next": "n_hide_1",
+      "editorX": 0,
+      "editorY": 0
+    },
+    "n_hide_1": {
+      "type": "SetObjectEnabled",
+      "params": {
+        "target": "guide_s4_c",
+        "enabled": false
+      },
+      "next": "",
+      "editorX": 260,
+      "editorY": 0
+    }
+  }
+}

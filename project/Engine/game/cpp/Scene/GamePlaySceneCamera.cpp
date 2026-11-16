@@ -59,7 +59,8 @@ void GamePlayScene::UpdateTargetLock() {
     float minDist = FLT_MAX;
     const EnemyEntity* nearest = nullptr;
     auto consider = [&](const EnemyEntity* candidate) {
-        if (candidate->IsDefeated()) {
+        // 倒れた敵と、フィニッシャーで切られて見えなくなっている敵は狙わない（見えない敵の方へカメラが寄らないように）
+        if (candidate == nullptr || candidate->IsDefeated() || !candidate->IsVisible()) {
             return;
         }
         const float dist = std::abs(candidate->GetPosition().x - pp.x);
@@ -93,6 +94,11 @@ void GamePlayScene::UpdateCamera() {
         ppos = playerDefeat_.CameraFocus();
         zoom = playerDefeat_.CameraZoom();
         followHeight = playerDefeat_.CameraHeight();
+    } else if (bossExecution_.IsActive()) {
+        // とどめの間はプレイヤーとボスの間を、演出が決めた寄りで映す（見る位置の高さは演出が決める）
+        ppos = bossExecution_.CameraFocus();
+        zoom = bossExecution_.CameraZoom();
+        followHeight = 0.0f;
     } else if (scriptCameraFocusSeconds_ > 0.0f) {
         // ノードグラフの FocusCamera で向けた先を映す（向けた先の高さをそのまま中心にする）
         scriptCameraFocusSeconds_ -= gameConstants::kFrameDeltaTime;
@@ -111,6 +117,10 @@ void GamePlayScene::UpdateCamera() {
     float cameraX = cameraMinX <= cameraMaxX
         ? std::clamp(ppos.x, cameraMinX, cameraMaxX)
         : (stageLeft + stageRight) * 0.5f;
+    // 開始演出でボスを映す間は、ボスが壁際にいても画面の真ん中に来るよう端で止めるのを外す
+    if (stageIntro_.IsPlaying()) {
+        cameraX += (ppos.x - cameraX) * stageIntro_.CameraUnclampWeight();
+    }
 
     // ロック中はカメラをほんの少しだけ対象側へ寄せて、狙っていることに気付きやすくする
     // （BattleTestScene/sceneShared::UpdateCameraFollowと同じ控えめな比率）

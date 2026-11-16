@@ -5,6 +5,7 @@
 #include "MyGame.h"
 #include "AssetPack.h"
 #include "Audio.h"
+#include "BossBattleDirector.h"
 #include "ClearScene.h"
 #include "CombatTuning.h"
 #include "EnemyTuning.h"
@@ -14,7 +15,11 @@
 #include "GameSounds.h"
 #include "HitEffectLibrary.h"
 #include "JsonConfigEditor.h"
+#include "KickedBombPool.h"
+#include "MonsterTraitTuning.h"
+#include "WeaponFinisherTuning.h"
 #include "PlayerDefeat.h"
+#include "BossExecution.h"
 #include "PlayerTuning.h"
 #include "ResultBackdrop.h"
 #include "StageLiberation.h"
@@ -83,11 +88,19 @@ void SetupConfigEditor() {
     editor->SetReloadCallback("hit_effects.json", [] { game::HitEffectLibrary::GetInstance()->Reload(); });
     editor->SetReloadCallback("style_meter.json", [] { game::StyleMeter::ReloadTuning(); });
     editor->SetReloadCallback("player_defeat.json", [] { game::PlayerDefeat::ReloadTuning(); });
+    editor->SetReloadCallback("boss_execution.json", [] { game::BossExecution::ReloadTuning(); });
     editor->SetReloadCallback("stage_liberation.json", [] { game::StageLiberation::ReloadTuning(); });
     editor->SetReloadCallback("result_backdrop.json", [] { game::ResultBackdrop::ReloadTuning(); });
     editor->SetReloadCallback("clear_scene.json", [] { game::ClearScene::ReloadTuning(); });
     // 撃ち出す剣の数は闘技場を開いた時に決まるが、呼ぶ本数は剣の数で止めるので読み直してもよい
     editor->SetReloadCallback("final_boss.json", [] { game::FinalBossTuningStore::Reload(); });
+    // ボスの名前と技の並びは、次に戦うボスを結び付けた時から使われる
+    editor->SetReloadCallback("boss_battle.json", [] { game::BossBattleTuningStore::Reload(); });
+    // 飛んでいる爆弾の見た目は最初に読み込んだモデルのまま（速さや当たりの大きさは読み直せる）
+    editor->SetReloadCallback("bomb_kick.json", [] { game::BombKickTuningStore::Reload(); });
+    // 締めの動作の数値と演出は読み直せる（打ち上げ技の有無はコンボの表を作る起動時だけ見る）
+    editor->SetReloadCallback("weapon_finishers.json", [] { game::WeaponFinisherTuning::Reload(); });
+    editor->SetReloadCallback("monster_traits.json", [] { game::MonsterTraitTuning::Reload(); });
     editor->SetReloadCallback("sounds.json", [] { game::gameSounds::Reload(); });
     editor->SetReloadCallback("bgm.json", [] { Audio::ReloadBGMConfig(); });
 }
@@ -131,7 +144,10 @@ void MyGame::Initialize() {
     ScreenFlash::GetInstance()->Initialize(dxCommon_.get());
 
     // --smoke-test で起動したら自動テストプレイを始める（画面の更新を待たずに速く回すため VSync は切る）
-    if (smokeTest_.StartIfRequested(input_.get())) {
+    // --realtime も付けた時は、人が画面を見ながら確かめられるよう、ふだんの速さのまま進める
+    constexpr const wchar_t* kRealtimeFlag = L"--realtime";
+    const bool realtime = std::wstring(GetCommandLineW()).find(kRealtimeFlag) != std::wstring::npos;
+    if (smokeTest_.StartIfRequested(input_.get()) && !realtime) {
         dxCommon_->SetVSyncEnabled(false);
     }
 

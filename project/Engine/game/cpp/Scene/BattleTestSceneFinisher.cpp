@@ -47,6 +47,7 @@ void BattleTestScene::TriggerFinisherSlash() {
 
     finisherActive_ = true;
     finisherLineIdx_ = 0;
+    finisherSlashes_.clear();
     finisherBeatTimer_ = CombatTune().finisherChargeDelay;
     tm->RequestHitStop(HitEffectLibrary::GetInstance()->SceneParticles().hitStopJuggle);
     ScreenFlash::GetInstance()->Request(SceneVisualTuning::BattleFinisher().chargeFlashColor, SceneVisualTuning::BattleFinisher().chargeFlashSeconds);
@@ -86,6 +87,7 @@ void BattleTestScene::UpdateFinisherSlashLine() {
     // カメラ視界全体にランダムな位置を高速で斬り刻む
     static std::mt19937 sRng { std::random_device { }() };
     const finisherEffects::BeatSlash slash = finisherEffects::SpawnBeatSlash(sRng, camera_->GetTranslate(), finisherLineIdx_);
+    finisherSlashes_.push_back(slash);
     const Vector3 slashCenter = { slash.center.x, slash.center.y, 0.0f };
     sceneShared::EmitFinisherSlashLine(pm_, "bt_sword_slash", "bt_hit_spark", slashCenter, slash.angle, slash.length);
     gameSounds::Play(SoundCue::kFinisherBeat);
@@ -131,7 +133,7 @@ void BattleTestScene::PlayFinisherReleaseEffects() {
 
     // 溜めた斬撃線を一斉に白く光らせてから消し、太く短い閃光の斬撃線を重ねる
     static std::mt19937 sRngRelease { std::random_device { }() };
-    finisherEffects::SpawnReleaseSlashes(sRngRelease, pp, camera_->GetTranslate());
+    finisherEffects::SpawnReleaseSlashes(sRngRelease, pp, camera_->GetTranslate(), &finisherSlashes_);
     gameSounds::Play(SoundCue::kFinisherRelease);
 
     tm->RequestHitStop(HitEffectLibrary::GetInstance()->SceneParticles().hitStopFinisherSlash);
@@ -162,8 +164,8 @@ void BattleTestScene::PlayFinisherReleaseEffects() {
 
 /** @brief UpdateFinisherSlash()の下請け プレイヤー位置を画面UVへ投影し世界割れ演出を開始する */
 void BattleTestScene::StartFinisherShatterImpact() {
-    // 暗転+斬撃線ごと凍った画面をプレイヤー位置から砕き、素の世界を見せる
-    finisherEffects::StartShatterAt(finisherShatter_, *camera_, player_->GetPosition());
+    // 暗転+斬撃線ごと凍った画面を、刻んだ斬撃線に沿って割り落とし、素の世界を見せる
+    finisherEffects::StartSlashShatterAt(finisherShatter_, *camera_, player_->GetPosition(), finisherSlashes_);
     gameSounds::Play(SoundCue::kGlassShatter);
 }
 

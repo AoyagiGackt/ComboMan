@@ -1,6 +1,11 @@
 {
-  "_comment": "ヒット・破壊・被弾などの演出レシピ。impacts=ヒットストップとカメラ揺れ rings=放射状のリング（speedは呼び出し側が半径を渡す時は倍率） sparks=左右へ飛び散る火花 slashes=斬線 flashes=画面フラッシュ stars=きらめき particles=1粒 trails=武器の残像 colors=色。色は[R,G,B,A]。コード側が色を差し替える演出では、レシピの色の不透明度が倍率になる 武器ごとの演出: weapons.json の hitStyle（sword/spear/hammer/dagger）ごとに、slashes.combo_step_<hitStyle>（無ければ combo_step）、近接が当たった時の weapon_hit_<hitStyle>、締めの weapon_finisher_<hitStyle>（rings/sparks/stars/impacts/flashes のうち書いてあるものだけ出す）",
+  "_comment": "ヒット・破壊・被弾などの演出レシピ。impacts=ヒットストップとカメラ揺れ rings=放射状のリング（speedは呼び出し側が半径を渡す時は倍率） sparks=左右へ飛び散る火花 slashes=斬線 flashes=画面フラッシュ stars=きらめき particles=1粒 trails=武器の残像 colors=色。色は[R,G,B,A]。コード側が色を差し替える演出では、レシピの色の不透明度が倍率になる 武器ごとの演出: weapons.json の hitStyle（sword/spear/hammer/dagger）ごとに、slashes.combo_step_<hitStyle>（無ければ combo_step）、近接が当たった時の weapon_hit_<hitStyle>、締めの weapon_finisher_<hitStyle>（rings/sparks/stars/impacts/flashes のうち書いてあるものだけ出す）。explosion=爆発の揺れと閃光 explosion_core=中心光 explosion_fire=炎の輪と火の粉 explosion_smoke=遅く残る煙の輪 explosion_debris=暗い破片 rubble=崩落の手応え rubble_debris=壁の破片 rubble_dust=崩落の足元の土煙 gate_dust=扉の足元の土煙 gate_open=扉の開き始めの揺れ bomb_kick=爆弾を吹き飛ばした瞬間の手応え bomb_kick_trail=飛んでいる爆弾の火の粉 boss_roar=ボスが第2段階へ入った咆哮 boss_charge_warning=突進の身構え boss_charge_trail=突進の土煙 boss_dash_warning=ダッシュの身構え boss_dash_trail=ダッシュの残り火",
   "impacts": {
+    "boss_roar": { "hitStopFrames": 6, "shakeAmount": 0.38, "shakeSeconds": 0.6 },
+    "bomb_kick": { "hitStopFrames": 4, "shakeAmount": 0.1, "shakeSeconds": 0.1 },
+    "explosion": { "hitStopFrames": 10, "shakeAmount": 0.42, "shakeSeconds": 0.28 },
+    "rubble": { "hitStopFrames": 3, "shakeAmount": 0.12, "shakeSeconds": 0.14 },
+    "gate_open": { "hitStopFrames": 0, "shakeAmount": 0.08, "shakeSeconds": 0.18 },
     "weapon_hit_hammer": {
       "hitStopFrames": 2,
       "shakeAmount": 0.18,
@@ -183,6 +188,11 @@
     }
   },
   "rings": {
+    "boss_roar": { "particle": "hit_ring", "speed": 8, "color": [1, 0.25, 0.2, 1], "count": 40, "lifetime": 0.8, "size": 0.45 },
+    "boss_charge_warning": { "particle": "hit_ring", "speed": 2, "color": [1, 0.45, 0.2, 0.8], "count": 16, "lifetime": 0.25, "size": 0.22 },
+    "boss_dash_warning": { "particle": "hit_ring", "speed": 1.5, "color": [0.6, 0.4, 1, 0.8], "count": 12, "lifetime": 0.2, "size": 0.2 },
+    "explosion_fire": { "particle": "hit_ring", "speed": 1, "color": [1, 0.5, 0.12, 1], "count": 30, "lifetime": 0.45, "size": 0.38 },
+    "explosion_smoke": { "particle": "land_dust", "speed": 0.35, "color": [0.42, 0.4, 0.38, 0.65], "count": 24, "lifetime": 1.15, "size": 0.55 },
     "weapon_hit_sword": {
       "particle": "hit_ring",
       "speed": 3.2,
@@ -192,9 +202,9 @@
         1,
         1
       ],
-      "count": 6,
+      "count": 8,
       "lifetime": 0.12,
-      "size": 0.06
+      "size": 0.069
     },
     "weapon_hit_spear": {
       "particle": "hit_ring",
@@ -205,9 +215,9 @@
         1,
         0.9
       ],
-      "count": 4,
+      "count": 5,
       "lifetime": 0.18,
-      "size": 0.08
+      "size": 0.092
     },
     "weapon_hit_hammer": {
       "particle": "hit_ring",
@@ -218,9 +228,9 @@
         0.5,
         0.9
       ],
-      "count": 18,
+      "count": 23,
       "lifetime": 0.3,
-      "size": 0.22
+      "size": 0.253
     },
     "weapon_finisher_spear": {
       "particle": "hit_ring",
@@ -394,6 +404,8 @@
       "lifetime": 0.5,
       "size": 0.32
     },
+    "slime_splash": { "particle": "hit_ring", "speed": 2.8, "color": [0.45, 0.95, 0.55, 0.85], "count": 12, "size": 0.22 },
+    "slime_land": { "particle": "hit_ring", "speed": 2.2, "color": [0.45, 0.95, 0.55, 0.7], "count": 10, "size": 0.2 },
     "contact": {
       "particle": "hit_ring",
       "speed": 4,
@@ -481,9 +493,9 @@
         1,
         1
       ],
-      "count": 7,
+      "count": 9,
       "lifetime": 0.16,
-      "size": 0.09
+      "size": 0.104
     },
     "enemy_hit_outer": {
       "particle": "hit_ring",
@@ -494,9 +506,9 @@
         1,
         1
       ],
-      "count": 14,
+      "count": 18,
       "lifetime": 0.26,
-      "size": 0.11
+      "size": 0.127
     },
     "enemy_hit_extra": {
       "particle": "hit_ring",
@@ -507,9 +519,9 @@
         1,
         0.55
       ],
-      "count": 8,
+      "count": 10,
       "lifetime": 0.24,
-      "size": 0.1035
+      "size": 0.119
     },
     "enemy_telegraph": {
       "particle": "hit_ring",
@@ -839,13 +851,28 @@
     }
   },
   "sparks": {
+    "boss_charge_trail": { "particle": "land_dust", "speedXMin": 0.2, "speedXMax": 1.5, "riseMin": 0.5, "riseMax": 1.8, "count": 4, "color": [0.75, 0.68, 0.58, 0.7], "lifetime": 0.45, "size": 0.32 },
+    "boss_dash_trail": { "particle": "hit_spark", "speedXMin": 0, "speedXMax": 0.6, "riseMin": 0.2, "riseMax": 0.9, "count": 3, "color": [0.6, 0.4, 1, 0.9], "lifetime": 0.3, "size": 0.18 },
+    "bomb_kick_trail": { "particle": "hit_spark", "speedXMin": 0, "speedXMax": 0.8, "riseMin": 0.3, "riseMax": 1.2, "count": 2, "color": [1, 0.55, 0.15, 1], "altColor": [1, 0.9, 0.4, 1], "alternateColor": true, "lifetime": 0.3, "size": 0.14 },
+    "explosion_fire": { "particle": "hit_spark", "speedXMin": 0.5, "speedXMax": 4, "riseMin": 5, "riseMax": 10, "count": 24, "color": [1, 0.4, 0.08, 1], "altColor": [1, 0.85, 0.2, 1], "alternateColor": true, "lifetime": 0.85, "size": 0.2 },
+    "explosion_debris": { "particle": "hit_spark", "speedXMin": 2, "speedXMax": 7, "riseMin": 1.5, "riseMax": 5, "count": 16, "color": [0.25, 0.2, 0.16, 1], "lifetime": 1.1, "size": 0.24 },
+    "rubble_debris": { "particle": "hit_spark", "speedXMin": 0.6, "speedXMax": 3, "riseMin": 0, "riseMax": 2, "count": 20, "color": [0.48, 0.47, 0.45, 1], "lifetime": 0.85, "size": 0.25 },
+    "rubble_dust": { "particle": "land_dust", "speedXMin": 1.2, "speedXMax": 3.5, "riseMin": 0.8, "riseMax": 2.2, "count": 14, "color": [0.65, 0.61, 0.54, 0.65], "lifetime": 0.6, "size": 0.36 },
+    "slime_splash": { "particle": "hit_spark", "speedXMin": 0.8, "speedXMax": 3.2, "riseMin": 1.5, "riseMax": 4.5, "count": 14, "color": [0.45, 0.95, 0.55, 0.95], "altColor": [0.75, 1, 0.8, 0.95], "alternateColor": true, "lifetime": 0.45, "size": 0.22 },
+    "slime_drops": { "particle": "land_dust", "speedXMin": 0.3, "speedXMax": 1.6, "riseMin": 3, "riseMax": 6, "count": 8, "color": [0.35, 0.85, 0.45, 0.9], "lifetime": 0.7, "size": 0.32 },
+    "slime_hop": { "particle": "hit_spark", "speedXMin": 0.4, "speedXMax": 1.8, "riseMin": 0.8, "riseMax": 2.4, "count": 8, "color": [0.45, 0.95, 0.55, 0.9], "altColor": [0.75, 1, 0.8, 0.9], "alternateColor": true, "lifetime": 0.35, "size": 0.18 },
+    "slime_land": { "particle": "land_dust", "speedXMin": 1.5, "speedXMax": 4, "riseMin": 0.3, "riseMax": 1.2, "count": 12, "color": [0.4, 0.9, 0.5, 0.85], "lifetime": 0.45, "size": 0.26 },
+    "defeat_shards": { "particle": "hit_spark", "speedXMin": 2, "speedXMax": 7, "riseMin": 2.5, "riseMax": 8, "count": 22, "color": [0.85, 0.97, 1, 1], "altColor": [1, 1, 1, 1], "alternateColor": true, "lifetime": 0.55, "size": 0.2 },
+    "finisher_ground_wave": { "particle": "land_dust", "speedXMin": 3, "speedXMax": 6.5, "riseMin": 0.1, "riseMax": 0.5, "count": 18, "color": [0.72, 0.67, 0.6, 0.7], "lifetime": 0.5, "size": 0.38 },
+    "finisher_ground_puff": { "particle": "land_dust", "speedXMin": 0.4, "speedXMax": 1.8, "riseMin": 0.4, "riseMax": 1.0, "count": 8, "color": [0.66, 0.62, 0.56, 0.6], "lifetime": 0.75, "size": 0.62 },
+    "gate_dust": { "particle": "land_dust", "speedXMin": 1.2, "speedXMax": 3.5, "riseMin": 0.8, "riseMax": 2.2, "count": 12, "color": [0.85, 0.78, 0.65, 0.65], "lifetime": 0.5, "size": 0.3 },
     "weapon_hit_spear": {
       "particle": "hit_spark",
       "speedXMin": 3,
       "speedXMax": 6,
       "riseMin": 0,
       "riseMax": 0.6,
-      "count": 6,
+      "count": 8,
       "color": [
         1,
         1,
@@ -853,7 +880,7 @@
         1
       ],
       "lifetime": 0.2,
-      "size": 0.06
+      "size": 0.069
     },
     "weapon_hit_hammer": {
       "particle": "land_dust",
@@ -861,7 +888,7 @@
       "speedXMax": 3.5,
       "riseMin": 0.8,
       "riseMax": 2.2,
-      "count": 10,
+      "count": 13,
       "color": [
         0.85,
         0.78,
@@ -869,7 +896,7 @@
         0.75
       ],
       "lifetime": 0.45,
-      "size": 0.26
+      "size": 0.299
     },
     "weapon_hit_dagger": {
       "particle": "hit_spark",
@@ -877,7 +904,7 @@
       "speedXMax": 3,
       "riseMin": 0.5,
       "riseMax": 3,
-      "count": 12,
+      "count": 16,
       "color": [
         1,
         1,
@@ -885,7 +912,7 @@
         1
       ],
       "lifetime": 0.2,
-      "size": 0.05
+      "size": 0.057
     },
     "weapon_finisher_hammer": {
       "particle": "land_dust",
@@ -1029,7 +1056,7 @@
       "speedXMax": 2.5,
       "riseMin": 1.5,
       "riseMax": 4.5,
-      "count": 9,
+      "count": 12,
       "color": [
         1,
         1,
@@ -1037,7 +1064,7 @@
         1
       ],
       "lifetime": 0.32,
-      "size": 0.075
+      "size": 0.086
     },
     "enemy_hit_extra": {
       "particle": "hit_spark",
@@ -1053,7 +1080,7 @@
         1
       ],
       "lifetime": 0.32,
-      "size": 0.075
+      "size": 0.086
     },
     "skill_impact": {
       "particle": "hit_spark",
@@ -1310,6 +1337,8 @@
     }
   },
   "flashes": {
+    "boss_roar": { "color": [1, 0.3, 0.25, 0.4], "seconds": 0.16 },
+    "explosion": { "color": [1, 0.87, 0.65, 0.55], "seconds": 0.09 },
     "weapon_finisher_sword": {
       "color": [
         1,
@@ -1550,6 +1579,7 @@
     }
   },
   "particles": {
+    "explosion_core": { "particle": "hit_spark", "color": [1, 0.9, 0.55, 1], "lifetime": 0.18, "size": 1.6 },
     "enemy_tracer": {
       "particle": "gun_shot",
       "color": [
@@ -1619,6 +1649,7 @@
       "lifetime": 0.14,
       "size": 1.4
     },
+    "finisher_ember": { "particle": "hit_spark", "color": [1, 0.7, 0.3, 0.65], "lifetime": 1.1, "size": 0.11, "riseSpeed": 1.0, "flicker": true },
     "awaken_aura": {
       "particle": "awaken_aura",
       "color": [
@@ -1810,7 +1841,7 @@
       1,
       0.5
     ],
-    "releaseFlashSeconds": 0.15,
+    "releaseFlashSeconds": 0.22,
     "absorbTargetHeight": 0.5,
     "absorbGlowColor": [
       0.5,
@@ -1834,10 +1865,17 @@
     "shakeLaunchDur": 0.28,
     "shakeFinishAmt": 0.55,
     "shakeFinishDur": 0.4,
-    "shakeFinisherSlashAmt": 0.65,
+    "shakeFinisherSlashAmt": 0.8,
     "shakeFinisherSlashDur": 0.45,
     "finisherSlashRadius": 4.5,
-    "finisherOverlayAlpha": 0.6
+    "finisherOverlayAlpha": 0.6,
+    "finisherEmberCount": 14,
+    "finisherEmberSpread": 0.9,
+    "finisherEmberRiseMin": 0.5,
+    "finisherEmberRiseMax": 1.4,
+    "finisherEmberDriftX": 0.5,
+    "defeatSlowSeconds": 0.22,
+    "defeatSlowScale": 0.3
   },
   "finisherVisuals": {
     "slashLineLengthMin": 4,
@@ -1862,10 +1900,10 @@
       1
     ],
     "slashFlashSeconds": 0.22,
-    "releaseSlashCount": 8,
+    "releaseSlashCount": 10,
     "releaseSlashThickness": 9,
     "releaseSlashSeconds": 0.15,
-    "releaseBladeCount": 30,
+    "releaseBladeCount": 48,
     "releaseBladeSpeedMin": 2,
     "releaseBladeSpeedMax": 5,
     "releaseWarpImpulse": 1
@@ -1989,7 +2027,7 @@
       0.2,
       0.8
     ],
-    "finisherShatterSeconds": 0.9,
+    "finisherShatterSeconds": 1.4,
     "launchRingSpeed": 5.5,
     "launchRingColor": [
       1,
@@ -2299,7 +2337,7 @@
     "hpBarGreenScale": 0.85,
     "hpBarGreenBase": 0.15,
     "hpBarAlpha": 0.9,
-    "finisherShatterSeconds": 0.9,
+    "finisherShatterSeconds": 1.4,
     "hitRingSpeed": 3,
     "hitRingColor": [
       1,

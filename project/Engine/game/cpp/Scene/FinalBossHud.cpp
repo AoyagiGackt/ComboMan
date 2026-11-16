@@ -22,8 +22,9 @@ constexpr std::size_t kMark = 3;
 constexpr std::size_t kTop = 4;
 constexpr std::size_t kBottom = 5;
 constexpr std::size_t kVeil = 6;
-constexpr Vector2 kBarPosition = { kCenterX, kScreenHeight - 64.0f };
-constexpr float kBarWidth = 720.0f;
+constexpr float kBarY = 56.0f;
+constexpr Vector2 kBarPosition = { kCenterX, kBarY };
+constexpr float kBarWidth = 560.0f;
 constexpr float kBarHeight = 14.0f;
 constexpr float kBorder = 3.0f;
 constexpr float kMarkWidth = 3.0f;
@@ -155,7 +156,12 @@ void FinalBossHud::Draw() {
     if (!initialized_) {
         return;
     }
-    for (auto& sprite : sprites_) {
+    // 黒帯を先に描き、上中央の体力バーを隠さず、白い幕は最後に重ねる。
+    constexpr std::array<std::size_t, kSpriteCount> kDrawOrder = {
+        kTop, kBottom, kBackground, kDelayed, kHealth, kMark, kVeil
+    };
+    for (const std::size_t index : kDrawOrder) {
+        auto& sprite = sprites_[index];
         if (sprite->GetSize().x > 0.0f && sprite->GetSize().y > 0.0f) {
             sprite->Draw();
         }

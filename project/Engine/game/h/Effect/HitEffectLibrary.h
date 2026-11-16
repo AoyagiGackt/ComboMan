@@ -113,6 +113,13 @@ struct SceneParticleDef {
     float shakeFinisherSlashDur = 0.45f;
     float finisherSlashRadius = 4.5f; ///< 斬撃線の最大半長
     float finisherOverlayAlpha = 0.60f; ///< 演出中の画面暗転の濃さ
+    int finisherEmberCount = 14; ///< コンボの締めで立ちのぼる残り火の数
+    float finisherEmberSpread = 0.9f; ///< 残り火を散らす半径（当てた所から）
+    float finisherEmberRiseMin = 0.5f; ///< 残り火が立ちのぼる最小の速さ
+    float finisherEmberRiseMax = 1.4f; ///< 残り火が立ちのぼる最大の速さ
+    float finisherEmberDriftX = 0.5f; ///< 残り火が横へ流れる最大の速さ
+    float defeatSlowSeconds = 0.22f; ///< 敵を倒した瞬間のスローの秒数
+    float defeatSlowScale = 0.3f; ///< 敵を倒した瞬間のスローの速さ（1=ふだん）
     float ghostSpawnInterval = 0.05f; ///< 残像を追加する間隔（秒）
     float ghostLifetime = 0.3f; ///< 残像が消えるまでの秒数
     float ghostMaxAlpha = 0.5f; ///< 残像の最大不透明度
@@ -286,6 +293,18 @@ public:
     void Impact(const std::string& name, const EffectStyle& style = {}) const;
     void Ring(const std::string& name, const Vector3& position, const EffectStyle& style = {}) const;
     void Sparks(const std::string& name, const Vector3& position, const EffectStyle& style = {}) const;
+    /** @brief 名前が空でなければ輪を出す（調整値で空にした演出は出さず、警告も出さない） */
+    void RingIfNamed(const std::string& name, const Vector3& position) const {
+        if (!name.empty()) {
+            Ring(name, position);
+        }
+    }
+    /** @brief 名前が空でなければ火花を出す（調整値で空にした演出は出さず、警告も出さない） */
+    void SparksIfNamed(const std::string& name, const Vector3& position) const {
+        if (!name.empty()) {
+            Sparks(name, position);
+        }
+    }
     /** @brief 斬線を出す（facingX が正なら右向きの角度） */
     void Slash(const std::string& name, const Vector3& position, float facingX, const EffectStyle& style = {}) const;
     void Flash(const std::string& name, const EffectStyle& style = {}) const;
