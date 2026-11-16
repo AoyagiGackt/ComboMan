@@ -2,6 +2,8 @@
  * @brief 敵の装備位置とヒットストップ中の見た目更新
  */
 #include "EnemyEntity.h"
+#include "BossExecutionTuning.h"
+#include "EnemyTuning.h"
 #include "GameConstants.h"
 #include <algorithm>
 #include <cmath>
@@ -18,6 +20,21 @@ void EnemyEntity::UpdateDroppedWeapon() {
         droppedWeaponPos_.y = droppedWeaponGroundY_;
         droppedWeaponLanded_ = true;
     }
+}
+
+/** @brief 見た目を置く位置（位置は床の上面から corpseFootOffset だけ上に置いているので、その分だけ下げて足元を床にそろえる） */
+Vector3 EnemyEntity::VisualPosition() const {
+    // 膝をついたボスは、膝が床に付くまで沈め、肩で息をするように小さく上下させる
+    if (IsKneeling()) {
+        const BossKneelTuning& kneel = BossExecutionTuningStore::Get().kneel;
+        const float breath = std::sin(offerTimer_ * kneel.breathSpeed) * kneel.breathAmount;
+        return { pos_.x, pos_.y - EnemyTuning::GetInstance()->Basic().corpseFootOffset - kneel.sink + breath, pos_.z };
+    }
+    // 倒れた体は床に寝かせた時にめり込まないよう浮かせてあるので、下げない
+    if (defeated_) {
+        return pos_;
+    }
+    return { pos_.x, pos_.y - EnemyTuning::GetInstance()->Basic().corpseFootOffset, pos_.z };
 }
 
 /** @brief 武器の位置を本体の手元（落としていれば落とした場所）へ合わせる */
@@ -50,6 +67,14 @@ void EnemyEntity::UpdateOfferedWeapon(bool advance) {
     if (advance) {
         offerTimer_ += gameConstants::kFrameDeltaTime;
     }
+    // 膝をつくボスは武器を浮かべず、地面に突き立てたまま光らせる
+    if (IsKneeling()) {
+        if (!kneelPoseApplied_) {
+            ApplyKneelPose();
+        }
+        PlaceKneelWeapon();
+        return;
+    }
     // 手元（落ちた武器なら落ちた場所）から、回収位置の上へ勢いよく上がって減速する
     const float rise = (std::min)(offerTimer_ / kOfferRiseSeconds, 1.0f);
     const float eased = 1.0f - (1.0f - rise) * (1.0f - rise);
@@ -71,6 +96,40 @@ void EnemyEntity::UpdateOfferedWeapon(bool advance) {
         kOfferDimColor.w });
 }
 
+/** @brief 膝をつく姿勢（ボーンの曲げ・ゆっくりの待機アニメ）を掛け始める */
+void EnemyEntity::ApplyKneelPose() {
+    const BossKneelTuning& kneel = BossExecutionTuningStore::Get().kneel;
+    std::vector<ReachPoseLayer::Reach> reaches;
+    reaches.reserve(kneel.reaches.size());
+    for (const KneelReach& reach : kneel.reaches) {
+        reaches.push_back({ reach.bone, reach.direction, reach.weight });
+    }
+    kneelLayer_.SetReaches(reaches);
+    object_->SetPoseLayer(&kneelLayer_);
+    // 倒れた瞬間の攻撃の姿勢で固まらないよう、待機アニメをゆっくり流して息づかいを見せる
+    object_->SetAnimation(idleAnimation_);
+    object_->SetAnimSpeed(kneel.animSpeed);
+    animationState_ = VisualAnim::kIdle;
+    kneelPoseApplied_ = true;
+}
+
+/** @brief 膝をついている間、武器を体の前の地面に突き立てて明滅させる */
+void EnemyEntity::PlaceKneelWeapon() {
+    const BossKneelTuning& kneel = BossExecutionTuningStore::Get().kneel;
+    const float facingYaw = facingSign_ >= 0.0f ? gameConstants::kHalfPi : -gameConstants::kHalfPi;
+    weaponObject_->SetPosition({ pos_.x + facingSign_ * kneel.weaponOffset.x, pos_.y + kneel.weaponOffset.y, pos_.z + kneel.weaponOffset.z });
+    weaponObject_->SetRotation({ 0.0f, facingYaw, kneel.weaponTilt });
+    weaponObject_->SetScale(weaponScale_);
+    // 撃破後の灰色ではなく、白と淡い青の間で明滅させて抜き取れることを目立たせる
+    constexpr float kHalf = 0.5f;
+    const float pulse = kHalf + kHalf * std::sin(offerTimer_ * kneel.weaponPulseSpeed);
+    weaponObject_->SetColor({
+        kneel.weaponDimColor.x + (1.0f - kneel.weaponDimColor.x) * pulse,
+        kneel.weaponDimColor.y + (1.0f - kneel.weaponDimColor.y) * pulse,
+        kneel.weaponDimColor.z + (1.0f - kneel.weaponDimColor.z) * pulse,
+        kneel.weaponDimColor.w });
+}
+
 /** @brief ヒットストップ中の1フレーム（物理・AIを止め、被弾直後なら本体を左右に震わせて描画行列だけ更新する） */
 void EnemyEntity::UpdateDuringHitStop() {
     // 1フレームだけ立つフラグは停止前のフレームでシーン側が読み終えているため、停止明けに二重に拾われないよう落とす
@@ -78,7 +137,7 @@ void EnemyEntity::UpdateDuringHitStop() {
     justFiredAttack_ = false;
     justStartedTelegraph_ = false;
 
-    Vector3 visualPos = pos_;
+    Vector3 visualPos = VisualPosition();
     if (hitFlashTimer_ > 0.0f) {
         // 殴られた敵だけを白く光らせたまま左右に小刻みに震わせる
         ++hitStopShakeFrame_;
@@ -113,8 +172,9 @@ void EnemyEntity::UpdateScripted() {
     const float facingYaw = facingSign_ >= 0.0f ? gameConstants::kHalfPi : -gameConstants::kHalfPi;
     object_->SetRotation({ 0.0f, facingYaw, 0.0f });
     weaponObject_->SetRotation({ 0.0f, facingYaw, kWeaponRestTilt });
-    object_->SetPosition(pos_);
-    PlaceWeapon(pos_);
+    const Vector3 visualPos = VisualPosition();
+    object_->SetPosition(visualPos);
+    PlaceWeapon(visualPos);
     object_->Update();
     weaponObject_->Update();
 }

@@ -151,8 +151,8 @@ void Player::HandleMeleeCombat(Input* input, const Vector3& enemyPos) {
     meleeCombo_.Update(gameConstants::kFrameDeltaTime);
     if (const MeleeAttackDef* atk = meleeCombo_.GetActive()) {
         if (meleeCombo_.JustStartedStep()) {
-            // 段ごとにモーションを頭から再生（速度も段の定義に従う）
-            PlayAttackAnim(atk->slashAnim ? rig_->slashAnim : rig_->punchAnim, atk->animSpeed);
+            // 段ごとに土台を頭から流し直す（武器ごとの振りは加算モーションが付ける）
+            PlayMeleeStepAnim(*atk);
             SetFrameEvent(FrameEvent::kSwingStarted);
             autoCombo_.OnStepStarted(wm->GetCurrent().type, meleeCombo_, !onGround_);
         }

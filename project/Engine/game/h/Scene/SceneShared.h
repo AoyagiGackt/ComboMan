@@ -204,8 +204,10 @@ namespace sceneShared {
     /**
      * @brief 右側の操作説明パネルを描画する
      * @param anchor 描画開始位置（スクリーンpx）各シーンのUILayoutの "controls.pos" で編集する
+     * @param header 一覧の上の見出し（空なら出さない。ページの見出しを別に出す時に使う）
      */
-    void DrawControlsHud(FontRenderer& fontRenderer, const Vector2& anchor, const wchar_t* portalActionLabel);
+    void DrawControlsHud(FontRenderer& fontRenderer, const Vector2& anchor, const wchar_t* portalActionLabel,
+        const std::wstring& header = L"-- 操作説明 --");
 
     /**
      * @brief 右側の操作説明パネルを、見出しと1行ずつの説明で描画する（DrawControlsHud と同じ体裁）

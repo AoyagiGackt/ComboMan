@@ -37,6 +37,7 @@
 #include <cmath>
 #include <cstring>
 #include <random>
+#include <span>
 using namespace engine::graphics;
 
 // スタイルゲージ・覚醒ゲージ・ヒット判定範囲の調整値はResources/Config/combat_tuning.json（CombatTuning）で持つ
@@ -196,6 +197,9 @@ void GamePlayScene::EmitWeaponStyleHit(const Vector3& position, bool finisher) {
     const auto* wm = WeaponManager::GetInstance();
     const std::string hitStyle = wm->HasEquippedWeapon() ? wm->GetCurrent().hitStyle : std::string();
     gameSounds::PlayStyled(finisher ? "meleeFinisher" : "meleeHit", hitStyle);
+    if (finisher) {
+        EmitComboFinisherAccent(position);
+    }
     if (hitStyle.empty()) {
         return;
     }
@@ -217,6 +221,31 @@ void GamePlayScene::EmitWeaponStyleHit(const Vector3& position, bool finisher) {
     }
     if (library->Has("flashes", name)) {
         fx.Flash(name);
+    }
+}
+
+/** @brief コンボの締めが当たった瞬間に、足元から床を這って広がる衝撃と、武器の色の残り火を出す（画面を光らせずに重さを出す） */
+void GamePlayScene::EmitComboFinisherAccent(const Vector3& position) {
+    const auto& visuals = HitEffectLibrary::GetInstance()->SceneParticles();
+    const HitEffectPlayer fx(pm_, &cameraShaker_, &rng_);
+    // 地上で当てた時だけ、当てた敵の真下（プレイヤーの足元の高さ）から左右へ砂ぼこりの波を走らせる
+    if (player_->IsOnGround()) {
+        const Vector3 ground = { position.x, player_->GetPosition().y, position.z };
+        fx.Sparks("finisher_ground_wave", ground);
+        fx.Sparks("finisher_ground_puff", ground);
+    }
+    // 武器の色の小さな火の粉を、当てた所の周りからゆっくり立ちのぼらせる
+    const auto* wm = WeaponManager::GetInstance();
+    EffectStyle emberStyle;
+    if (wm->HasEquippedWeapon()) {
+        emberStyle.tint = ColorRgb(wm->GetCurrent().effectColor);
+    }
+    std::uniform_real_distribution<float> offset(-visuals.finisherEmberSpread, visuals.finisherEmberSpread);
+    std::uniform_real_distribution<float> rise(visuals.finisherEmberRiseMin, visuals.finisherEmberRiseMax);
+    std::uniform_real_distribution<float> drift(-visuals.finisherEmberDriftX, visuals.finisherEmberDriftX);
+    for (int i = 0; i < visuals.finisherEmberCount; ++i) {
+        emberStyle.velocity = Vector3 { drift(rng_), rise(rng_), 0.0f };
+        fx.Particle("finisher_ember", { position.x + offset(rng_), position.y + offset(rng_), position.z }, emberStyle);
     }
 }
 
@@ -410,23 +439,20 @@ ElementEffectContext GamePlayScene::ElementContext() {
 /** @brief UpdateParticles()の下請け ボスの予告円→着弾ダメージのAoEスラム攻撃を処理する */
 void GamePlayScene::UpdateBossSlamAttack(float dt) {
     const auto& visuals = HitEffectLibrary::GetInstance()->SceneParticles();
+    // ボスがいない・倒れた・見えない時は、予告の途中でも取り消す（予告の円が残らないように）
     if (!enemy_ || enemy_->IsDefeated() || !enemy_->IsVisible()) {
+        bossSlamWarningActive_ = false;
+        bossSlamRequested_ = false;
         return;
     }
 
     if (!bossSlamWarningActive_) {
-        const Vector3& ppos = player_->GetPosition();
-        const Vector3& epos = enemy_->GetPosition();
-        const float dx = ppos.x - epos.x;
-        const float dy = ppos.y - epos.y;
-        if (dx * dx + dy * dy > EnemyTuning::GetInstance()->BossSlam().engageRange * EnemyTuning::GetInstance()->BossSlam().engageRange) {
-            return; // ボスと交戦中でなければタイマーを進めない（戦闘開始前に発動しないように）
-        }
-        bossSlamTimer_ -= dt;
-        if (bossSlamTimer_ <= 0.0f) {
+        // 叩きつけを出す時機はボス戦の進行役が決める（名乗る前や他の技の最中には頼まれない）
+        if (bossSlamRequested_) {
+            bossSlamRequested_ = false;
             bossSlamWarningActive_ = true;
             bossSlamWarningTimer_ = EnemyTuning::GetInstance()->BossSlam().warningDuration;
-            bossSlamTargetPos_ = ppos; // 着弾地点は予告開始時点のプレイヤー位置に固定する（避けられるように）
+            bossSlamTargetPos_ = player_->GetPosition(); // 着弾地点は予告開始時点のプレイヤー位置に固定する（避けられるように）
         }
         return;
     }
@@ -439,7 +465,7 @@ void GamePlayScene::UpdateBossSlamAttack(float dt) {
     float sx, sy;
     sceneShared::WorldToScreen(bossSlamTargetPos_.x, bossSlamTargetPos_.y, cam.x, cam.y, sx, sy);
     const float pxPerWorldUnit = gameConstants::kScreenCenterX / gameConstants::kCameraHalfW;
-    const float diameterPx = EnemyTuning::GetInstance()->BossSlam().radius * 2.0f * pxPerWorldUnit
+    const float diameterPx = BossSlamRadius() * 2.0f * pxPerWorldUnit
         * (visuals.warningMinScale + (1.0f - visuals.warningMinScale) * progress);
     const float blink = 0.5f + 0.5f * std::sin(bossSlamWarningTimer_ * visuals.warningBlinkSpeed);
     bossSlamWarningSprite_->SetColor({ 1.0f, visuals.warningGreenBase + progress * visuals.warningGreenGrowth, visuals.warningBlue,
@@ -450,7 +476,7 @@ void GamePlayScene::UpdateBossSlamAttack(float dt) {
 
     const HitEffectPlayer fx(pm_, &cameraShaker_, &rng_);
     fx.Ring("slam_warning", bossSlamTargetPos_,
-        { .speed = EnemyTuning::GetInstance()->BossSlam().radius,
+        { .speed = BossSlamRadius(),
             .tint = Vector3 { 1.0f, visuals.warningRingGreenBase - progress * visuals.warningRingGreenFade, visuals.warningRingBlueBase - progress * visuals.warningRingBlueFade } });
 
     if (bossSlamWarningTimer_ > 0.0f) {
@@ -459,12 +485,11 @@ void GamePlayScene::UpdateBossSlamAttack(float dt) {
 
     // 着弾判定
     bossSlamWarningActive_ = false;
-    bossSlamTimer_ = EnemyTuning::GetInstance()->BossSlam().interval;
 
     const Vector3& ppos = player_->GetPosition();
     const float dx = ppos.x - bossSlamTargetPos_.x;
     const float dy = ppos.y - bossSlamTargetPos_.y;
-    const float slamRadius = EnemyTuning::GetInstance()->BossSlam().radius;
+    const float slamRadius = BossSlamRadius();
     if (dx * dx + dy * dy <= slamRadius * slamRadius && !TryJustDodge(bossSlamTargetPos_) && !player_->IsInvincible()) {
         RunData::GetInstance()->TakeDamage(EnemyTuning::GetInstance()->BossSlam().damage);
         player_->OnHit();
@@ -475,6 +500,49 @@ void GamePlayScene::UpdateBossSlamAttack(float dt) {
     fx.Ring("boss_slam_inner", bossSlamTargetPos_, { .speed = slamRadius });
     fx.Ring("boss_slam_outer", bossSlamTargetPos_, { .speed = slamRadius });
     fx.Sparks("boss_slam", bossSlamTargetPos_);
+}
+
+/** @brief 爆風の有無で演出表を選び、破壊時の粒子と手応えを出す */
+void GamePlayScene::EmitBreakableDestructionEffect(const Vector3& position, const Vector3& footPosition, float radius) {
+    /** @brief レシピの出力方法 */
+    enum class EffectKind { kImpact, kFlash, kParticle, kRing, kSparks, kDust };
+    /** @brief レシピ名と出力方法の組 */
+    struct DestructionEffect {
+        const char* recipe;
+        EffectKind kind;
+    };
+    // 爆発は中心光、炎、煙、破片を重ね、崩落は破片と足元の煙を出す
+    constexpr DestructionEffect kExplosionEffects[] = {
+        { "explosion", EffectKind::kImpact },
+        { "explosion", EffectKind::kFlash },
+        { "explosion_core", EffectKind::kParticle },
+        { "explosion_fire", EffectKind::kRing },
+        { "explosion_smoke", EffectKind::kRing },
+        { "explosion_fire", EffectKind::kSparks },
+        { "explosion_debris", EffectKind::kSparks },
+    };
+    constexpr DestructionEffect kRubbleEffects[] = {
+        { "rubble", EffectKind::kImpact },
+        { "rubble_debris", EffectKind::kSparks },
+        { "rubble_dust", EffectKind::kDust },
+    };
+    const bool explosive = radius > 0.0f;
+    const std::span<const DestructionEffect> effects = explosive
+        ? std::span<const DestructionEffect>(kExplosionEffects)
+        : std::span<const DestructionEffect>(kRubbleEffects);
+    const HitEffectPlayer fx(pm_, &cameraShaker_, &rng_);
+    // 輪の速度倍率はレシピ側で調整する
+    for (const DestructionEffect& effect : effects) {
+        switch (effect.kind) {
+        case EffectKind::kImpact: fx.Impact(effect.recipe); break;
+        case EffectKind::kFlash: fx.Flash(effect.recipe); break;
+        case EffectKind::kParticle: fx.Particle(effect.recipe, position); break;
+        case EffectKind::kRing: fx.Ring(effect.recipe, position, { .speed = radius }); break;
+        case EffectKind::kSparks: fx.Sparks(effect.recipe, position); break;
+        case EffectKind::kDust: fx.Sparks(effect.recipe, footPosition); break;
+        }
+    }
+    gameSounds::Play(explosive ? SoundCue::kExplosion : SoundCue::kRubble);
 }
 
 } // namespace engine::game

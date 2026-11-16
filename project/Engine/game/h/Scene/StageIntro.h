@@ -73,6 +73,10 @@ public:
     float CameraZoom() const {
         return cameraZoom_;
     }
+    /** @brief カメラをステージの端で止めずに追う位置の真ん中へ寄せる割合（1=ボスを必ず画面の真ん中に映す、0=ふだんどおり端で止める） */
+    float CameraUnclampWeight() const {
+        return cameraUnclampWeight_;
+    }
     /** @brief 演出の文字を積む（シーンの Update 中、fontRenderer.Reset() の後に呼ぶ。演出の後も GO! が残っていれば積む） */
     void QueueText(FontRenderer& font) const;
     /** @brief 幕と斬線を描く（SpriteCommon の共通設定を済ませた後に呼ぶ） */
@@ -110,6 +114,8 @@ private:
 
     Vector3 cameraFocus_ {};
     float cameraZoom_ = 1.0f;
+    float cameraUnclampWeight_ = 0.0f; ///< ボスが壁際にいても真ん中に映すため、端で止めるのを外す割合
+    bool zoomInToBoss_ = false; ///< 最初に寄る先がボスか
     Vector3 zoomInTarget_ {}; ///< 見渡した後にカメラが寄っていく先（武器紹介があればボス、無ければ開始位置）
     bool hasOverview_ = false; ///< ステージ全体を見渡す段階があるか
     Vector3 overviewFocus_ {};

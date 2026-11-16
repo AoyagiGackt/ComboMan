@@ -332,18 +332,47 @@ void ComboMotionLibrary::EditClip(const std::string& rigId, const std::string& a
 void ComboMotionLayer::Collect(const Skeleton& skeleton, std::vector<PoseLayerRotation>& out) const {
     lastTrackCount_ = 0;
     lastAppliedCount_ = 0;
+    // 構えを先に入れ、技の差分は同じ骨なら構えの後ろへ掛け合わせる
+    // （同じ骨を2回書くと、次のフレームで元の回転へ戻す時に途中の値へ戻ってしまうため1つにまとめる）
+    const size_t firstIndex = out.size();
+    if (stance_ != nullptr && stanceWeight_ > 0.0f) {
+        AppendClip(*stance_, 0.0f, stanceWeight_, skeleton, firstIndex, out);
+    }
     if (clip_ == nullptr) {
         return;
     }
     lastTrackCount_ = static_cast<int>(clip_->tracks.size());
-    for (const MotionTrack& track : clip_->tracks) {
+    lastAppliedCount_ = AppendClip(*clip_, time_, 1.0f, skeleton, firstIndex, out);
+}
+
+/** @brief クリップの各トラックを評価して差分回転の一覧へ足し、実際に掛けたトラック数を返す */
+int ComboMotionLayer::AppendClip(const MotionClip& clip, float time, float weight, const Skeleton& skeleton,
+    size_t firstIndex, std::vector<PoseLayerRotation>& out) {
+    constexpr Quaternion kIdentity = { 0.0f, 0.0f, 0.0f, 1.0f };
+    int applied = 0;
+    for (const MotionTrack& track : clip.tracks) {
         const auto jointIndex = skeleton.FindJointIndex(track.bone);
         if (!jointIndex) {
             continue; // このリグに無いボーンは無視する（別リグ向けのデータを誤って読んでも崩れない）
         }
-        out.push_back({ *jointIndex, track.Evaluate(time_) });
-        ++lastAppliedCount_;
+        // 効き具合が1未満なら、回転なしからその割合だけ寄せる
+        Quaternion delta = track.Evaluate(time);
+        if (weight < 1.0f) {
+            delta = Slerp(kIdentity, delta, weight);
+        }
+        // すでに同じ骨があれば掛け合わせ、無ければ新しく足す
+        const auto existing = std::find_if(out.begin() + static_cast<std::ptrdiff_t>(firstIndex), out.end(),
+            [&](const PoseLayerRotation& rotation) {
+                return rotation.jointIndex == *jointIndex;
+            });
+        if (existing != out.end()) {
+            existing->delta = Normalize(Multiply(existing->delta, delta));
+        } else {
+            out.push_back({ *jointIndex, delta });
+        }
+        ++applied;
     }
+    return applied;
 }
 
 } // namespace engine::game

@@ -106,6 +106,7 @@ void GlassShatterEffect::CaptureFrame() {
         return;
     }
 
+    MatchFreezeTextureToBackBuffer();
     auto* cmd = dxCommon_->GetCommandList();
     auto* backBuf = dxCommon_->GetCurrentBackBufferResource();
 
@@ -113,6 +114,36 @@ void GlassShatterEffect::CaptureFrame() {
     pipelineHelper::CaptureRenderTarget(cmd, backBuf, freezeTexture_.Get());
 
     captureNeeded_ = false;
+}
+
+/** @brief 画面を撮る写し先をバックバッファと同じ大きさにし、絵がある範囲を定数バッファへ送る */
+void GlassShatterEffect::MatchFreezeTextureToBackBuffer() {
+    const D3D12_RESOURCE_DESC backDesc = dxCommon_->GetCurrentBackBufferResource()->GetDesc();
+    const D3D12_RESOURCE_DESC freezeDesc = freezeTexture_->GetDesc();
+    if (backDesc.Width != freezeDesc.Width || backDesc.Height != freezeDesc.Height) {
+        // 前のフレームの描画が古い写し先を読み終えてから作り直す（同じ SRV の番号を使い回す）
+        dxCommon_->WaitForGpu();
+        D3D12_RESOURCE_DESC desc = pipelineHelper::MakeRenderTextureDesc(
+            static_cast<UINT>(backDesc.Width), backDesc.Height, backDesc.Format);
+        desc.Flags = D3D12_RESOURCE_FLAG_NONE; // コピー先なので描画先にはしない
+        D3D12_HEAP_PROPERTIES heap { };
+        heap.Type = D3D12_HEAP_TYPE_DEFAULT;
+        Microsoft::WRL::ComPtr<ID3D12Resource> texture;
+        const HRESULT hr = dxCommon_->GetDevice()->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &desc,
+            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, nullptr, IID_PPV_ARGS(&texture));
+        ENGINE_ASSERT(SUCCEEDED(hr));
+        freezeTexture_ = texture;
+        srvManager_->CreateSrvForTexture2D(freezeSrvIndex_, freezeTexture_.Get(), backDesc.Format, 1);
+    }
+
+    // 絵は内部解像度の縦横比のまま、バックバッファの中に余白を付けて描かれている
+    if (cbData_) {
+        const D3D12_VIEWPORT viewport = dxCommon_->GetBackBufferViewport();
+        const float width = static_cast<float>(backDesc.Width);
+        const float height = static_cast<float>(backDesc.Height);
+        cbData_->captureRect = { viewport.TopLeftX / width, viewport.TopLeftY / height,
+            viewport.Width / width, viewport.Height / height };
+    }
 }
 
 /** @brief バックバッファ上にエフェクトを重ねて描画する（シーン描画後に呼ぶ） */

@@ -18,6 +18,7 @@
 #include "BulletPool.h"
 #include "Camera.h"
 #include "DirectXCommon.h"
+#include "FinisherEffects.h"
 #include "FontRenderer.h"
 #include "GlassShatterEffect.h"
 #include "ImGuiManager.h"
@@ -354,6 +355,7 @@ private:
     bool finisherActive_ = false;
     int finisherLineIdx_ = 0;
     float finisherBeatTimer_ = 0.0f;
+    std::vector<finisherEffects::BeatSlash> finisherSlashes_; ///< 刻んだ斬撃線（解放の瞬間に、この線に沿って画面を割る）
 
     /** @brief 大技演出中の画面暗転オーバーレイ */
     std::unique_ptr<Sprite> finisherOverlay_;

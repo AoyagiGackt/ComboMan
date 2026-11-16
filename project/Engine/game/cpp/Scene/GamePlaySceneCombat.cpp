@@ -176,24 +176,7 @@ void GamePlayScene::ApplyMeleeComboStyleHit(const AABB& enemyAABB) {
     if (!Collision::CheckCollision(meleeRange, enemyAABB)) {
         return;
     }
-    // 同じ武器の同じ段を続けて当てた回数を数える（連打を減点するため）
-    const int techniqueId = static_cast<int>(wm->GetCurrent().type) * kTechniqueIdStride
-        + player_->GetComboStep();
-    if (techniqueId == lastTechniqueId_) {
-        repeatedTechniqueCount_++;
-    } else {
-        lastTechniqueId_ = techniqueId;
-        repeatedTechniqueCount_ = 0;
-    }
-    // スタイル: 段が進むほど・持ち替え直後・空中ほど高く、同じ技の連打ほど低くする
-    const float repeatPenalty = (std::min)(repeatedTechniqueCount_ * CombatTune().meleeRepeatPenaltyPerHit, CombatTune().meleeRepeatPenaltyCap);
-    const float switchBonus = player_->JustWeaponSwitchHit() ? CombatTune().meleeWeaponSwitchBonus : 0.0f;
-    // 足場に乗って空中から仕掛けたコンボは地上より評価を上げる（高い位置のブロックに戦闘上の意味を持たせる）
-    const float airborneBonus = player_->IsOnGround() ? 0.0f : CombatTune().airborneHitStyleBonus;
-    styleMeter_ = std::clamp(styleMeter_ + CombatTune().meleeBaseStyleGain
-            + player_->GetComboStep() * CombatTune().meleeComboStepStyleGain + switchBonus + airborneBonus - repeatPenalty,
-        0.0f, 1.0f);
-    ChargeAwakenGaugeByStyle(CombatTune().meleeAwakenGaugeGain);
+    AwardMeleeStyle();
     // ダメージ: 武器の威力 × 段の倍率 × 全体倍率（最低1）
     const MeleeAttackDef* attack = player_->GetActiveMeleeAttack();
     const WeaponData& weapon = wm->GetCurrent();
@@ -212,19 +195,17 @@ void GamePlayScene::ApplyMeleeComboStyleHit(const AABB& enemyAABB) {
     // 疲労ぶん弱めたダメージを与え、使った武器の疲労を溜める
     enemy_->TakeDamageScaled(static_cast<float>(damage) * fatigueMult);
     RegisterFatigueHit(fatigueIndex, CombatTune().weaponFatiguePerHit);
-    if (skillSequence && attack != nullptr && attack->finisher) {
-        enemy_->ApplyHomeRun(player_->GetLastDirX());
-    } else {
-        enemy_->ApplyComboReaction(player_->GetLastDirX() * knockbackMult,
-            (attack != nullptr ? attack->knockY : CombatTune().defaultKnockY) * knockbackMult,
-            player_->JustWeaponSwitchHit(), ppos.x, comboFinisher);
-    }
-    // ボスは長く拘束しすぎると一方的になるため、雑魚より硬直を短くする
-    enemy_->ApplyHitstun(MeleeHitstunSeconds(attack) * CombatTune().bossHitstunScale, true);
-    styleRankHud_.RegisterHit(attack != nullptr ? attack->id : "melee", 1.0f);
-    // 段を出し切った時だけ HUD に FINISH! を出す
-    if (comboFinisher) {
-        styleRankHud_.RegisterFinisher();
+    // ボスはふだん吹き飛ばずのけぞらない（ダメージだけ入れ、たまるとひるむ）。ひるんでいる間だけ普通の敵と同じ反応にする
+    if (BossReactsToHits()) {
+        if (skillSequence && attack != nullptr && attack->finisher) {
+            enemy_->ApplyHomeRun(player_->GetLastDirX());
+        } else {
+            enemy_->ApplyComboReaction(player_->GetLastDirX() * MeleeKnockDirSign(attack) * knockbackMult,
+                (attack != nullptr ? attack->knockY : CombatTune().defaultKnockY) * knockbackMult,
+                player_->JustWeaponSwitchHit(), ppos.x, comboFinisher);
+        }
+        // ボスは長く拘束しすぎると一方的になるため、雑魚より硬直を短くする
+        enemy_->ApplyHitstun(MeleeHitstunSeconds(attack) * CombatTune().bossHitstunScale, true);
     }
     const int chainHits = styleRankHud_.GetHitCount();
 
@@ -296,20 +277,16 @@ void GamePlayScene::ApplyWeaponSkillStyleHit(const AABB& enemyAABB) {
     if (!Collision::CheckCollision(SkillRangeAround(ppos, radius), enemyAABB)) {
         return;
     }
-    // スタイル: 前回と違う技なら多く、同じ技の繰り返しなら少なく加える
-    const int techniqueId = kSkillTechniqueIdBase + static_cast<int>(wm->GetCurrent().type);
-    const float varietyBonus = techniqueId == lastTechniqueId_ ? CombatTune().skillVarietyBonusRepeat : CombatTune().skillVarietyBonusFresh;
-    lastTechniqueId_ = techniqueId;
-    styleMeter_ = std::clamp(styleMeter_ + varietyBonus, 0.0f, 1.0f);
-    ChargeAwakenGaugeByStyle(CombatTune().skillAwakenGaugeGain);
+    AwardSkillStyle();
     // ダメージ: 叩きつけか通常の固有技かの固定値（ボス技を奪っていれば上乗せ）
     const int slamBonus = (slam && HasBossSlamTechnique()) ? GameRules::GetInstance()->Get().bossTechniqueBonusDamage : 0;
     const float rawDamage = static_cast<float>((slam ? CombatTune().bossSlamBaseDamage : CombatTune().bossSkillBaseDamage) + slamBonus);
     enemy_->TakeDamage((std::max)(1, static_cast<int>(std::round(rawDamage * CurrentDamageMult()))));
-    enemy_->ApplyHitstun(CombatTune().skillHitstunSeconds, true);
-    enemy_->ApplyComboReaction(player_->GetLastDirX() * wm->GetCurrent().knockbackMult, CombatTune().skillKnockY,
-        false, ppos.x, true);
-    styleRankHud_.RegisterHit("skill_" + std::to_string(static_cast<int>(wm->GetCurrent().type)), 1.0f);
+    if (BossReactsToHits()) {
+        enemy_->ApplyHitstun(CombatTune().skillHitstunSeconds, true);
+        enemy_->ApplyComboReaction(player_->GetLastDirX() * wm->GetCurrent().knockbackMult, CombatTune().skillKnockY,
+            false, ppos.x, true);
+    }
 
     // 固有技は通常段より大きく弾けさせる（叩きつけはさらに大きく）
     const WeaponData& weapon = wm->GetCurrent();
@@ -442,16 +419,12 @@ void GamePlayScene::ApplyGunShotStyleHit() {
         return;
     }
     const auto* wm = WeaponManager::GetInstance();
-    const GunShotDef* shot = player_->GetActiveGunShot();
     const RangedWeaponData& gun = wm->GetRanged();
     // 弾は手前の相手で止まるので、射撃の的に選ばれた時だけ当たる（BuildGunShotTarget()で選択済み）
     if (!gunShotPicker_.IsTarget(enemy_)) {
         return;
     }
-    // 段が進むほどスタイルが伸びる（銃コンボを回す動機付け）
-    float gain = CombatTune().gunBaseStyleGain + ((shot != nullptr) ? player_->GetGunComboStep() * CombatTune().gunComboStepStyleGain : 0.0f);
-    styleMeter_ = std::clamp(styleMeter_ + gain, 0.0f, 1.0f);
-    ChargeAwakenGaugeByStyle(CombatTune().gunAwakenGaugeGain);
+    AwardGunStyle();
     const float gunFatigueMult = WeaponFatigueDamageMult(GunFatigueIndex());
     const bool wasDefeated = enemy_->IsDefeated();
     enemy_->TakeDamageScaled(static_cast<float>((std::max)(1, static_cast<int>(std::round(CombatTune().gunBaseDamage * CurrentDamageMult()))))
@@ -462,8 +435,9 @@ void GamePlayScene::ApplyGunShotStyleHit() {
     }
     RegisterFatigueHit(GunFatigueIndex(), CombatTune().gunFatiguePerHit);
     // 連射で一方的にならないよう、銃は怯ませるだけで攻撃は潰さない
-    enemy_->ApplyHitstun(CombatTune().gunHitstunSeconds, false);
-    styleRankHud_.RegisterHit(shot != nullptr ? shot->id : "shot", 1.0f);
+    if (BossReactsToHits()) {
+        enemy_->ApplyHitstun(CombatTune().gunHitstunSeconds, false);
+    }
 
     // 銃は連射するので小さめの弾けで着弾を示す
     Vector4 gunHitColor = HitEffectLibrary::GetInstance()->Color("gun_hit");
@@ -498,6 +472,54 @@ void GamePlayScene::ApplyRampageStyleHit(const AABB& enemyAABB) {
 
     // 乱舞は手数が多いので控えめな弾けで1発ごとの命中を示す
     EmitEnemyHitEffect(enemy_->GetPosition(), HitEffectLibrary::GetInstance()->Color("rampage_hit"), CombatTune().rampageHitStrength);
+}
+
+/** @brief 近接の一撃ぶんのスタイルを加える（ボスにも道中の敵にも共通） */
+void GamePlayScene::AwardMeleeStyle() {
+    const auto* wm = WeaponManager::GetInstance();
+    // 同じ武器の同じ段を続けて当てた回数を数える（連打を減点するため）
+    const int techniqueId = static_cast<int>(wm->GetCurrent().type) * kTechniqueIdStride
+        + player_->GetComboStep();
+    if (techniqueId == lastTechniqueId_) {
+        repeatedTechniqueCount_++;
+    } else {
+        lastTechniqueId_ = techniqueId;
+        repeatedTechniqueCount_ = 0;
+    }
+    // スタイル: 段が進むほど・持ち替え直後・空中ほど高く、同じ技の連打ほど低くする
+    const float repeatPenalty = (std::min)(repeatedTechniqueCount_ * CombatTune().meleeRepeatPenaltyPerHit, CombatTune().meleeRepeatPenaltyCap);
+    const float switchBonus = player_->JustWeaponSwitchHit() ? CombatTune().meleeWeaponSwitchBonus : 0.0f;
+    // 足場に乗って空中から仕掛けたコンボは地上より評価を上げる（高い位置のブロックに戦闘上の意味を持たせる）
+    const float airborneBonus = player_->IsOnGround() ? 0.0f : CombatTune().airborneHitStyleBonus;
+    styleMeter_ = std::clamp(styleMeter_ + CombatTune().meleeBaseStyleGain
+            + player_->GetComboStep() * CombatTune().meleeComboStepStyleGain + switchBonus + airborneBonus - repeatPenalty,
+        0.0f, 1.0f);
+    ChargeAwakenGaugeByStyle(CombatTune().meleeAwakenGaugeGain);
+    // 右上のランク表示にも技の名前つきで登録する
+    const MeleeAttackDef* attack = player_->GetActiveMeleeAttack();
+    styleRankHud_.RegisterHit(attack != nullptr ? attack->id : "melee", 1.0f);
+}
+
+/** @brief 武器固有技の一撃ぶんのスタイルを加える（ボスにも道中の敵にも共通） */
+void GamePlayScene::AwardSkillStyle() {
+    const auto* wm = WeaponManager::GetInstance();
+    // 前回と違う技なら多く、同じ技の繰り返しなら少なく加える
+    const int techniqueId = kSkillTechniqueIdBase + static_cast<int>(wm->GetCurrent().type);
+    const float varietyBonus = techniqueId == lastTechniqueId_ ? CombatTune().skillVarietyBonusRepeat : CombatTune().skillVarietyBonusFresh;
+    lastTechniqueId_ = techniqueId;
+    styleMeter_ = std::clamp(styleMeter_ + varietyBonus, 0.0f, 1.0f);
+    ChargeAwakenGaugeByStyle(CombatTune().skillAwakenGaugeGain);
+    styleRankHud_.RegisterHit("skill_" + std::to_string(static_cast<int>(wm->GetCurrent().type)), 1.0f);
+}
+
+/** @brief 射撃の一発ぶんのスタイルを加える（ボスにも道中の敵にも共通） */
+void GamePlayScene::AwardGunStyle() {
+    // 段が進むほどスタイルが伸びる（銃コンボを回す動機付け）
+    const GunShotDef* shot = player_->GetActiveGunShot();
+    const float gain = CombatTune().gunBaseStyleGain + ((shot != nullptr) ? player_->GetGunComboStep() * CombatTune().gunComboStepStyleGain : 0.0f);
+    styleMeter_ = std::clamp(styleMeter_ + gain, 0.0f, 1.0f);
+    ChargeAwakenGaugeByStyle(CombatTune().gunAwakenGaugeGain);
+    styleRankHud_.RegisterHit(shot != nullptr ? shot->id : "shot", 1.0f);
 }
 
 /** @brief UpdateStyleAndUI()の下請け スタイルメーターの時間経過による減衰を処理する */
@@ -592,12 +614,23 @@ void GamePlayScene::UpdateParticles(float dt) {
     // ラスボスは体当たりと叩きつけの代わりに自分の技で攻める
     if (!finalBoss_.IsActive()) {
         UpdatePlayerEnemyContactHit(dt);
+        UpdateStageBoss(dt);
         UpdateBossSlamAttack(dt);
+        // ドラゴンが火を吐く・コウモリが急降下するなど、モンスターごとの動き
+        UpdateMonsterTraits(dt);
     }
     UpdateStyleTechniqueParticles(dt);
 
+    // 倒した瞬間の演出と、HUD のフィニッシュ!（コンボの締めではなく、倒した時だけ出す）
     auto emitDefeat = [this](const Vector3& pos) {
+        styleRankHud_.RegisterFinisher();
+        // 倒した瞬間だけ時間を少しゆっくりにして、とどめの手応えを残す（ラスボスは専用の撃破演出に任せる）
+        if (!finalBoss_.IsActive()) {
+            const auto& visuals = HitEffectLibrary::GetInstance()->SceneParticles();
+            TimeManager::GetInstance()->RequestSlowMotion(visuals.defeatSlowSeconds, visuals.defeatSlowScale);
+        }
         const HitEffectPlayer fx(pm_, &cameraShaker_, &rng_);
+        fx.Sparks("defeat_shards", pos);
         fx.Star("defeat", pos);
         fx.Ring("defeat", pos);
         fx.Ring("defeat_orb", pos);

@@ -4,7 +4,7 @@
     { "name": "基本コンボ", "steps": ["attack", "attack", "attack"] },
     { "name": "銃を混ぜる", "steps": ["attack", "attack", "shoot", "attack"] },
     { "name": "回避から反撃", "steps": ["dodge", "attack", "attack", "attack"] },
-    { "name": "打ち上げて空中へ", "steps": ["attack", "attack", "launch", "jump", "airAttack", "airAttack"] },
+    { "name": "打ち上げて空中へ（剣・短剣）", "steps": ["attack", "attack", "launch", "jump", "airAttack", "airAttack"] },
     { "name": "固有技でしめる", "steps": ["attack", "attack", "skill"] }
   ]
 }

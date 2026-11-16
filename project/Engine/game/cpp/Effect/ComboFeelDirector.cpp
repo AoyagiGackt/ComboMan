@@ -66,7 +66,7 @@ constexpr JsonField<ComboFeelSettings> kSettingsFields[] = {
 };
 
 // WeaponType の並び順と一致させる（パネルとJSONのキーに使う）
-constexpr std::array<const char*, ComboFeelSettings::kWeaponTypeCount> kWeaponTypeNames = {
+constexpr std::array<const char*, ComboFeelSettings::kWeaponTypeCount> kBladeWeaponNames = {
     "Sword", "Spear", "Hammer", "Dagger", "Ball", "Greatsword", "Scythe", "Axe"
 };
 
@@ -293,8 +293,9 @@ void ComboFeelDirector::UpdateImpact(const Camera* camera) {
             const float cy = p.x * vp.m[0][1] + p.y * vp.m[1][1] + p.z * vp.m[2][1] + vp.m[3][1];
             const float cw = p.x * vp.m[0][3] + p.y * vp.m[1][3] + p.z * vp.m[2][3] + vp.m[3][3];
             if (cw > kMinClipW) {
-                blurCenterU_ = cx / cw * 0.5f + 0.5f;
-                blurCenterV_ = 0.5f - cy / cw * 0.5f;
+                // 中心が画面の外（高く打ち上げた敵など）だと、ブラーが画面の外の黒を引き込んで上から黒い枠が出るので、画面の中に収める
+                blurCenterU_ = std::clamp(cx / cw * 0.5f + 0.5f, 0.0f, 1.0f);
+                blurCenterV_ = std::clamp(0.5f - cy / cw * 0.5f, 0.0f, 1.0f);
             }
         }
         if (impactTimer_ >= (std::max)(settings_.blurSeconds, settings_.zoomSeconds)) {
@@ -432,11 +433,11 @@ void ComboFeelDirector::LoadSettings() {
         ReadJsonFields(j, kSettingsFields, s);
         if (j.contains("blades") && j["blades"].is_object()) {
             const nlohmann::json& blades = j["blades"];
-            for (size_t i = 0; i < kWeaponTypeNames.size(); ++i) {
-                if (!blades.contains(kWeaponTypeNames[i])) {
+            for (size_t i = 0; i < kBladeWeaponNames.size(); ++i) {
+                if (!blades.contains(kBladeWeaponNames[i])) {
                     continue;
                 }
-                const nlohmann::json& b = blades[kWeaponTypeNames[i]];
+                const nlohmann::json& b = blades[kBladeWeaponNames[i]];
                 s.blades[i].base = Vector3FromJson(b.value("base", nlohmann::json { }), s.blades[i].base);
                 s.blades[i].tip = Vector3FromJson(b.value("tip", nlohmann::json { }), s.blades[i].tip);
             }
@@ -451,8 +452,8 @@ void ComboFeelDirector::LoadSettings() {
 void ComboFeelDirector::SaveSettings() const {
     const ComboFeelSettings& s = settings_;
     nlohmann::json blades = nlohmann::json::object();
-    for (size_t i = 0; i < kWeaponTypeNames.size(); ++i) {
-        blades[kWeaponTypeNames[i]] = { { "base", ToJson(s.blades[i].base) }, { "tip", ToJson(s.blades[i].tip) } };
+    for (size_t i = 0; i < kBladeWeaponNames.size(); ++i) {
+        blades[kBladeWeaponNames[i]] = { { "base", ToJson(s.blades[i].base) }, { "tip", ToJson(s.blades[i].tip) } };
     }
     nlohmann::json j = nlohmann::json::object();
     WriteJsonFields(j, kSettingsFields, s);
@@ -529,7 +530,7 @@ void ComboFeelDirector::UpdateDebugPanel(Input* input) {
                 trail_.GetSampleCount(), trail_.GetVertexCount(), lastTrailMicros_);
 
             ImGui::SeparatorText("刃の範囲（武器モデル空間）");
-            ImGui::Combo("武器", &lastWeaponIndex_, kWeaponTypeNames.data(), static_cast<int>(kWeaponTypeNames.size()));
+            ImGui::Combo("武器", &lastWeaponIndex_, kBladeWeaponNames.data(), static_cast<int>(kBladeWeaponNames.size()));
             // 選んだ武器の刃の根元と先端を編集する（番号は範囲外にならないよう丸める）
             BladeRange& blade = s.blades[static_cast<size_t>(std::clamp(lastWeaponIndex_, 0, ComboFeelSettings::kWeaponTypeCount - 1))];
             ImGui::DragFloat3("根元", &blade.base.x, kDragSpeed);

@@ -17,6 +17,7 @@ struct EnemyVisualTuning {
     float yawOffset = 0.0f;
     float bodyHalfWidth = 0.0f; ///< 壁と当たる体の横幅の半分（0なら共通の値）
     float bodyHeight = 0.0f; ///< 壁と当たる体の高さ（0なら共通の値）
+    float depthOffset = 0.0f; ///< 見た目だけを奥へずらす量（大きい体にプレイヤーが隠れないように。当たり判定は変えない）
 };
 
 /** @brief 汎用敵(EnemyEntity)の調整値 */
@@ -80,8 +81,6 @@ struct EnemyBulletTuning {
 
 /** @brief ボスの予告円→着弾の範囲攻撃の調整値 */
 struct BossSlamTuning {
-    float engageRange = 10.0f;
-    float interval = 7.0f;
     float warningDuration = 1.1f;
     float radius = 2.6f;
     int damage = 3;

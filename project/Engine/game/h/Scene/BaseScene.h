@@ -149,6 +149,10 @@ public:
     StageEditor& GetStageEditor() {
         return *stageEditor_;
     }
+    /** @brief 全シーン共通のステージエディタを読むだけで使う */
+    const StageEditor& GetStageEditor() const {
+        return *stageEditor_;
+    }
 
     /**
      * @brief エディタから操作するプレイヤーを返す

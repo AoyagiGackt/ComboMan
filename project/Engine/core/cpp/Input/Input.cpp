@@ -130,6 +130,9 @@ struct FixedPrompt {
 };
 constexpr FixedPrompt kFixedPrompts[] = {
     { L"Slot", L"十字キー", L"1-3" },
+    { L"Slot1", L"十字↑", L"1" }, // 武器の枠1つずつ（十字キーは上・右・下の順）
+    { L"Slot2", L"十字→", L"2" },
+    { L"Slot3", L"十字↓", L"3" },
     { L"Confirm", L"A", L"Enter" },
     { L"Back", L"B", L"Backspace" },
 };
@@ -301,13 +304,13 @@ void Input::LoadActionBindings() {
     // 攻撃系（近接・射撃・スキル・覚醒・とどめ・銃の切り替え）
     actionBindings_[static_cast<size_t>(Action::kAttack)] = { DIK_L, 0, XINPUT_GAMEPAD_X };
     actionBindings_[static_cast<size_t>(Action::kShoot)] = { DIK_K, 0, XINPUT_GAMEPAD_Y };
-    actionBindings_[static_cast<size_t>(Action::kSkill)] = { DIK_SPACE, 0, XINPUT_GAMEPAD_B };
-    actionBindings_[static_cast<size_t>(Action::kAwaken)] = { DIK_R, 0, XINPUT_GAMEPAD_RIGHT_SHOULDER };
+    actionBindings_[static_cast<size_t>(Action::kSkill)] = { DIK_SPACE, 0, XINPUT_GAMEPAD_RIGHT_SHOULDER };
+    actionBindings_[static_cast<size_t>(Action::kAwaken)] = { DIK_R, 0, XINPUT_GAMEPAD_LEFT_SHOULDER };
     actionBindings_[static_cast<size_t>(Action::kFinisher)] = { DIK_F, 0, XINPUT_GAMEPAD_LEFT_SHOULDER };
     actionBindings_[static_cast<size_t>(Action::kGunSwitch)] = { DIK_G, 0, XINPUT_GAMEPAD_DPAD_LEFT };
     // 回避・ワープ・武器奪取・調べる・ロックオン
-    actionBindings_[static_cast<size_t>(Action::kDodge)] = { DIK_I, 0, XINPUT_GAMEPAD_RIGHT_THUMB };
-    actionBindings_[static_cast<size_t>(Action::kWarp)] = { DIK_C, 0, XINPUT_GAMEPAD_LEFT_THUMB };
+    actionBindings_[static_cast<size_t>(Action::kDodge)] = { DIK_I, 0, XINPUT_GAMEPAD_B };
+    actionBindings_[static_cast<size_t>(Action::kWarp)] = { DIK_C, 0, 0 };
     actionBindings_[static_cast<size_t>(Action::kSteal)] = { DIK_J, 0, kGamepadLeftTrigger };
     actionBindings_[static_cast<size_t>(Action::kInteract)] = { DIK_RETURN, 0, kGamepadLeftTrigger };
     actionBindings_[static_cast<size_t>(Action::kLockOn)] = { DIK_LSHIFT, 0, kGamepadRightTrigger };

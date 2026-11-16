@@ -61,9 +61,12 @@ void GamePlayScene::OnEditorLevelLoaded() {
     enemy_ = nullptr;
     weaponEnemies_.clear();
     enemyBullets_.clear();
+    kickedBombs_.Clear();
+    thrownWeapons_.Clear();
+    bossWaves_.clear();
+    weaponFinisherPending_ = false;
     bossSlamWarningActive_ = false;
     floorElapsedSeconds_ = 0.0f;
-    bossSlamTimer_ = EnemyTuning::GetInstance()->BossSlam().interval;
     lockedEnemy_ = nullptr;
 
     bossInstanceId_ = 0;
@@ -112,10 +115,19 @@ void GamePlayScene::BindEditorBoss() {
 
     // 新しい実体にだけ、ボスの戦闘と演出を初期設定する
     weaponStealTriggered_ = false;
+    bossExecution_.End(); // 前のボスへのとどめの途中で読み直した時に、演出を残さない
     mainEnemyDefeatEffectEmitted_ = false;
     mainWeaponAbsorbing_ = false;
     bossSlamWarningActive_ = false;
     bossWeaponType_ = boss->weaponType;
+    // ステージのボスは倒れると武器を地面に突き立てて膝をつき、とどめを待つ（ラスボス戦は専用の演出がある）
+    enemy_->SetKneelOnDefeat(!IsFinalBossMode());
+    bossDirector_.Bind(enemy_, WeaponTypeName(boss->weaponType));
+    bossSlamRequested_ = false;
+    // エディタでステージを開き直した時も、前のステージで飛ばした爆弾を残さない
+    kickedBombs_.Clear();
+    thrownWeapons_.Clear();
+    bossWaves_.clear();
     // NodeType の並び順に、そのマスのボスが使うHPの項目（戦闘マス以外は通常戦闘と同じ）
     static constexpr int GameRulesData::* kBossHpByNode[] = {
         &GameRulesData::bossHpCombat, // Combat

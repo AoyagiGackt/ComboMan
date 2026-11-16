@@ -53,6 +53,7 @@ constexpr float kHeaderOffsetY = -36.0f; // 最初の行から見た列名の高
 constexpr float kRankColumnX = 190.0f; // 行の左端から見た各列の位置
 constexpr float kTimeColumnX = 310.0f;
 constexpr float kScoreColumnX = 450.0f;
+constexpr float kColumnGap = 16.0f; // 列の文字が長い時に、次の列との間に空ける最小のすき間
 constexpr int kMaxStageRows = 6; // 板に収まる行数
 constexpr Vector4 kRowColor = { 0.92f, 0.94f, 1.0f, 1.0f };
 constexpr Vector4 kHeaderColor = { 0.6f, 0.65f, 0.75f, 1.0f };
@@ -305,7 +306,7 @@ void ClearScene::QueueTitle(UILayout& layout, float time) {
         Faded(layout.Color("title.color", kTitleColor), amount));
 
     const Vector2 subtitlePosition = layout.Pos("subtitle.pos", kSubtitlePosition);
-    QueueCentered(fontRenderer_, L"ALL STAGES CLEAR", subtitlePosition.x, subtitlePosition.y,
+    QueueCentered(fontRenderer_, L"全ステージ クリア", subtitlePosition.x, subtitlePosition.y,
         layout.Float("subtitle.scale", kSubtitleScale), Faded(layout.Color("subtitle.color", kSubtitleColor), amount));
 }
 
@@ -329,13 +330,27 @@ void ClearScene::QueueStageRows(UILayout& layout, float time) {
         return;
     }
 
+    // 日本語の見出しと各行の実測幅から、列の間隔を確保する。
+    float stageWidth = FontRenderer::MeasureStringW(L"ステージ", kHeaderScale).x;
+    float timeWidth = FontRenderer::MeasureStringW(L"タイム", kHeaderScale).x;
+    for (const auto& record : stageRecords_) {
+        stageWidth = (std::max)(stageWidth,
+            FontRenderer::MeasureStringW(L"ステージ " + std::to_wstring(record.floor + 1), scale).x);
+        timeWidth = (std::max)(timeWidth, FontRenderer::MeasureStringW(FormatTime(record.seconds), scale).x);
+    }
+    const float rankColumnX = (std::max)(kRankColumnX, stageWidth + kColumnGap);
+    const float rankWidth = (std::max)(FontRenderer::MeasureStringW(L"評価", kHeaderScale).x,
+        FontRenderer::MeasureStringW(L"SSS", scale).x);
+    const float timeColumnX = (std::max)(kTimeColumnX, rankColumnX + rankWidth + kColumnGap);
+    const float scoreColumnX = (std::max)(kScoreColumnX, timeColumnX + timeWidth + kColumnGap);
+
     // 列の見出し
     const Vector4 headerColor = Faded(kHeaderColor, panelAmount);
     const float headerY = rows.y + kHeaderOffsetY;
-    fontRenderer_.DrawStringW(L"STAGE", rows.x, headerY, kHeaderScale, headerColor);
-    fontRenderer_.DrawStringW(L"RANK", rows.x + kRankColumnX, headerY, kHeaderScale, headerColor);
-    fontRenderer_.DrawStringW(L"TIME", rows.x + kTimeColumnX, headerY, kHeaderScale, headerColor);
-    fontRenderer_.DrawStringW(L"SCORE", rows.x + kScoreColumnX, headerY, kHeaderScale, headerColor);
+    fontRenderer_.DrawStringW(L"ステージ", rows.x, headerY, kHeaderScale, headerColor);
+    fontRenderer_.DrawStringW(L"評価", rows.x + rankColumnX, headerY, kHeaderScale, headerColor);
+    fontRenderer_.DrawStringW(L"タイム", rows.x + timeColumnX, headerY, kHeaderScale, headerColor);
+    fontRenderer_.DrawStringW(L"スコア", rows.x + scoreColumnX, headerY, kHeaderScale, headerColor);
 
     const int rowCount = (std::min)(static_cast<int>(stageRecords_.size()), kMaxStageRows);
     for (int i = 0; i < rowCount; ++i) {
@@ -349,10 +364,10 @@ void ClearScene::QueueStageRows(UILayout& layout, float time) {
         const float y = rows.y + spacing * static_cast<float>(i);
         const Vector4 color = Faded(rowColor, amount);
         const std::string rank = RunData::CalcRank(static_cast<float>(record.stylePermille) / RunData::kStylePermilleScale);
-        fontRenderer_.DrawStringW(L"STAGE " + std::to_wstring(record.floor + 1), x, y, scale, color);
-        fontRenderer_.DrawString(rank, x + kRankColumnX, y, scale, Faded(StyleMeter::ColorForRank(rank), amount));
-        fontRenderer_.DrawStringW(FormatTime(record.seconds), x + kTimeColumnX, y, scale, color);
-        fontRenderer_.DrawStringW(L"+" + std::to_wstring(record.score), x + kScoreColumnX, y, scale, color);
+        fontRenderer_.DrawStringW(L"ステージ " + std::to_wstring(record.floor + 1), x, y, scale, color);
+        fontRenderer_.DrawString(rank, x + rankColumnX, y, scale, Faded(StyleMeter::ColorForRank(rank), amount));
+        fontRenderer_.DrawStringW(FormatTime(record.seconds), x + timeColumnX, y, scale, color);
+        fontRenderer_.DrawStringW(L"+" + std::to_wstring(record.score), x + scoreColumnX, y, scale, color);
     }
 }
 
@@ -368,7 +383,7 @@ void ClearScene::QueueTotal(UILayout& layout, float time) {
     const Vector4 totalColor = layout.Color("total.color", kTotalColor);
 
     fontRenderer_.DrawPanel(position.x, position.y + kDividerOffsetY, kDividerWidth, kDividerThickness, Faded(kHeaderColor, amount));
-    fontRenderer_.DrawStringW(L"TOTAL SCORE", position.x, position.y, kTotalLabelScale, Faded(kHeaderColor, amount));
+    fontRenderer_.DrawStringW(L"合計スコア", position.x, position.y, kTotalLabelScale, Faded(kHeaderColor, amount));
 
     const float counted = RevealAmount(time, start, tune.countUpSeconds);
     const int shownScore = static_cast<int>(std::lround(static_cast<float>(runScore_) * counted));
@@ -378,16 +393,16 @@ void ClearScene::QueueTotal(UILayout& layout, float time) {
     // 合計時間と最高ランクは数え上げと一緒に出す
     const float detailX = position.x + kTotalDetailOffsetX;
     const Vector4 detailColor = Faded(kRowColor, amount);
-    fontRenderer_.DrawStringW(L"TOTAL TIME  " + FormatTime(totalSeconds_), detailX, position.y, kTotalDetailScale, detailColor);
-    fontRenderer_.DrawStringW(L"BEST RANK", detailX, position.y + kTotalDetailSpacing, kTotalDetailScale, detailColor);
-    const float rankOffsetX = FontRenderer::MeasureStringW(L"BEST RANK  ", kTotalDetailScale).x;
+    fontRenderer_.DrawStringW(L"合計タイム  " + FormatTime(totalSeconds_), detailX, position.y, kTotalDetailScale, detailColor);
+    fontRenderer_.DrawStringW(L"最高評価", detailX, position.y + kTotalDetailSpacing, kTotalDetailScale, detailColor);
+    const float rankOffsetX = FontRenderer::MeasureStringW(L"最高評価  ", kTotalDetailScale).x;
     fontRenderer_.DrawString(bestRank_, detailX + rankOffsetX, position.y + kTotalDetailSpacing, kTotalDetailScale,
         Faded(StyleMeter::ColorForRank(bestRank_), amount));
 
     // 数え終わった所で1位の更新を知らせる
     if (isNewRecord_) {
         const float recordAmount = RevealAmount(time, start + tune.countUpSeconds, tune.rowSlideSeconds);
-        fontRenderer_.DrawStringW(L"NEW RECORD!", detailX, position.y + kNewRecordOffsetY, kTotalDetailScale,
+        fontRenderer_.DrawStringW(L"新記録!", detailX, position.y + kNewRecordOffsetY, kTotalDetailScale,
             Faded(kNewRecordColor, recordAmount));
     }
 }
@@ -405,7 +420,7 @@ void ClearScene::QueueRanking(UILayout& layout, float time) {
 
     const float panelAmount = RevealAmount(time, start, tune.rowSlideSeconds);
     fontRenderer_.DrawPanel(panelPosition.x, panelPosition.y, panelSize.x, panelSize.y, Faded(kPanelColor, panelAmount));
-    fontRenderer_.DrawStringW(L"RANKING", position.x, position.y + kHeaderOffsetY, kHeaderScale, Faded(kHeaderColor, panelAmount));
+    fontRenderer_.DrawStringW(L"ランキング", position.x, position.y + kHeaderOffsetY, kHeaderScale, Faded(kHeaderColor, panelAmount));
 
     // 上位から順に出し、今回のスコアの行だけ色を変える
     bool highlighted = false;

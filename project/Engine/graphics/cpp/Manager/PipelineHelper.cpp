@@ -275,7 +275,23 @@ void CaptureRenderTarget(ID3D12GraphicsCommandList* cmd,
         DirectXCommon::MakeTransitionBarrier(destination, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COPY_DEST),
     };
     cmd->ResourceBarrier(kBarrierCount, toCopy);
-    cmd->CopyResource(destination, source);
+    // ウィンドウの大きさを変えるとバックバッファだけ大きさが変わるので、違う時は重なる範囲だけ写す（丸ごと写すと D3D12 のエラーで落ちる）
+    const D3D12_RESOURCE_DESC sourceDesc = source->GetDesc();
+    const D3D12_RESOURCE_DESC destinationDesc = destination->GetDesc();
+    if (sourceDesc.Width == destinationDesc.Width && sourceDesc.Height == destinationDesc.Height) {
+        cmd->CopyResource(destination, source);
+    } else {
+        D3D12_TEXTURE_COPY_LOCATION from { };
+        from.pResource = source;
+        from.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+        D3D12_TEXTURE_COPY_LOCATION to { };
+        to.pResource = destination;
+        to.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+        const D3D12_BOX box = { 0, 0, 0,
+            static_cast<UINT>((std::min)(sourceDesc.Width, destinationDesc.Width)),
+            (std::min)(sourceDesc.Height, destinationDesc.Height), 1 };
+        cmd->CopyTextureRegion(&to, 0, 0, 0, &from, &box);
+    }
     const D3D12_RESOURCE_BARRIER toRestore[kBarrierCount] = {
         DirectXCommon::MakeTransitionBarrier(source, D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET),
         DirectXCommon::MakeTransitionBarrier(destination, D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE),

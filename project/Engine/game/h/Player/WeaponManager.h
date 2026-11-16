@@ -25,7 +25,7 @@ public:
     static WeaponManager* GetInstance();
 
     /**
-     * @brief 画面に出す武器名を返す（日本語のスタイル名。未設定の武器だけ内部名で代用する）
+     * @brief 画面に出す武器名を返す（剣・槍などの武器の種類の名前）
      * @param data 名前を出す武器
      */
     static std::wstring GetDisplayName(const WeaponData& data);

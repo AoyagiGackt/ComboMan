@@ -1,0 +1,24 @@
+{
+  "_comment": "攻撃で吹き飛ばした爆弾（爆風のある壊せる物）。enabled=falseなら今までどおりその場で爆発する。visual=飛んでいる間の見た目と回る速さ flight=横の速さ・吹き飛んだ瞬間の上向きの速さ・落ちる加速度・何にも当たらず爆発するまでの秒数 hit=敵や壁にぶつかったとみなす半径・吹き飛んだ直後に足元の床を数えない秒数 effects=吹き飛ばした瞬間の手応え・飛んでいる間の火の粉と出す間隔。爆発の威力と演出は元の壊せる物の設定と hit_effects.json の explosion_* を使う",
+  "enabled": true,
+  "visual": {
+    "model": "Resources/block/gimmick/gimmick_barrel.obj",
+    "texture": "Resources/block/gimmick/gimmick_palette.png",
+    "spinSpeed": 14
+  },
+  "flight": {
+    "speedX": 14,
+    "launchSpeedY": 3.5,
+    "gravity": 18,
+    "maxSeconds": 2
+  },
+  "hit": {
+    "radius": 0.45,
+    "launchGraceSeconds": 0.06
+  },
+  "effects": {
+    "launchImpact": "bomb_kick",
+    "trailSparks": "bomb_kick_trail",
+    "trailInterval": 0.05
+  }
+}

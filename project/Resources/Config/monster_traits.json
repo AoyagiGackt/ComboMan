@@ -1,0 +1,67 @@
+{
+  "_comment": "モンスターごとの個性の動き（名前は enemy_params.json の visuals と同じ）。trait=動き（fireBreath=身構えてから扇状に火の玉を吐く boneThrow=身構えてから山なりに骨を投げる hop=跳ねながら近づく swoop=身構えてからプレイヤーへ急降下して戻る none=なし） interval=次の動きまでの秒数 range=プレイヤーがこれより近い時だけ動く telegraphSeconds=身構える秒数（攻撃を当てて止めると潰せる） damage=当たった時のダメージ count=一度に出す数 spreadDegrees=扇の角度（隣どうしの差） speed=火の玉の速さ・骨の横の速さ riseSpeed=骨の上向きの速さ gravity=骨が落ちる加速度 lifetime=飛ぶ秒数 launchHeight=足元から出す高さ hopX/hopY=跳ぶ横と上の強さ swoopSeconds/returnSeconds=急降下と戻りの秒数 effects=hit_effects.json のレシピ名（warningRing=身構えの輪 actSparks=動いた瞬間の火花 landSparks/landRing=跳ねたり打ち上げられたりして着地した瞬間の粒と輪 attackSparks/attackRing=体当たりなど近接攻撃を出した瞬間の粒と輪 attackDrops=近接攻撃で高く飛び散る大きな粒）",
+  "monsters": {
+    "Dragon": {
+      "trait": "fireBreath",
+      "interval": 3.5,
+      "range": 8,
+      "telegraphSeconds": 0.8,
+      "damage": 2,
+      "count": 3,
+      "spreadDegrees": 15,
+      "speed": 6,
+      "lifetime": 1.8,
+      "launchHeight": 0.8,
+      "effects": {
+        "warningRing": "boss_charge_warning",
+        "actSparks": "boss_charge_trail"
+      }
+    },
+    "Skeleton": {
+      "trait": "boneThrow",
+      "interval": 2.8,
+      "range": 9,
+      "telegraphSeconds": 0.5,
+      "damage": 1,
+      "count": 1,
+      "speed": 5,
+      "riseSpeed": 6.5,
+      "gravity": 12,
+      "lifetime": 2.5,
+      "launchHeight": 0.8,
+      "effects": {
+        "warningRing": "slam_warning",
+        "actSparks": "gate_dust"
+      }
+    },
+    "Slime": {
+      "trait": "hop",
+      "interval": 1.4,
+      "range": 7,
+      "hopX": 0.6,
+      "hopY": 0.22,
+      "effects": {
+        "warningRing": "",
+        "actSparks": "slime_hop",
+        "landSparks": "slime_land",
+        "landRing": "slime_land",
+        "attackSparks": "slime_splash",
+        "attackRing": "slime_splash",
+        "attackDrops": "slime_drops"
+      }
+    },
+    "Bat": {
+      "trait": "swoop",
+      "interval": 3.2,
+      "range": 7,
+      "telegraphSeconds": 0.5,
+      "damage": 1,
+      "swoopSeconds": 0.45,
+      "returnSeconds": 0.6,
+      "effects": {
+        "warningRing": "boss_dash_warning",
+        "actSparks": "boss_dash_trail"
+      }
+    }
+  }
+}

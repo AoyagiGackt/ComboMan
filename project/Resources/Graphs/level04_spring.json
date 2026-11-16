@@ -1,0 +1,76 @@
+{
+  "comments": {
+    "c0": {
+      "text": "回復の泉（フラグ s4_spring で開始）。1秒ごとに、泉 s4_spring の上に立っているかを調べ、立っていれば体力を1回復して緑の輪を出す。Repeat の count=0 はずっと繰り返す",
+      "x": -20,
+      "y": -120,
+      "w": 760,
+      "h": 90,
+      "colorR": 0.3,
+      "colorG": 0.9,
+      "colorB": 0.5
+    }
+  },
+  "start": "n_msg",
+  "nodes": {
+    "n_msg": {
+      "type": "ShowMessage",
+      "params": {
+        "text": "回復の泉: 上に立つと体力が回復する",
+        "seconds": 2
+      },
+      "next": "n_loop",
+      "editorX": 0,
+      "editorY": 0
+    },
+    "n_loop": {
+      "type": "Repeat",
+      "params": {
+        "count": 0,
+        "interval": 1
+      },
+      "nextTrue": "n_check",
+      "nextFalse": "",
+      "editorX": 260,
+      "editorY": 0
+    },
+    "n_check": {
+      "type": "IfPlayerInArea",
+      "params": {
+        "x": 34.5,
+        "y": 0.4,
+        "width": 1.6,
+        "height": 2.5
+      },
+      "nextTrue": "n_heal",
+      "nextFalse": "n_loop",
+      "editorX": 520,
+      "editorY": 0
+    },
+    "n_heal": {
+      "type": "HealPlayer",
+      "params": {
+        "amount": 1
+      },
+      "next": "n_ring",
+      "editorX": 780,
+      "editorY": -60
+    },
+    "n_ring": {
+      "type": "EmitRing",
+      "params": {
+        "group": "hit_ring",
+        "x": 34.5,
+        "y": 0,
+        "z": 0,
+        "radius": 1.5,
+        "r": 0.3,
+        "g": 1,
+        "b": 0.5
+      },
+      "next": "n_loop",
+      "editorX": 1040,
+      "editorY": -60
+    }
+  }
+}

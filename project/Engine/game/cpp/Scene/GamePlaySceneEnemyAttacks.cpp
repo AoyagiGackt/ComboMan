@@ -17,6 +17,7 @@
 #include "HsvFilter.h"
 #include "ImGuiControlPanel.h"
 #include "ImageFilter.h"
+#include "MonsterTraitTuning.h"
 #include "ParticleManager.h"
 #include "PipelineStateGuard.h"
 #include "PlayerBridge.h"
@@ -122,12 +123,17 @@ void GamePlayScene::BuildGunShotTarget() {
 void GamePlayScene::UpdateWeaponEnemies() {
     // entry.enemyの物理/アニメーション更新自体はStageEditor所有のためGetStageEditor().UpdateObjects()
     // （BaseScene::Tick()がUpdate()の直後に呼ぶ）が担う。ここではヒット判定・武器奪取だけを行う
+    // 一振りで何体に当たってもスタイルは一回分だけ入れる（群れに当てるだけで上がりすぎないように）
+    bool meleeStyleAwarded = false;
+    bool skillStyleAwarded = false;
+    bool gunStyleAwarded = false;
     for (auto& entry : weaponEnemies_) {
         // 生きている敵には、このフレームの攻撃が当たったかを調べて反映する
         if (!entry.enemy->IsDefeated()) {
             WeaponEnemyHit hit = DetectWeaponEnemyHit(entry, EnemyHitBoxAt(entry.enemy->GetPosition()));
             if (hit.hit) {
                 ApplyWeaponEnemyHit(entry, hit);
+                AwardWeaponEnemyStyle(hit, meleeStyleAwarded, skillStyleAwarded, gunStyleAwarded);
             }
         }
         // 倒れた後は、モンスターなら消えて覚醒ゲージに、武器持ちなら武器の奪取を待つ
@@ -222,7 +228,9 @@ void GamePlayScene::ApplyWeaponEnemyHit(WeaponEnemyEntry& entry, WeaponEnemyHit&
     if (skillSequence && hit.attack != nullptr && hit.attack->finisher) {
         entry.enemy->ApplyHomeRun(player_->GetLastDirX());
     } else {
-        entry.enemy->ApplyComboReaction(player_->GetLastDirX() * knockbackMult, knockY,
+        // 手前へ引き寄せる段（鎌の刈り込みなど）は押し出す向きを反転する
+        const float knockSign = hit.melee ? MeleeKnockDirSign(hit.attack) : 1.0f;
+        entry.enemy->ApplyComboReaction(player_->GetLastDirX() * knockSign * knockbackMult, knockY,
             player_->JustWeaponSwitchHit(), playerPos.x, hit.blowAway);
     }
     // のけぞり: 近接は段ごとの長さ、銃と固有技は調整値の長さ
@@ -237,6 +245,24 @@ void GamePlayScene::ApplyWeaponEnemyHit(WeaponEnemyEntry& entry, WeaponEnemyHit&
         entry.enemy->ApplySlow(slowSeconds);
     }
     EmitWeaponEnemyHitEffects(entry.enemy->GetPosition(), hit);
+}
+
+/** @brief 道中の敵へのこのフレームの命中を、種類ごとに一度だけスタイルへ加える */
+void GamePlayScene::AwardWeaponEnemyStyle(const WeaponEnemyHit& hit, bool& meleeAwarded, bool& skillAwarded, bool& gunAwarded) {
+    // 近接: 段の加点（フィニッシュ! の表示は倒した時に出す）
+    if (hit.melee && !meleeAwarded) {
+        meleeAwarded = true;
+        AwardMeleeStyle();
+    }
+    // 固有技（スピン連射は射撃として数える）
+    if (hit.skill && !skillAwarded) {
+        skillAwarded = true;
+        AwardSkillStyle();
+    }
+    if (hit.gun && !gunAwarded) {
+        gunAwarded = true;
+        AwardGunStyle();
+    }
 }
 
 /** @brief 命中時のパーティクル・属性演出・ヒットストップを出す */
@@ -334,7 +360,7 @@ void GamePlayScene::UpdateWeaponSteal(WeaponEnemyEntry& entry) {
     const float dy = playerPos.y - enemyPos.y;
     const float absorbRange = CombatTune().absorbRange;
     // 吸収範囲の中で奪取ボタンを押したら、突き刺し動作と演出を出して吸い寄せ始める
-    if (!entry.absorbing && dx * dx + dy * dy <= absorbRange * absorbRange
+    if (!entry.absorbing && dx * dx + dy * dy <= absorbRange * absorbRange && IsSelectedStealTarget(entry.enemy)
         && input_->TriggerAction(Input::Action::kSteal)) {
         entry.absorbing = true;
         entry.absorbTimer = CombatTune().absorbDuration;
@@ -453,6 +479,12 @@ void GamePlayScene::UpdateExplosiveBarrels() {
             continue;
         }
 
+        // 爆弾は攻撃を当てると吹き飛び、ぶつかった所で爆発する（UpdateKickedBombs で進める）
+        const BombPayload payload = { desc.radius, desc.playerDamage, desc.enemyDamage };
+        if (TryKickBomb(barrel, desc, payload)) {
+            continue;
+        }
+
         const bool destroyed = barrel.TakeHit();
         fx.Star("breakable_damage", barrel.GetPosition());
         if (!destroyed) {
@@ -462,32 +494,14 @@ void GamePlayScene::UpdateExplosiveBarrels() {
         // 破壊: 爆風範囲内のプレイヤー/敵にまとめてダメージを与える（環境を利用した攻撃手段）
         barrel.Destroy();
         GameFlags::GetInstance()->SetFlag("broken_" + std::string(desc.name), true);
+        ApplyBombBlast(barrel.GetPosition(), payload);
 
-        const float radiusSq = desc.radius * desc.radius;
-        if (DistanceSquaredXY(playerPos, barrel.GetPosition()) <= radiusSq && !TryJustDodge(barrel.GetPosition()) && !player_->IsInvincible()) {
-            RunData::GetInstance()->TakeDamage(desc.playerDamage);
-            player_->OnHit();
-        }
-        if (enemy_ && !enemy_->IsDefeated()) {
-            const Vector3& epos = enemy_->GetPosition();
-            if (DistanceSquaredXY(epos, barrel.GetPosition()) <= radiusSq) {
-                enemy_->TakeDamage(desc.enemyDamage);
-            }
-        }
-        for (auto& entry : weaponEnemies_) {
-            if (entry.enemy->IsDefeated()) {
-                continue;
-            }
-            const Vector3& wepos = entry.enemy->GetPosition();
-            if (DistanceSquaredXY(wepos, barrel.GetPosition()) <= radiusSq) {
-                entry.enemy->TakeDamage(desc.enemyDamage);
-            }
-        }
-
-        fx.Impact("breakable");
-        fx.Ring("breakable", barrel.GetPosition(), { .speed = desc.radius });
-        fx.Sparks("breakable", barrel.GetPosition());
+        // 崩落の土煙は破壊前の箱の下端中央に置く
+        const Vector3 footPosition = { (barrelBounds.min.x + barrelBounds.max.x) * 0.5f,
+            barrelBounds.min.y, (barrelBounds.min.z + barrelBounds.max.z) * 0.5f };
+        EmitBreakableDestructionEffect(barrel.GetPosition(), footPosition, desc.radius);
     }
+    UpdateKickedBombs();
 }
 
 /** @brief UpdateParticles()の下請け プレイヤーと敵の接触ヒット判定・ダメージ・演出を処理する */
@@ -572,6 +586,7 @@ void GamePlayScene::UpdateEnemyAttackOnPlayer(float dt) {
     // 飛んでいる弾を進め、寿命が尽きたら消す
     for (auto it = enemyBullets_.begin(); it != enemyBullets_.end();) {
         EnemyBullet& bullet = *it;
+        bullet.vel.y -= bullet.gravity * dt;
         bullet.pos.x += bullet.vel.x * dt;
         bullet.pos.y += bullet.vel.y * dt;
         bullet.timer -= dt;
@@ -625,6 +640,13 @@ void GamePlayScene::ApplyEnemyMeleeSwing(EnemyEntity* attacker) {
     const Vector3 swingCenter = { epos.x + dirX * tuning.meleeReach * 0.5f, epos.y + HitEffectLibrary::GetInstance()->SceneParticles().swingCenterHeight, 0.0f };
     const HitEffectPlayer fx(pm_, &cameraShaker_, &rng_);
     fx.Slash("enemy_swing", swingCenter, dirX);
+    // モンスターは種類ごとの粒と輪も出す（スライムの体当たりは飛び散る粘液）
+    if (attacker->IsMonster()) {
+        const MonsterTraitData& trait = MonsterTraitTuning::Get(attacker->GetMonsterKind());
+        fx.SparksIfNamed(trait.attackSparks, swingCenter);
+        fx.RingIfNamed(trait.attackRing, swingCenter);
+        fx.SparksIfNamed(trait.attackDrops, swingCenter);
+    }
 
     // 前方だけに判定を出す（背後にいるプレイヤーには当たらない＝回り込みが有効）
     const AABB swingRange = {

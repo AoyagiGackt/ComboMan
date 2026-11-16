@@ -60,10 +60,15 @@ void StageEditor::ApplySnapshot(const LevelSnapshot& snap) {
         UnregisterEnemyEntity(entry);
     }
     objects_.clear();
+    openedGatePositions_.clear();
     for (const auto& desc : snap.objects) {
         ObjectEntry entry;
         entry.desc = desc;
         entry.authoredPosition = entry.desc.position;
+        // 読み込み時点のフラグを基準にして開始済みの扉の通知を抑える
+        entry.previousActivationFlag = !entry.desc.activationFlag.empty()
+            && GameFlags::GetInstance()->GetFlag(entry.desc.activationFlag);
+        entry.activationFlagInitialized = true;
         entry.runtimeActive = IsRuntimeActive(entry.desc) && entry.desc.activationDelay <= 0.0f;
         objects_.push_back(std::move(entry));
     }

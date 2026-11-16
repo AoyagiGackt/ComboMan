@@ -399,7 +399,7 @@ void DrawControlsPanel(FontRenderer& fontRenderer, const Vector2& anchor, const 
 }
 
 /** @brief 右側の操作説明パネルを、本編の操作の一覧で描画する */
-void DrawControlsHud(FontRenderer& fontRenderer, const Vector2& anchor, const wchar_t* portalActionLabel) {
+void DrawControlsHud(FontRenderer& fontRenderer, const Vector2& anchor, const wchar_t* portalActionLabel, const std::wstring& header) {
     std::vector<std::wstring> rows;
 
     // {操作名} は最後に使った機器（キーボード/パッド）のボタン名へ置き換わる
@@ -417,13 +417,15 @@ void DrawControlsHud(FontRenderer& fontRenderer, const Vector2& anchor, const wc
         row(L"{GunSwitch}", L": 銃切替");
     }
     row(L"{Skill}", L": 武器固有技");
+    row(L"{Steal}", L": 倒した敵の武器を奪う");
+    row(L"{LockOn}", L": ロックオン");
     row(L"{Slot}", L": 武器スロット選択");
     row(L"{Interact}", portalActionLabel);
     row(L"{Awaken}", L": 覚醒発動");
     row(L"{Finisher}", L": フィニッシャー");
     row(L"{Pause}", L": ポーズ・音量設定");
 
-    DrawControlsPanel(fontRenderer, anchor, L"-- 操作説明 --", rows);
+    DrawControlsPanel(fontRenderer, anchor, header, rows);
 }
 
 

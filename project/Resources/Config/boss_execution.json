@@ -1,0 +1,117 @@
+{
+  "_comment": "倒したボスが膝をつく姿勢と、武器を奪う時のとどめの流れ。位置はボスの足元が原点で、X の正はプレイヤーが最初にいた側。拍は前の拍から delay 秒後に行う（afterMove なら前の移動が終わってから数える）。pose は g0〜=地上の段、glast=地上の最後、a0〜=空中の段、alast=空中の最後、launch=打ち上げ（抜き取ったボスの武器の技）",
+  "bossCenterHeight": 0.45,
+  "cameraHeight": 1.0,
+  "zoomRate": 3.0,
+  "slashMarkColor": [1.0, 1.0, 1.0, 1.0],
+  "slashMarkThickness": 3.0,
+  "slashMarkSeconds": 0.6,
+  "defaultStyle": "pierce",
+  "kneel": {
+    "sink": 0.18,
+    "bodyLean": 0.15,
+    "breathAmount": 0.012,
+    "breathSpeed": 2.2,
+    "animSpeed": 0.25,
+    "weaponOffset": [0.35, 0.4, 0.15],
+    "weaponTilt": 3.1416,
+    "weaponDimColor": [0.75, 0.85, 1.0, 1.0],
+    "weaponPulseSpeed": 3.0,
+    "reaches": [
+      { "bone": "UpperLeg.L", "direction": [0.0, -0.25, 1.0], "weight": 1.0 },
+      { "bone": "LowerLeg.L", "direction": [0.0, -1.0, 0.1], "weight": 1.0 },
+      { "bone": "UpperLeg.R", "direction": [0.0, -1.0, 0.15], "weight": 1.0 },
+      { "bone": "LowerLeg.R", "direction": [0.0, -0.15, -1.0], "weight": 1.0 },
+      { "bone": "Torso", "direction": [0.0, 1.0, 0.35], "weight": 0.8 },
+      { "bone": "Neck", "direction": [0.0, 1.0, 0.6], "weight": 0.8 },
+      { "bone": "UpperArm.R", "direction": [0.0, -0.5, 0.85], "weight": 0.8 },
+      { "bone": "LowerArm.R", "direction": [0.0, -0.6, 0.8], "weight": 0.8 },
+      { "bone": "UpperArm.L", "direction": [0.0, -1.0, 0.35], "weight": 0.7 },
+      { "bone": "LowerArm.L", "direction": [0.0, -0.7, 0.7], "weight": 0.7 }
+    ]
+  },
+  "intro": [
+    { "_comment": "ゆっくり歩み寄る", "move": true, "moveTo": [0.75, 0.0, 0.0], "walkSpeed": 1.6, "face": "boss", "zoom": 0.5 },
+    { "_comment": "見下ろして間を置く", "afterMove": true, "delay": 0.45, "zoom": 0.42 },
+    { "_comment": "突き立てた武器を抜き取って構える", "grab": true, "pose": "g0", "poseSeconds": 0.0, "ring": "absorb", "flash": "absorb", "cue": "swing" },
+    { "delay": 0.5 }
+  ],
+  "stages": {
+    "level01": "judgement",
+    "level02": "pierce",
+    "level03": "cross",
+    "level04": "cleave",
+    "level05": "reap",
+    "level06": "flurry"
+  },
+  "styles": {
+    "judgement": {
+      "_comment": "跳び上がって宙で止まり、真上から叩き落とす",
+      "endHold": 1.0,
+      "beats": [
+        { "move": true, "moveTo": [0.5, 1.6, 0.0], "moveSeconds": 0.3, "pose": "launch", "poseSeconds": 0.25, "cue": "swing", "playerSparks": "land_dust" },
+        { "afterMove": true, "delay": 0.0, "pose": "alast", "poseSeconds": 0.4, "slowSeconds": 0.45, "slowScale": 0.3, "zoom": 0.36 },
+        { "delay": 0.2, "move": true, "moveTo": [0.3, 0.0, 0.0], "moveSeconds": 0.08 },
+        { "afterMove": true, "slashAngle": 90.0, "slashLength": 1.2, "screenSlash": true, "screenSlashLength": 4.0, "impact": "weapon_finisher_hammer", "sparks": "finisher_ground_wave", "ring": "weapon_finisher_hammer", "flash": "combo_finisher", "hitStop": 10, "shake": 0.5, "shakeSeconds": 0.4, "cue": "release", "slice": true },
+        { "delay": 0.5, "face": "away", "pose": "g0", "poseSeconds": 0.0, "zoom": 0.45 }
+      ]
+    },
+    "pierce": {
+      "_comment": "一歩引いて構え、ボスを突き抜けて背を向ける。少し遅れて斬れる",
+      "endHold": 1.0,
+      "beats": [
+        { "move": true, "moveTo": [1.3, 0.0, 0.0], "moveSeconds": 0.25, "pose": "g0", "poseSeconds": 0.0 },
+        { "afterMove": true, "delay": 0.35, "zoom": 0.38 },
+        { "move": true, "moveTo": [-1.1, 0.0, 0.0], "moveSeconds": 0.1, "pose": "glast", "poseSeconds": 0.22, "playerSparks": "defeat_shards", "slashAngle": 0.0, "slashLength": 1.4, "sparks": "enemy_hit", "hitStop": 5, "cue": "beat" },
+        { "afterMove": true, "face": "away", "slowSeconds": 0.6, "slowScale": 0.4 },
+        { "delay": 0.7, "screenSlash": true, "slashAngle": 0.0, "slashLength": 1.4, "screenSlashLength": 6.0, "flash": "weapon_finisher_sword", "ring": "combo_finisher", "shake": 0.3, "shakeSeconds": 0.3, "hitStop": 8, "cue": "glass", "slice": true, "zoom": 0.45 }
+      ]
+    },
+    "cross": {
+      "_comment": "消えては現れて三方から斬り、背を向けた後で斬った跡がまとめて開く",
+      "endHold": 1.0,
+      "beats": [
+        { "pose": "g0", "poseSeconds": 0.16, "slashAngle": 40.0, "slashLength": 1.1, "sparks": "enemy_hit", "hitStop": 4, "cue": "beat" },
+        { "delay": 0.22, "move": true, "moveTo": [-0.8, 0.0, 0.0], "playerSparks": "defeat_shards", "face": "boss", "pose": "g1", "poseSeconds": 0.16, "slashAngle": -40.0, "slashLength": 1.1, "sparks": "enemy_hit", "hitStop": 4, "cue": "beat" },
+        { "delay": 0.22, "move": true, "moveTo": [0.6, 0.9, 0.0], "playerSparks": "defeat_shards", "face": "boss", "pose": "a0", "poseSeconds": 0.18, "slashAngle": 90.0, "slashLength": 1.2, "sparks": "enemy_hit", "hitStop": 4, "cue": "beat" },
+        { "delay": 0.22, "move": true, "moveTo": [1.2, 0.0, 0.0], "playerSparks": "defeat_shards", "face": "away", "pose": "g0", "poseSeconds": 0.0, "zoom": 0.38 },
+        { "delay": 0.65, "screenSlash": true, "slashAngle": 40.0, "slashLength": 1.1, "screenSlashLength": 4.0, "flash": "combo_finisher", "ring": "combo_finisher", "impact": "combo_finisher", "hitStop": 8, "cue": "release", "slice": true, "zoom": 0.45 }
+      ]
+    },
+    "cleave": {
+      "_comment": "ゆっくり振りかぶり、時が遅くなった中で真っ二つに振り下ろす",
+      "endHold": 1.1,
+      "beats": [
+        { "move": true, "moveTo": [0.6, 0.0, 0.0], "moveSeconds": 0.2, "pose": "g0", "poseSeconds": 0.0 },
+        { "afterMove": true, "delay": 0.3, "pose": "glast", "poseSeconds": 0.5, "slowSeconds": 0.5, "slowScale": 0.3, "cue": "swing", "zoom": 0.36 },
+        { "delay": 0.3, "slashAngle": 90.0, "slashLength": 1.4, "screenSlash": true, "screenSlashLength": 5.0, "impact": "weapon_finisher_hammer", "sparks": "finisher_ground_wave", "flash": "weapon_finisher_sword", "hitStop": 12, "shake": 0.6, "shakeSeconds": 0.4, "cue": "release", "slice": true },
+        { "delay": 0.6, "face": "away", "zoom": 0.45 }
+      ]
+    },
+    "reap": {
+      "_comment": "背中合わせに回り込んで静止し、振り向きざまに二度刈る",
+      "endHold": 1.0,
+      "beats": [
+        { "delay": 0.1, "move": true, "moveTo": [-0.6, 0.0, 0.0], "playerSparks": "defeat_shards", "face": "away", "pose": "g0", "poseSeconds": 0.0, "zoom": 0.38 },
+        { "delay": 0.8 },
+        { "face": "boss", "pose": "glast", "poseSeconds": 0.5, "cue": "swing" },
+        { "delay": 0.2, "slashAngle": 10.0, "slashLength": 1.3, "sparks": "enemy_hit_extra", "hitStop": 5, "cue": "beat" },
+        { "delay": 0.2, "slashAngle": -10.0, "slashLength": 1.3, "sparks": "enemy_hit_extra", "hitStop": 5, "cue": "beat" },
+        { "delay": 0.4, "screenSlash": true, "slashAngle": 0.0, "slashLength": 1.3, "screenSlashLength": 6.0, "flash": "combo_finisher", "ring": "combo_finisher", "shake": 0.3, "shakeSeconds": 0.3, "hitStop": 8, "cue": "glass", "slice": true, "zoom": 0.45 }
+      ]
+    },
+    "flurry": {
+      "_comment": "ボスの周りを跳び回って斬り刻み、最後は離れて背を向けた所で全部の斬った跡が開く",
+      "endHold": 1.1,
+      "beats": [
+        { "move": true, "moveTo": [0.7, 0.0, 0.0], "playerSparks": "defeat_shards", "pose": "g0", "poseSeconds": 0.12, "slashAngle": 20.0, "slashLength": 1.0, "hitStop": 3, "cue": "beat" },
+        { "delay": 0.14, "move": true, "moveTo": [-0.7, 0.5, 0.0], "playerSparks": "defeat_shards", "face": "boss", "pose": "g1", "poseSeconds": 0.12, "slashAngle": -35.0, "slashLength": 1.0, "hitStop": 3, "cue": "beat" },
+        { "delay": 0.14, "move": true, "moveTo": [0.6, 1.1, 0.0], "playerSparks": "defeat_shards", "face": "boss", "pose": "a0", "poseSeconds": 0.12, "slashAngle": 70.0, "slashLength": 1.0, "hitStop": 3, "cue": "beat" },
+        { "delay": 0.14, "move": true, "moveTo": [-0.6, 0.1, 0.0], "playerSparks": "defeat_shards", "face": "boss", "pose": "g0", "poseSeconds": 0.12, "slashAngle": -10.0, "slashLength": 1.0, "hitStop": 3, "cue": "beat" },
+        { "delay": 0.14, "move": true, "moveTo": [0.0, 1.6, 0.0], "playerSparks": "defeat_shards", "face": "boss", "pose": "alast", "poseSeconds": 0.14, "slashAngle": 90.0, "slashLength": 1.1, "hitStop": 4, "cue": "beat" },
+        { "delay": 0.2, "move": true, "moveTo": [1.4, 0.0, 0.0], "moveSeconds": 0.15, "face": "away", "pose": "glast", "poseSeconds": 0.4, "zoom": 0.38 },
+        { "afterMove": true, "delay": 0.6, "screenSlash": true, "slashAngle": 20.0, "slashLength": 1.0, "screenSlashLength": 5.0, "flash": "combo_finisher", "ring": "combo_finisher", "impact": "combo_finisher", "sparks": "defeat_shards", "hitStop": 10, "cue": "release", "slice": true, "zoom": 0.45 }
+      ]
+    }
+  }
+}

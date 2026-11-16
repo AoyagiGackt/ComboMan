@@ -10,6 +10,7 @@
 #include "Model.h"
 #include "ModelCommon.h"
 #include "Object3d.h"
+#include "ReachPoseLayer.h"
 #include "SkinCommon.h"
 #include "SkinnedModel.h"
 #include "SkinnedObject3d.h"
@@ -107,6 +108,10 @@ public:
     bool IsMonster() const {
         return monsterObject_ != nullptr;
     }
+    /** @brief モンスターの種類の名前（enemy_params.json の visuals の名前。モンスターでなければ空） */
+    const std::string& GetMonsterKind() const {
+        return monsterKind_;
+    }
 
     /** @brief モデルを描画する */
     void Draw();
@@ -145,6 +150,10 @@ public:
     bool IsInHitstun() const {
         return hitstunTimer_ > 0.0f;
     }
+    /** @brief 打ち上げられて宙にいるか */
+    bool IsLaunched() const {
+        return isLaunched_;
+    }
 
     /**
      * @brief 大技の締めで斜め上へ大きく打ち飛ばし、回転させながら飛ばす（撃破済みでも飛ばす）
@@ -166,6 +175,18 @@ public:
      * @param rate   1フレームで寄せる割合（0〜1）
      */
     void PullDroppedWeaponToward(const Vector3& target, float rate);
+    /** @brief 倒れた時に、武器を地面に突き立てて膝をつくか（ステージのボスだけ true にする。武器も落とさなくなる） */
+    void SetKneelOnDefeat(bool kneel) {
+        kneelOnDefeat_ = kneel;
+    }
+    /** @brief 倒れて膝をついているか（とどめの演出を始められる状態か） */
+    bool IsKneeling() const {
+        return kneelOnDefeat_ && defeated_ && !weaponDropped_ && !monsterObject_;
+    }
+    /** @brief 武器を描かないようにするか（とどめで武器を抜き取られた後に隠す） */
+    void SetWeaponHidden(bool hidden) {
+        weaponHidden_ = hidden;
+    }
     /** @brief 指定秒数だけ行動を遅くする */
     void ApplySlow(float seconds) {
         slowTimer_ = (std::max)(slowTimer_, seconds);
@@ -251,8 +272,11 @@ public:
         homeRunSpinTimer_ = 0.0f;
         defeated_ = false;
         corpseFallStarted_ = false;
+        kneelPoseApplied_ = false;
+        weaponHidden_ = false;
         if (object_) {
             object_->SetAnimSpeed(1.0f);
+            object_->SetPoseLayer(nullptr);
         }
         // 浮かべた時に大きくした武器を手に持つ大きさへ戻す
         if (weaponObject_) {
@@ -291,7 +315,7 @@ public:
      * @brief 位置だけ再計算する（AI/物理は一切進めない、StageEditor等が外部からpos_を書き換えた後の追従用）
      */
     void RefreshVisualTransforms() override {
-        object_->SetPosition(pos_);
+        object_->SetPosition(VisualPosition());
         object_->Update();
         SyncMonsterVisual(false);
     }
@@ -403,6 +427,7 @@ private:
     static constexpr float kDefeatedBodyLean = 1.35f; // 撃破後に倒れ込む本体の傾き
     static constexpr float kDefeatedWeaponTilt = 1.15f; // 撃破後に落とした武器の傾き
     static constexpr float kKnockbackStopSpeed = 0.001f; // これ未満の水平ノックバックは止まっているとみなす
+    static constexpr float kHoverReturnRate = 0.12f; // 飛ぶ種類が殴られてずれた高さから、ゆらゆらの高さへ1フレームで戻る割合
     static constexpr float kCeilingBounceFactor = -0.1f; // 天井に当たった時の跳ね返り（負で下向きに返す）
 
     // 攻撃ステートマシン（Idle→Telegraph→Active→Idle を固定時間で巡回する）
@@ -585,6 +610,10 @@ private:
     bool droppedWeaponLanded_ = false;
     float offerTimer_ = 0.0f; ///< 撃破されて武器を浮かべ始めてからの秒数
     bool weaponPulled_ = false; ///< 回収で落ちた武器を吸い寄せ始めたか（以後は浮かべない）
+    bool kneelOnDefeat_ = false; ///< 倒れた時に膝をつくか（SetKneelOnDefeat）
+    bool kneelPoseApplied_ = false; ///< 膝をつく姿勢のポーズレイヤーを掛けたか
+    bool weaponHidden_ = false; ///< 武器を描かないか（SetWeaponHidden）
+    ReachPoseLayer kneelLayer_; ///< 膝をつく姿勢へボーンを曲げるレイヤー
 
     // モンスターの見た目（設定されていれば騎士の代わりにこれを描画する）
     std::unique_ptr<Object3d> monsterObject_;
@@ -592,6 +621,8 @@ private:
     float monsterBodyHalfWidth_ = 0.0f; ///< 壁と当たる体の横幅の半分（0なら共通の値）
     float monsterBodyHeight_ = 0.0f; ///< 壁と当たる体の高さ（0なら共通の値）
     float monsterYawOffset_ = 0.0f; ///< モデルの正面を+Zへ揃える向き補正（ラジアン）
+    float monsterDepthOffset_ = 0.0f; ///< 見た目だけを奥へずらす量（大きい体にプレイヤーが隠れないように）
+    std::string monsterKind_; ///< モンスターの種類の名前（個性の動きを引く時に使う）
     float monsterBobTimer_ = 0.0f;
     Vector4 bodyColor_ = { 1.0f, 1.0f, 1.0f, 1.0f }; ///< 本体に今かけている色（モンスターの見た目へ写す）
     static constexpr float kMonsterBobSpeed = 6.0f; // その場で弾む速さ（生きている感じを出す、ラジアン毎秒）
@@ -612,11 +643,17 @@ private:
     void UpdateDroppedWeapon();
     /** @brief 武器の位置を本体の手元（落としていれば落とした場所）へ合わせる */
     void PlaceWeapon(const Vector3& bodyPos);
+    /** @brief 見た目を置く位置（位置は床の上面から少し上に置いているので、その分だけ下げて足元を床にそろえる） */
+    Vector3 VisualPosition() const;
     /**
      * @brief 撃破後、まだ吸い寄せていない武器を回収位置の上へ浮かべて回し、光らせる（PlaceWeapon と色・向きを決めた後に呼ぶ）
      * @param advance 時間を進めるか（ヒットストップ中は false で姿だけ保つ）
      */
     void UpdateOfferedWeapon(bool advance);
+    /** @brief 膝をつく姿勢（ボーンの曲げ・ゆっくりの待機アニメ）を掛け始める（膝をついた最初の1回） */
+    void ApplyKneelPose();
+    /** @brief 膝をついている間、武器を体の前の地面に突き立てて明滅させる */
+    void PlaceKneelWeapon();
     int hitStopShakeFrame_ = 0; ///< ヒットストップ中の震えの左右を交互にするカウンタ
 
     /** @brief ヒットストップ中の1フレーム（物理・AIを止め、被弾直後なら本体を左右に震わせて描画行列だけ更新する） */

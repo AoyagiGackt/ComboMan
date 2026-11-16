@@ -499,7 +499,7 @@ void CommandListView::Draw(const Input* input) {
     float tabX = tabsPos.x;
     for (int i = 0; i < static_cast<int>(list.size()); ++i) {
         const bool unlocked = WeaponManager::GetInstance()->IsUnlocked(i);
-        const std::wstring name = unlocked ? list[i].styleNameJp : kLockedName;
+        const std::wstring name = unlocked ? WeaponManager::GetDisplayName(list[i]) : kLockedName;
         const Vector2 size = FontRenderer::MeasureStringW(name, tabScale);
         if (i == weaponIndex_) {
             font.DrawPanel(tabX - kTabPadding, tabsPos.y - kTabPadding, size.x + kTabPadding * 2.0f, size.y + kTabPadding * 2.0f,

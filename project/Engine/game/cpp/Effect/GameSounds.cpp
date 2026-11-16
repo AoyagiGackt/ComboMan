@@ -31,6 +31,8 @@ constexpr const char* kCueKeys[] = {
     "finisherBeat",
     "finisherRelease",
     "glassShatter",
+    "explosion",
+    "rubble",
 };
 static_assert(std::size(kCueKeys) == static_cast<size_t>(SoundCue::kCount), "SoundCue と項目名の数をそろえる");
 

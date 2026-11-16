@@ -46,8 +46,6 @@ constexpr float kDebugGameOverButtonTop = 48.0f; ///< やられ演出のボタ�
 constexpr float kDebugClearButtonTop = 92.0f; ///< クリア演出のボタンは、やられ演出のボタンのすぐ下に置く
 constexpr Vector4 kDebugGameOverHoverColor = { 0.65f, 0.12f, 0.12f, 0.85f };
 constexpr Vector4 kDebugClearHoverColor = { 0.75f, 0.6f, 0.1f, 0.85f };
-constexpr float kDebugFinalBossButtonTop = 136.0f; ///< ラスボス戦のボタンは、クリア演出のボタンのすぐ下に置く
-constexpr Vector4 kDebugFinalBossHoverColor = { 0.45f, 0.25f, 0.75f, 0.85f };
 constexpr const char* kDefaultLevelPath = "Resources/Levels/level01.json";
 
 
@@ -133,8 +131,6 @@ void GamePlayScene::InitializeParticlesAndHud() {
         kDebugGameOverButtonTop, kDebugGameOverHoverColor, &GameRulesData::debugGameOverButton });
     debugClearButton_.Initialize(spriteCommon_.get(), { L"[F5] すぐクリアする（演出は2種類）", DIK_F5, "debug_clear",
         kDebugClearButtonTop, kDebugClearHoverColor, &GameRulesData::debugClearButton });
-    debugFinalBossButton_.Initialize(spriteCommon_.get(), { L"[F4] ラスボス戦を始める", DIK_F4, "debug_final_boss",
-        kDebugFinalBossButtonTop, kDebugFinalBossHoverColor, &GameRulesData::debugFinalBossButton });
     clearFinish_.Initialize(spriteCommon_.get());
     SlashMark::GetInstance()->Initialize(spriteCommon_.get());
 
@@ -149,6 +145,7 @@ void GamePlayScene::InitializeParticlesAndHud() {
     // ボスAoEスラムの着弾予告円（円形グロー画像を赤く点滅させて範囲を示す）
     bossSlamWarningSprite_ = std::make_unique<Sprite>();
     bossSlamWarningSprite_->Initialize(spriteCommon_.get(), "Resources/Effects/circle2.png");
+    stageBossHud_.Initialize(spriteCommon_.get(), &fontRenderer_);
 
     InitializeWeaponSlotHud();
     SetupPauseMenu();
@@ -160,6 +157,8 @@ void GamePlayScene::InitializeGhostEditorAndEffects() {
     ghostObject_->Initialize(modelCommon_.get());
     ghostObject_->SetModel(player_->GetModel());
     ghostObject_->SetEnableLighting(false);
+    kickedBombs_.Initialize(modelCommon_.get());
+    InitializeThrownWeapons();
 
     sceneEditor_.LoadAll(BuildEditContext());
 
@@ -344,12 +343,13 @@ void GamePlayScene::Update() {
         TriggerDebugClear();
         return;
     }
-    if (debugFinalBossButton_.Update(input_, dxCommon_)) {
-        StartDebugFinalBoss();
-        return;
-    }
     // ラスボス戦の演出の間は、操作を止めて演出だけを進める
     if (UpdateFinalBossCinematic()) {
+        return;
+    }
+    // ボスへのとどめの間は、操作と敵を止めて演出だけを進める
+    if (bossExecution_.IsActive()) {
+        UpdateBossExecution();
         return;
     }
 
@@ -375,6 +375,8 @@ void GamePlayScene::Update() {
     player_->RefreshVisualTransforms();
     sceneEditor_.Update(BuildEditContext(), input_);
     UpdateStyleAndUI(dt);
+    // 締めの動作は、ボスへの通常の当たり（UpdateStyleAndUI）で吹き飛ばしが上書きされないようその後に出す
+    ApplyPendingWeaponFinisher();
     UpdateParticles(dt);
     UpdateFinisherSlash(dt);
     enemySlice_.Update(dt, camera_.get());
@@ -465,7 +467,8 @@ void GamePlayScene::UpdateStageIntro() {
 
 /** @brief プレイヤーのやられ演出を始める（ラン中にHPが尽きた時に1回） */
 void GamePlayScene::StartPlayerDefeat() {
-    // ロック中の対象へカメラを寄せないよう外し、敵と仕掛けも止める
+    // ロック中の対象へカメラを寄せないよう外し、敵と仕掛けも止める（とどめの途中なら閉じて技の姿勢から戻す）
+    bossExecution_.End();
     lockedEnemy_ = nullptr;
     const StageBounds bounds = GetStageBounds();
     PlayerDefeat::Setup setup;
@@ -522,7 +525,10 @@ void GamePlayScene::UpdateCombatEvents() {
     // 乱舞 打ち上げヒット
     // 打ち上げ: 敵を浮かせ、止めと揺れと輪と火花を出す
     if (player_->JustLaunched()) {
-        enemy_->Launch(CombatTune().launchSpeed);
+        // ボスはひるんでいる間だけ浮く
+        if (BossReactsToHits()) {
+            enemy_->Launch(CombatTune().launchSpeed);
+        }
         const Vector3& epos = enemy_->GetPosition();
         tm->RequestHitStop(HitEffectLibrary::GetInstance()->SceneParticles().hitStopLaunch);
         cameraShaker_.Request(HitEffectLibrary::GetInstance()->SceneParticles().shakeLaunchAmt, HitEffectLibrary::GetInstance()->SceneParticles().shakeLaunchDur);
@@ -574,6 +580,7 @@ void GamePlayScene::UpdateCombatEvents() {
         const Vector3& epos = enemy_->GetPosition();
         finisherActive_ = true;
         finisherLineIdx_ = 0;
+        finisherSlashes_.clear();
         finisherBeatTimer_ = CombatTune().finisherChargeDelay;
         // 画面内の敵をすべて打ち上げて空中に拘束し、暗転とともに溜めを作る
         for (EnemyEntity* target : CollectOnScreenEnemies()) {
@@ -590,6 +597,8 @@ void GamePlayScene::UpdateCombat() {
     auto* tm = TimeManager::GetInstance();
     // ヒットストップ中も回避ボタンの押下は記憶しておく（停止明けに回避へつなげ、押した感触が消えないように）
     player_->BufferDodgeInput(input_);
+    // 奪う相手はここで1体だけ決め、道中の敵とボスの両方の回収で使う（ヒットストップ中も決め直す）
+    SelectStealTarget();
     // ヒットが入るとこのフレーム内でヒットストップが始まるため、進んだかどうかは先に確定させておく
     const bool gameAdvanced = !tm->IsHitStopped();
     if (gameAdvanced) {
@@ -620,9 +629,18 @@ void GamePlayScene::UpdateCombat() {
         }
         UpdateCombatEvents();
         UpdateWeaponEnemies();
+        // 地上コンボの締めが当たった瞬間の武器ごとの動作と、投げた武器（通常の当たりの後に重ねる）
+        UpdateWeaponFinisher();
+        UpdateThrownWeapons();
         // 雑魚へのヒットは直前のUpdateWeaponEnemies()、ボスへのヒットは前フレームのUpdateStyleAndUI()で記録済み
         UpdateWeaponFatigue();
         UpdateExplosiveBarrels();
+        // 配置物の更新で集めた扉の開始通知を一度だけ演出へ渡す
+        const HitEffectPlayer gateFx(pm_, &cameraShaker_, &rng_);
+        for (const Vector3& position : GetStageEditor().ConsumeOpenedGatePositions()) {
+            gateFx.Sparks("gate_dust", position);
+            gateFx.Impact("gate_open");
+        }
         // enemy_の物理/アニメーション更新自体はStageEditor所有のためGetStageEditor().UpdateObjects()
         // （BaseScene::Tick()がUpdate()の直後に呼ぶ）が担う。ここでは前フレーム分の着地判定だけ読む
         // （1フレーム遅延するが60fps下では実用上無視できる差）

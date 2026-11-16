@@ -241,12 +241,14 @@ void FontRenderer::BuildAtlas(bool bold) {
         return;
     }
 
-    // GDI で Courier New を 32bit DIBSection に描画する
-    GdiCanvas canvas = BeginGdiCanvas(kAtlasW, kAtlasH);
+    // GDI で Courier New を 32bit DIBSection に描画する（マスの大きさの kAtlasPixelScale 倍の細かさで作る）
+    constexpr int kAtlasPixelW = kAtlasW * kAtlasPixelScale;
+    constexpr int kAtlasPixelH = kAtlasH * kAtlasPixelScale;
+    GdiCanvas canvas = BeginGdiCanvas(kAtlasPixelW, kAtlasPixelH);
 
     // フォント  Courier New（負の高さは文字の高さの指定）
     LOGFONTA lf { };
-    lf.lfHeight = kAsciiFontHeight;
+    lf.lfHeight = kAsciiFontHeight * kAtlasPixelScale;
     lf.lfWeight = bold ? FW_BOLD : FW_NORMAL;
     lf.lfCharSet = ANSI_CHARSET;
     lf.lfOutPrecision = OUT_TT_PRECIS;
@@ -266,19 +268,19 @@ void FontRenderer::BuildAtlas(bool bold) {
         int col = idx % kCols;
         int row = idx / kCols;
         buf[0] = static_cast<char>(c);
-        TextOutA(canvas.dc, col * kCharW, row * kCharH + kAsciiRowOffset, buf, 1);
+        TextOutA(canvas.dc, col * kCharW * kAtlasPixelScale, (row * kCharH + kAsciiRowOffset) * kAtlasPixelScale, buf, 1);
     }
 
     SelectObject(canvas.dc, hOldFont);
     DeleteObject(hFont);
 
     // 白い文字の輝度をアルファにしたテクスチャとして登録する
-    const std::vector<uint8_t> rgba = FinishGdiCanvas(canvas, kAtlasW, kAtlasH);
-    TextureManager::GetInstance()->LoadFromRawRGBA8(atlasKey, rgba.data(), kAtlasW, kAtlasH);
+    const std::vector<uint8_t> rgba = FinishGdiCanvas(canvas, kAtlasPixelW, kAtlasPixelH);
+    TextureManager::GetInstance()->LoadFromRawRGBA8(atlasKey, rgba.data(), kAtlasPixelW, kAtlasPixelH);
     // FlushUploads は SceneManager がシーン初期化後に一括で行う
 }
 
-// JP アトラス ひらがな・カタカナ・指定漢字を 16x16 グリッドで焼く
+// JP アトラス ひらがな・カタカナ・指定漢字を 16x16 のマス（絵は kAtlasPixelScale 倍の細かさ）で焼く
 
 /** @brief 文字の JP アトラス上のグリフ番号を返す（焼いていない文字は -1） */
 int FontRenderer::GetJpGlyphIdx(wchar_t c) const {
@@ -299,14 +301,15 @@ void FontRenderer::BuildJpAtlas(bool bold) {
     int totalGlyphs = static_cast<int>(glyphs.size());
     int atlasRows = (totalGlyphs + kJpCols - 1) / kJpCols;
     (bold ? jpAtlasRows_ : jpAtlasRowsRegular_) = atlasRows;
-    int atlasW = kJpCols * kJpCharW;
-    int atlasH = atlasRows * kJpCharH;
+    // マスの大きさの kAtlasPixelScale 倍の細かさで作る
+    const int atlasW = kJpCols * kJpCharW * kAtlasPixelScale;
+    const int atlasH = atlasRows * kJpCharH * kAtlasPixelScale;
 
     GdiCanvas canvas = BeginGdiCanvas(atlasW, atlasH);
 
     // フォント  MS Gothic（マスの上下に少し余白を残す高さ）
     LOGFONTW lf { };
-    lf.lfHeight = -(kJpCharH - kJpFontCellMargin);
+    lf.lfHeight = -(kJpCharH - kJpFontCellMargin) * kAtlasPixelScale;
     lf.lfWeight = bold ? FW_BOLD : FW_NORMAL;
     lf.lfCharSet = DEFAULT_CHARSET;
     lf.lfOutPrecision = OUT_TT_PRECIS;
@@ -324,7 +327,7 @@ void FontRenderer::BuildJpAtlas(bool bold) {
         wbuf[0] = glyphs[i];
         int col = i % kJpCols;
         int row = i / kJpCols;
-        TextOutW(canvas.dc, col * kJpCharW, row * kJpCharH, wbuf, 1);
+        TextOutW(canvas.dc, col * kJpCharW * kAtlasPixelScale, row * kJpCharH * kAtlasPixelScale, wbuf, 1);
     }
 
     SelectObject(canvas.dc, hOldFont);
@@ -375,8 +378,11 @@ void FontRenderer::DrawGlyph(std::vector<Sprite>& pool, int& poolIndex, const ch
     auto& s = AcquireGlyphSprite(pool, poolIndex, atlas);
     s.SetPosition({ x, y });
     s.SetSize({ static_cast<float>(cellW) * scale, static_cast<float>(cellH) * scale });
-    s.SetTextureLeftTop({ static_cast<float>(col * cellW) + kGlyphUvInset, static_cast<float>(row * cellH) + kGlyphUvInset });
-    s.SetTextureSize({ static_cast<float>(cellW) - kGlyphUvInset * 2.0f, static_cast<float>(cellH) - kGlyphUvInset * 2.0f });
+    // 絵はマスの kAtlasPixelScale 倍の細かさで作ってあるので、切り出す範囲もその倍率で求める
+    const float atlasCellW = static_cast<float>(cellW * kAtlasPixelScale);
+    const float atlasCellH = static_cast<float>(cellH * kAtlasPixelScale);
+    s.SetTextureLeftTop({ static_cast<float>(col) * atlasCellW + kGlyphUvInset, static_cast<float>(row) * atlasCellH + kGlyphUvInset });
+    s.SetTextureSize({ atlasCellW - kGlyphUvInset * 2.0f, atlasCellH - kGlyphUvInset * 2.0f });
     s.SetColor(color);
     s.Update();
     s.Draw();

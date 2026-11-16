@@ -36,6 +36,11 @@ constexpr float kSubTitleY = 190.0f;
 constexpr float kSubTitleScale = 2.0f;
 constexpr const wchar_t* kComboTrialTitle = L"コンボ練習";
 constexpr const wchar_t* kConfirmExitTitle = L"本当に戻りますか？";
+constexpr const wchar_t* kControlsTitle = L"操作説明";
+constexpr const wchar_t* kControlsBackHint = L"[{Back}] もどる";
+constexpr Vector2 kControlsListPosition = { 470.0f, 230.0f }; // 操作の一覧の左上
+constexpr float kControlsBackHintY = 640.0f;
+constexpr float kControlsBackHintScale = 1.2f;
 constexpr const char* kStopTrialLabel = "練習をやめる";
 constexpr const char* kBackLabel = "もどる";
 constexpr const char* kConfirmNoLabel = "いいえ";
@@ -96,6 +101,25 @@ public:
     }
 };
 
+/** @brief 操作説明のページ（戻る・決定でメニューへ） */
+class PauseMenu::ControlsPage : public PauseMenu::IPage {
+public:
+    /** @brief 戻るか決定でメニューへ戻る */
+    void Update(PauseMenu& pause, Input* input) const override {
+        if (input->TriggerMenuCancel() || input->TriggerMenuConfirm()) {
+            pause.page_ = &Menu();
+        }
+    }
+    /** @brief 見出しと操作の一覧を描画する */
+    void Draw(PauseMenu& pause, const Input*) const override {
+        pause.DrawControls();
+    }
+    // 戻るボタンは操作説明を閉じるのに使う（一時停止は解除しない）
+    bool HandlesBack() const override {
+        return true;
+    }
+};
+
 /** @brief コンボ練習の一覧のページ（戻るでメニューへ） */
 class PauseMenu::ComboTrialPage : public PauseMenu::IPage {
 public:
@@ -139,6 +163,12 @@ const PauseMenu::IPage& PauseMenu::Menu() {
 /** @brief コマンド表のページの共有インスタンスを返す */
 const PauseMenu::IPage& PauseMenu::CommandList() {
     static const CommandListPage kPage;
+    return kPage;
+}
+
+/** @brief 操作説明のページの共有インスタンスを返す */
+const PauseMenu::IPage& PauseMenu::Controls() {
+    static const ControlsPage kPage;
     return kPage;
 }
 
@@ -195,8 +225,8 @@ void PauseMenu::EnableComboTrial(ComboTrial* trial) {
 
 /** @brief 今の設定に合わせてメニューの項目を並べ直す（音量の値は行1〜3の横に出すので、その並びは変えない） */
 void PauseMenu::RebuildItems() {
-    rows_ = { Row::kResume, Row::kBgmVolume, Row::kSeVolume, Row::kAutoCombo, Row::kCommandList };
-    std::vector<UIButton> items = { { "ゲームに戻る" }, { "BGM音量" }, { "SE音量" }, { "オートコンボ" }, { "コマンド表" } };
+    rows_ = { Row::kResume, Row::kBgmVolume, Row::kSeVolume, Row::kAutoCombo, Row::kControls, Row::kCommandList };
+    std::vector<UIButton> items = { { "ゲームに戻る" }, { "BGM音量" }, { "SE音量" }, { "オートコンボ" }, { "操作説明" }, { "コマンド表" } };
     if (comboTrial_ != nullptr && !comboTrial_->Trials().empty()) {
         rows_.push_back(Row::kComboTrial);
         items.push_back({ "コンボ練習" });
@@ -254,6 +284,8 @@ void PauseMenu::UpdateMenu(Input* input) {
     }
     if (row == Row::kResume) {
         controller_.Resume();
+    } else if (row == Row::kControls) {
+        page_ = &Controls();
     } else if (row == Row::kCommandList) {
         commandList_.Open();
         page_ = &CommandList();
@@ -348,6 +380,21 @@ void PauseMenu::DrawCommandPreview(const CommandPreviewRenderer& renderer) {
     if (controller_.IsPaused() && page_ == &CommandList()) {
         commandList_.DrawPreview(renderer);
     }
+}
+
+/** @brief 操作説明のページの描画（見出しと、ボタンごとの操作の一覧） */
+void PauseMenu::DrawControls() {
+    UILayout& layout = UILayout::Get(layoutName_);
+    const Vector4 titleColor = layout.Color("pause.title_color", kTitleColor);
+    fontRenderer_->DrawStringCenteredW(kControlsTitle, layout.Float("pause.sub_title_y", kSubTitleY),
+        layout.Float("pause.sub_title_scale", kSubTitleScale), titleColor);
+    // 一覧の表記は、最後に使った機器（キーボード/パッド）に合わせて変わる
+    // 見出しはページの上に大きく出しているので、一覧の上には出さない
+    sceneShared::DrawControlsHud(*fontRenderer_, layout.Pos("pause.controls_pos", kControlsListPosition), L": 調べる・入口に入る", L"");
+    const Input* input = Input::GetCurrent();
+    const std::wstring backHint = input != nullptr ? input->ExpandPrompts(kControlsBackHint) : std::wstring(kControlsBackHint);
+    fontRenderer_->DrawStringCenteredW(backHint, layout.Float("pause.controls_back_y", kControlsBackHintY),
+        layout.Float("pause.controls_back_scale", kControlsBackHintScale), titleColor);
 }
 
 /** @brief メニューページの描画（項目・現在値・見出し） */

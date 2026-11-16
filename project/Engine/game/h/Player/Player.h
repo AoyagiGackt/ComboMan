@@ -556,6 +556,7 @@ private:
 
     // テレポート斬り（向いている方向へ短距離ワープする機動アクション。全区間無敵、コンボからキャンセル可）
     bool warpActive_ = false;
+    bool warpRequestedByDodge_ = false; ///< ロックオン中に敵の方へ倒して回避を押し、回避の代わりにワープを頼んだか
     float warpTimer_ = 0.0f;
     float warpStartX_ = 0.0f;
     float warpTargetX_ = 0.0f;
@@ -589,8 +590,11 @@ private:
     bool autoComboSuppressed_ = false; ///< true の間はオートコンボを設定に関係なく止める（コンボ練習中）
     /// 段ごとの加算モーション（両リグの SkinnedObject3d が参照するので、リグより先に宣言して長く生存させる）
     ComboMotionLayer motionLayer_;
+    float stanceWeight_ = 0.0f; ///< 武器の構えの効き具合（技の間は0へ、振り終えると1へ寄せる）
     /** @brief 今の段と経過割合を加算モーションのレイヤーへ渡す（リグを評価する直前に呼ぶ） */
     void SyncMotionLayer();
+    /** @brief 持っている武器の構えを、技を振っていない間だけ重ねる（技の間は素早く薄める） */
+    void SyncStanceLayer(bool attacking);
     const engine::graphics::Animation* previewAnim_ = nullptr; ///< プレビュー中に設定済みのベースアニメ（毎フレームのクリップ複製を避ける）
     bool previewWeaponActive_ = false; ///< プレビュー中に装備とは別の武器を持たせているか
     WeaponType previewWeapon_ { }; ///< プレビュー中に持たせている武器
@@ -629,6 +633,7 @@ private:
     // ブロックとの当たり判定の許容値
     static constexpr float kTopCrossTolerance = 0.01f; // 上面を跨いだとみなす高さの誤差
     static constexpr float kSideOverlapMargin = 0.05f; // 側面判定で上下の縁を無視する幅
+    static constexpr float kStackedBlockGap = 0.05f; // 床のすぐ上に積まれたブロックとみなす隙間（これより離れた浮いたブロックの下でも床に立てる）
     static constexpr float kLandingSnapTolerance = 0.05f; // 上面へ吸着させる高さの許容
 
     // 体の旋回（度）
@@ -928,6 +933,11 @@ private:
 
     /** @brief 攻撃モーションを頭から再生し、再生し切るまで状態遷移をロックする */
     void PlayAttackAnim(const engine::graphics::Animation& anim, float speed);
+    /**
+     * @brief 近接の段を始める（土台は構えの待機アニメにし、振りの動きは段ごとの加算モーションだけで付ける）
+     * @note 共通の斬りアニメを土台にすると、加算が終わった後の動きがどの武器も同じに見えるため。段の長さで土台も終える
+     */
+    void PlayMeleeStepAnim(const MeleeAttackDef& attack);
 
     // Update() 分割ヘルパー（呼び出し順に定義、詳細は Player.cpp 参照）
     /** @brief 毎フレーム冒頭でJust～系の単発フラグ（ジャンプ・着地・被弾等）を全てリセットする */
@@ -942,6 +952,10 @@ private:
     /// @note 覚醒ゲージがkWarpGaugeCost_未満の時は通常時は発動しない（覚醒中はゲージ消費なしで発動可）。
     /// 近接コンボ中でも受け付けてコンボを打ち切る回避と同じくフィニッシャー溜め中・乱舞中・水中は受け付けない
     void HandleWarp(Input* input);
+    /** @brief 今ワープを始められるか（妨げる状態でなく、ゲージかクールタイムの条件を満たしているか） */
+    bool CanStartWarp() const;
+    /** @brief ロックオンを押しながら、向いている方（ロック中は敵の方）へ移動入力しているか */
+    bool IsWarpChordHeld(Input* input) const;
     /** @brief 回避・ワープの水平移動を1フレーム進め、移動時間に達したかを返す */
     bool AdvanceHorizontalMove(float& timer, float duration, float startX, float targetX);
     /// @brief 数字キー/十字キーによる武器スロット切り替えを処理する

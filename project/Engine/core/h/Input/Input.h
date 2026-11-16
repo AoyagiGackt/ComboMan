@@ -175,7 +175,7 @@ public: // メンバ関数
 
     /**
      * @brief 文章中の {操作名} を、最後に使った機器のボタン名へ置き換える
-     * @param text {Steal} や {Dodge} などを含む文章。Action名のほかに {Move} {Slot} {Confirm} {Back} が使える
+     * @param text {Steal} や {Dodge} などを含む文章。Action名のほかに {Move} {Slot} {Slot1}〜{Slot3} {Confirm} {Back} が使える
      * @return 置き換え後の文章（知らない名前はそのまま残す）
      */
     std::wstring ExpandPrompts(const std::wstring& text) const;

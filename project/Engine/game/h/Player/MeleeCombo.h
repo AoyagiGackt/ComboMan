@@ -42,6 +42,11 @@ struct MeleeComboSet {
     const MeleeAttackDef* launcher; ///< 打ち上げ技（S+攻撃、地上のみ）
 };
 
+/** @brief 段で敵を押し出す向き（knockX が負の段は手前へ引き寄せるので -1、それ以外は +1。段が無ければ +1） */
+inline float MeleeKnockDirSign(const MeleeAttackDef* attack) {
+    return attack != nullptr && attack->knockX < 0.0f ? -1.0f : 1.0f;
+}
+
 /** @brief 武器タイプに対応するコンボ一式を返す（未定義タイプは Sword のセット） */
 const MeleeComboSet& GetMeleeComboSet(WeaponType type);
 

@@ -452,6 +452,36 @@
     <ClCompile Include="Engine\game\cpp\Effect\GameSounds.cpp">
       <Filter>ソースファイル\Engine\game\cpp\Effect</Filter>
     </ClCompile>
+    <ClCompile Include="Engine\game\cpp\Effect\KickedBombPool.cpp">
+      <Filter>ソースファイル\Engine\game\cpp\Effect</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\game\cpp\Effect\ThrownWeaponPool.cpp">
+      <Filter>ソースファイル\Engine\game\cpp\Effect</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\game\cpp\Scripting\WeaponFinisherTuning.cpp">
+      <Filter>ソースファイル\Engine\game\cpp\Scripting\調整値</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\game\cpp\Scripting\MonsterTraitTuning.cpp">
+      <Filter>ソースファイル\Engine\game\cpp\Scripting\調整値</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\game\cpp\Scene\GamePlaySceneBombs.cpp">
+      <Filter>ソースファイル\Engine\game\cpp\Scene</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\game\cpp\Scene\GamePlaySceneFinishers.cpp">
+      <Filter>ソースファイル\Engine\game\cpp\Scene</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\game\cpp\Scene\GamePlaySceneMonsters.cpp">
+      <Filter>ソースファイル\Engine\game\cpp\Scene</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\game\cpp\Scene\GamePlaySceneBoss.cpp">
+      <Filter>ソースファイル\Engine\game\cpp\Scene</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\game\cpp\Scene\GamePlaySceneExecution.cpp">
+      <Filter>ソースファイル\Engine\game\cpp\Scene</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\game\cpp\Scene\BossBattleDirector.cpp">
+      <Filter>ソースファイル\Engine\game\cpp\Scene</Filter>
+    </ClCompile>
     <ClCompile Include="Engine\game\cpp\Effect\SoundAssignEditor.cpp">
       <Filter>ソースファイル\Engine\game\cpp\Effect</Filter>
     </ClCompile>
@@ -693,6 +723,12 @@
       <Filter>ソースファイル\Engine\game\cpp\Scene\演出</Filter>
     </ClCompile>
     <ClCompile Include="Engine\game\cpp\Scene\PlayerDefeatTuning.cpp">
+      <Filter>ソースファイル\Engine\game\cpp\Scene\演出</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\game\cpp\Scene\BossExecution.cpp">
+      <Filter>ソースファイル\Engine\game\cpp\Scene\演出</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\game\cpp\Scene\BossExecutionTuning.cpp">
       <Filter>ソースファイル\Engine\game\cpp\Scene\演出</Filter>
     </ClCompile>
     <ClCompile Include="Engine\game\cpp\Scene\ClearFinish.cpp">
@@ -1011,6 +1047,12 @@
     <ClInclude Include="Engine\game\h\Scene\PlayerDefeatTuning.h">
       <Filter>ヘッダーファイル\Engine\game\h\Scene\演出</Filter>
     </ClInclude>
+    <ClInclude Include="Engine\game\h\Scene\BossExecution.h">
+      <Filter>ヘッダーファイル\Engine\game\h\Scene\演出</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\game\h\Scene\BossExecutionTuning.h">
+      <Filter>ヘッダーファイル\Engine\game\h\Scene\演出</Filter>
+    </ClInclude>
     <ClInclude Include="Engine\game\h\Scene\ClearFinish.h">
       <Filter>ヘッダーファイル\Engine\game\h\Scene\演出</Filter>
     </ClInclude>
@@ -1082,6 +1124,21 @@
     </ClInclude>
     <ClInclude Include="Engine\game\h\Effect\GameSounds.h">
       <Filter>ヘッダーファイル\Engine\game\h\Effect</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\game\h\Effect\KickedBombPool.h">
+      <Filter>ヘッダーファイル\Engine\game\h\Effect</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\game\h\Effect\ThrownWeaponPool.h">
+      <Filter>ヘッダーファイル\Engine\game\h\Effect</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\game\h\Scripting\WeaponFinisherTuning.h">
+      <Filter>ヘッダーファイル\Engine\game\h\Scripting\調整値</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\game\h\Scripting\MonsterTraitTuning.h">
+      <Filter>ヘッダーファイル\Engine\game\h\Scripting\調整値</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\game\h\Scene\BossBattleDirector.h">
+      <Filter>ヘッダーファイル\Engine\game\h\Scene</Filter>
     </ClInclude>
     <ClInclude Include="Engine\game\h\Effect\SoundAssignEditor.h">
       <Filter>ヘッダーファイル\Engine\game\h\Effect</Filter>

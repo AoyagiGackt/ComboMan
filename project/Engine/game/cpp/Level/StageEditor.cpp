@@ -81,6 +81,10 @@ void StageEditor::Open(const std::string& levelPath, ModelCommon* modelCommon, C
         ObjectEntry entry;
         entry.desc = std::move(desc);
         entry.authoredPosition = entry.desc.position;
+        // 読み込み時点のフラグを基準にして開始済みの扉の通知を抑える
+        entry.previousActivationFlag = !entry.desc.activationFlag.empty()
+            && GameFlags::GetInstance()->GetFlag(entry.desc.activationFlag);
+        entry.activationFlagInitialized = true;
         entry.runtimeActive = IsRuntimeActive(entry.desc) && entry.desc.activationDelay <= 0.0f;
         objects_.push_back(std::move(entry));
     }
@@ -195,6 +199,7 @@ void StageEditor::ReleaseLevelResources(bool releaseExternalEntities) {
         DestroyObjectRuntime(entry, false);
     }
     objects_.clear();
+    openedGatePositions_.clear();
     modelCache_.clear();
     triggers_.clear();
     checkpoints_.clear();

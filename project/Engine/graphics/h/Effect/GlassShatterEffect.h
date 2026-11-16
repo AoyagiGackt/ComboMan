@@ -99,6 +99,8 @@ private:
 
     /** @brief 斬線で分かれた破片ごとの中心と大きさを、画面を細かく区切って数えて求める（集まり直す時に破片ごとに回すため） */
     void BuildCutPieces();
+    /** @brief 画面を撮る写し先をバックバッファと同じ大きさにし、絵がある範囲を定数バッファへ送る（ウィンドウの大きさを変えても撮れるように） */
+    void MatchFreezeTextureToBackBuffer();
 
     engine::DirectXCommon* dxCommon_ = nullptr;
     SrvManager* srvManager_ = nullptr;
@@ -129,6 +131,7 @@ private:
         std::array<uint32_t, 3> piecePadding = {}; ///< 次の配列を16バイト境界にそろえる
         std::array<std::array<uint32_t, kMasksPerVector>, kMaxCutPieces / kMasksPerVector> cutPieceMasks = {}; ///< 破片の識別（斬線の左右の組み合わせ）を4つずつ
         std::array<std::array<float, kCutLineComponents>, kMaxCutPieces> cutPieceCenters = {}; ///< 破片の中心（xy、画面に対する0〜1）と半径（z、画面の高さ単位）
+        std::array<float, 4> captureRect = { 0.0f, 0.0f, 1.0f, 1.0f }; ///< 撮った画面の中で絵がある範囲（左上 xy と大きさ zw、撮った画面に対する0〜1）
     };
 
     // 定数バッファの配置がシェーダーの cbuffer と一致しているかを照合する
@@ -140,7 +143,8 @@ private:
     static_assert(offsetof(ShatterParams, cutPieceCount) == 832);
     static_assert(offsetof(ShatterParams, cutPieceMasks) == 848);
     static_assert(offsetof(ShatterParams, cutPieceCenters) == 1872);
-    static_assert(sizeof(ShatterParams) == 5968);
+    static_assert(offsetof(ShatterParams, captureRect) == 5968);
+    static_assert(sizeof(ShatterParams) == 5984);
     std::vector<CutLine> cutLines_; ///< 設定された斬線（初期化前に設定されても、初期化で定数バッファへ送る）
 
     Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature_;

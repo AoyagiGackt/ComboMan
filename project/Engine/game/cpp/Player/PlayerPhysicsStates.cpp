@@ -105,7 +105,8 @@ void Player::GroundedPhysicsState::Update(Player& player, Input* input) const {
     const float jumpMult = (player.isAwakened_ ? Tuning().awakenedJumpMult : 1.0f) * player.skillMods_.jumpMult;
 
     // 回避中は回避の移動が位置を決めるので、通常の左右移動とジャンプは受け付けない
-    if (!player.IsRampaging() && !player.finisherCharging_ && !player.dodgeActive_) {
+    // ワープ中も同じく、ワープの移動だけで進む（歩きを足すと決めた距離からずれて向きも変わる）
+    if (!player.IsRampaging() && !player.finisherCharging_ && !player.dodgeActive_ && !player.warpActive_) {
         player.ApplyHorizontalInput(input, Tuning().speed * speedMult);
     }
 

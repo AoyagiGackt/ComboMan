@@ -49,6 +49,21 @@ Vector3 RotateEulerXYZ(const Vector3& value, const Vector3& rotation) {
     result = { result.x * cy + result.z * sy, result.y, -result.x * sy + result.z * cy };
     return { result.x * cz - result.y * sz, result.x * sz + result.y * cz, result.z };
 }
+/** @brief 回転した箱の全頂点を囲むワールド座標の箱を求める */
+engine::AABB MakeRotatedBounds(const Vector3& center, const Vector3& halfExtent, const Vector3& rotation) {
+    Vector3 lower = { FLT_MAX, FLT_MAX, FLT_MAX };
+    Vector3 upper = { -FLT_MAX, -FLT_MAX, -FLT_MAX };
+    for (float x : { -halfExtent.x, halfExtent.x }) {
+        for (float y : { -halfExtent.y, halfExtent.y }) {
+            for (float z : { -halfExtent.z, halfExtent.z }) {
+                const Vector3 corner = center + RotateEulerXYZ({ x, y, z }, rotation);
+                lower = { (std::min)(lower.x, corner.x), (std::min)(lower.y, corner.y), (std::min)(lower.z, corner.z) };
+                upper = { (std::max)(upper.x, corner.x), (std::max)(upper.y, corner.y), (std::max)(upper.z, corner.z) };
+            }
+        }
+    }
+    return { lower, upper };
+}
 } // namespace
 
 /** @brief 描画資源の所有権を保持したまま色と描画行列を更新する */
@@ -62,10 +77,16 @@ std::vector<engine::AABB> StageEditor::GetSolidColliders() const {
     return CollectSolidColliders(true);
 }
 
+/** @brief 敵の体を除いた、壁と床だけの当たり判定の一覧を返す */
+std::vector<engine::AABB> StageEditor::GetTerrainColliders() const {
+    return CollectSolidColliders(false);
+}
+
 /** @brief solid=trueの配置物のワールドAABB一覧（includeEnemyBodies=falseなら敵の体を除いた地形だけ） */
 std::vector<engine::AABB> StageEditor::CollectSolidColliders(bool includeEnemyBodies) const {
     // 当たり判定を持ち、今ゲーム中で有効な（回収・破壊されていない）配置物だけを対象にする
     std::vector<engine::AABB> result;
+    std::vector<size_t> gateIndices;
     for (const auto& entry : objects_) {
         if (!entry.desc.solid || !entry.runtimeActive || !entry.visibleOverride
             || entry.pickupCollected || entry.breakableDestroyed) {
@@ -133,21 +154,69 @@ std::vector<engine::AABB> StageEditor::CollectSolidColliders(bool includeEnemyBo
         int instanceCount = static_cast<int>(entry.instances.size());
         for (int i = 0; i < instanceCount; ++i) {
             const Vector3 pos = PlacementInstancePosition(desc, basePos, i);
-            Vector3 minCorner = { FLT_MAX, FLT_MAX, FLT_MAX };
-            Vector3 maxCorner = { -FLT_MAX, -FLT_MAX, -FLT_MAX };
-            for (float x : { -hx, hx }) {
-                for (float y : { -hy, hy }) {
-                    for (float z : { -hz, hz }) {
-                        const Vector3 corner = pos + RotateEulerXYZ({ x, y, z }, colliderRotation);
-                        minCorner = { (std::min)(minCorner.x, corner.x), (std::min)(minCorner.y, corner.y), (std::min)(minCorner.z, corner.z) };
-                        maxCorner = { (std::max)(maxCorner.x, corner.x), (std::max)(maxCorner.y, corner.y), (std::max)(maxCorner.z, corner.z) };
-                    }
-                }
+            result.push_back(MakeRotatedBounds(pos, { hx, hy, hz }, colliderRotation));
+            // 条件を満たすまで閉じている扉なら、上を跳び越えられないよう後でステージ上端まで伸ばす
+            if (IsClosedGate(desc)) {
+                gateIndices.push_back(result.size() - 1);
             }
-            result.push_back({ minCorner, maxCorner });
         }
     }
+    ExtendGatesToStageTop(result, gateIndices);
     return result;
+}
+
+/** @brief 開き始めた扉の足元を取り出し、通知を消費する */
+std::vector<Vector3> StageEditor::ConsumeOpenedGatePositions() {
+    std::vector<Vector3> positions;
+    positions.swap(openedGatePositions_);
+    return positions;
+}
+
+/** @brief 回転と列配置を含む扉の箱の下端中央を通知へ追加する */
+void StageEditor::QueueOpenedGatePosition(const ObjectEntry& entry) {
+    const ObjectDesc& desc = entry.desc;
+    const Vector3 basePosition = WorldPositionOf(desc);
+    Vector3 lower = { FLT_MAX, FLT_MAX, FLT_MAX };
+    Vector3 upper = { -FLT_MAX, -FLT_MAX, -FLT_MAX };
+    // 配置された全実体の回転後の頂点から箱を求める
+    for (int index = 0; index < static_cast<int>(entry.instances.size()); ++index) {
+        const Vector3 center = PlacementInstancePosition(desc, basePosition, index);
+        const Vector3 halfExtent = { std::abs(desc.scale.x) * 0.5f,
+            std::abs(desc.scale.y) * 0.5f, std::abs(desc.scale.z) * 0.5f };
+        const engine::AABB bounds = MakeRotatedBounds(center, halfExtent, desc.rotation);
+        lower = { (std::min)(lower.x, bounds.min.x), (std::min)(lower.y, bounds.min.y), (std::min)(lower.z, bounds.min.z) };
+        upper = { (std::max)(upper.x, bounds.max.x), (std::max)(upper.y, bounds.max.y), (std::max)(upper.z, bounds.max.z) };
+    }
+    if (!entry.instances.empty()) {
+        openedGatePositions_.push_back({ (lower.x + upper.x) * 0.5f, lower.y, (lower.z + upper.z) * 0.5f });
+    }
+}
+
+/** @brief 敵を倒す等の条件が成立すると開く扉か（条件成立で消える当たり判定持ちのギミック） */
+bool StageEditor::IsGate(const ObjectDesc& desc) {
+    return desc.kind == objectKindName::kGimmick && desc.solid
+        && !desc.activationFlag.empty() && !desc.activeWhenFlag;
+}
+
+/** @brief 敵を倒す等の条件が成立するまで道を塞ぐ扉で、まだ条件が成立していないか */
+bool StageEditor::IsClosedGate(const ObjectDesc& desc) {
+    return IsGate(desc) && !GameFlags::GetInstance()->GetFlag(desc.activationFlag);
+}
+
+/** @brief 閉じている扉の当たり判定を、ほかの当たり判定の上端まで伸ばす（カメラの移動範囲は変えない） */
+void StageEditor::ExtendGatesToStageTop(std::vector<engine::AABB>& colliders, const std::vector<size_t>& gateIndices) {
+    if (gateIndices.empty()) {
+        return;
+    }
+    // ステージ全体の上端を求める
+    float stageTop = -FLT_MAX;
+    for (const engine::AABB& collider : colliders) {
+        stageTop = (std::max)(stageTop, collider.max.y);
+    }
+    // 扉の上端をそこへそろえる
+    for (size_t index : gateIndices) {
+        colliders[index].max.y = (std::max)(colliders[index].max.y, stageTop);
+    }
 }
 
 /** @brief kind=="breakable"で未破壊の配置物一覧を返す（毎フレーム呼ぶ想定） */

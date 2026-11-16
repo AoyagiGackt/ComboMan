@@ -263,6 +263,8 @@ public:
         const Vector3& to = intro.zoomInTarget_;
         intro.cameraFocus_ = { from.x + (to.x - from.x) * pan, from.y + (to.y - from.y) * zoomIn, from.z };
         intro.cameraZoom_ = intro.overviewZoom_ + (1.0f - intro.overviewZoom_) * zoomIn;
+        // ボスへ寄る時は、寄るにつれて壁際のボスも真ん中に映るようにする
+        intro.cameraUnclampWeight_ = intro.zoomInToBoss_ ? zoomIn : 0.0f;
         return zoomIn >= 1.0f;
     }
 };
@@ -275,6 +277,7 @@ public:
         // 幕が開いた時（見渡す段階があれば寄った先）にもうボスが映っているよう、ボスを向いておく
         if (intro.setup_.hasBoss) {
             intro.zoomInTarget_ = intro.setup_.bossFocus;
+            intro.zoomInToBoss_ = true;
         }
     }
     /** @brief この状態へ入る際の初期設定を適用する */
@@ -298,6 +301,8 @@ public:
         intro.textAlpha_ = (std::min)(fadeIn, fadeOut);
         const float pan = easing::EaseInOutSine(easing::Progress(t - tune.bossHoldSeconds, tune.bossPanSeconds));
         intro.cameraFocus_ = LerpVector(intro.setup_.bossFocus, intro.setup_.landing, pan);
+        // 壁際のボスも真ん中に映し、開始位置へ戻るにつれてふだんの端で止める映し方へ戻す
+        intro.cameraUnclampWeight_ = 1.0f - pan;
         return t >= tune.bossHoldSeconds + tune.bossPanSeconds;
     }
     /** @brief ボスの名前と奪える武器の文字を出す */
@@ -444,6 +449,8 @@ void StageIntro::Start(const Setup& setup, const Services& services) {
     cameraFocus_ = setup.landing;
     cameraZoom_ = 1.0f;
     zoomInTarget_ = setup.landing;
+    zoomInToBoss_ = false;
+    cameraUnclampWeight_ = 0.0f;
     hasOverview_ = false;
     playing_ = !phases_.empty();
     if (!playing_) {
@@ -463,6 +470,7 @@ void StageIntro::Start(const Setup& setup, const Services& services) {
     // 最初の画（幕が開いた時に見えるもの）は、見渡す段階があれば引いた画、無ければ最初に寄る先
     cameraFocus_ = hasOverview_ ? overviewFocus_ : zoomInTarget_;
     cameraZoom_ = hasOverview_ ? overviewZoom_ : 1.0f;
+    cameraUnclampWeight_ = !hasOverview_ && zoomInToBoss_ ? 1.0f : 0.0f;
     phases_[phaseIndex_]->Enter(*this);
 }
 
@@ -517,6 +525,7 @@ void StageIntro::Finish() {
     textAlpha_ = 0.0f;
     cameraFocus_ = setup_.landing;
     cameraZoom_ = 1.0f;
+    cameraUnclampWeight_ = 0.0f;
     SetPlayerPosition(setup_.landing);
     UpdatePlayerPose();
 }

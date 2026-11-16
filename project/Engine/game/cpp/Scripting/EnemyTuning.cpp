@@ -70,8 +70,6 @@ constexpr JsonField<EnemyBulletTuning> kBulletFields[] = {
 };
 
 constexpr JsonField<BossSlamTuning> kBossSlamFields[] = {
-    { "bossSlam", "engageRange", &BossSlamTuning::engageRange },
-    { "bossSlam", "interval", &BossSlamTuning::interval },
     { "bossSlam", "warningDuration", &BossSlamTuning::warningDuration },
     { "bossSlam", "radius", &BossSlamTuning::radius },
     { "bossSlam", "damage", &BossSlamTuning::damage },
@@ -132,6 +130,7 @@ void EnemyTuning::Reload() {
             { nullptr, "yawOffset", &EnemyVisualTuning::yawOffset },
             { nullptr, "bodyHalfWidth", &EnemyVisualTuning::bodyHalfWidth },
             { nullptr, "bodyHeight", &EnemyVisualTuning::bodyHeight },
+            { nullptr, "depthOffset", &EnemyVisualTuning::depthOffset },
         };
         for (const auto& [kind, value] : root["visuals"].items()) {
             if (!value.is_object()) {

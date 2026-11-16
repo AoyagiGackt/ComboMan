@@ -31,6 +31,7 @@ cbuffer ShatterParams : register(b0)
     uint3 piecePadding;
     uint4 cutPieceMasks[64];      // 破片の識別（斬線の左右の組み合わせ）を4つずつ
     float4 cutPieceCenters[256];  // 破片の中心（xy、UV）と半径（z、画面の高さ単位）
+    float4 captureRect;           // 撮った画面の中で絵がある範囲（左上 xy と大きさ zw。ウィンドウの大きさを変えると余白が付く）
 };
 
 Texture2D<float4> sceneTex    : register(t0); // キャプチャしたゲーム画面
@@ -126,6 +127,13 @@ float2 hash2(float2 p)
 float hash1(float2 p)
 {
     return frac(sin(dot(p, kHashAxisX)) * kHashScale);
+}
+
+// ---- 撮った画面 ----
+// 画面の点 uv（絵の中の0〜1）の、撮った画面の色（ウィンドウの大きさを変えて付いた余白を除いた範囲から読む）。
+float4 SampleScene(float2 uv)
+{
+    return sceneTex.SampleLevel(linearClamp, captureRect.xy + uv * captureRect.zw, 0.0f);
 }
 
 // ---- Voronoi ----
@@ -334,7 +342,7 @@ float4 DrawGlassFall(float2 uv, float t)
     float fall = GlassFallProgress(cell, t);
     float seed = hash1(cell.xy);
     float shade = 1.0f + (seed - kHalf) * kShardShade * saturate(fall * kShadeRampSpeed);
-    float4 scene = sceneTex.SampleLevel(linearClamp, sampleUV, 0.0f);
+    float4 scene = SampleScene(sampleUV);
     float3 color = lerp(scene.rgb * shade, 1.0f, saturate(crack * kCrackBrightness + ShardGlint(seed, fall)));
     return float4(color, 1.0f - fall);
 }
@@ -481,7 +489,7 @@ float4 DrawCutShards(float2 uv, float t)
     float glow = (1.0f - smoothstep(0.0f, max(cutGlowWidth, kMinInterval), edge)) * cutGlowStrength * (1.0f - separate);
     float fall = CutFallProgress(mask, t);
     float glint = ShardGlint(CutHash(mask ^ kSpreadSeed), fall);
-    float4 scene = sceneTex.SampleLevel(linearClamp, sampleUV, 0.0f);
+    float4 scene = SampleScene(sampleUV);
     return float4(lerp(scene.rgb, 1.0f, saturate(glow + glint)), scene.a * (1.0f - fall));
 }
 

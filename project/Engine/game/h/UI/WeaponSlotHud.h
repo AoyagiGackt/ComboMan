@@ -13,8 +13,6 @@ namespace engine::game {
 /** @brief 武器枠・実物アイコン・選択演出をまとめて管理する。 */
 class WeaponSlotHud final : public IHudWidget {
 public:
-    /** @brief スロット番号を表示するかを指定して初期化する */
-    explicit WeaponSlotHud(bool showNumbers = false) : showNumbers_(showNumbers) {}
     void Initialize(const HudServices& services) override;
     void Update(const HudFrame& frame) override;
     void QueueText(FontRenderer& font) const override;
@@ -67,6 +65,5 @@ private:
     Vector2 gunPosition_ = {};
     float pulseTime_ = 0.0f;
     float flashRemaining_ = 0.0f;
-    bool showNumbers_ = false;
 };
 }

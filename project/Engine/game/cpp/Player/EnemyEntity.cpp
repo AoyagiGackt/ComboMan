@@ -3,6 +3,7 @@
  * @brief 武器を持つ敵（EnemyEntity）の性格・攻撃の状態・被弾・描画の実装
  */
 #include "EnemyEntity.h"
+#include "BossExecutionTuning.h"
 #include "GameConstants.h"
 #include "GravityBody.h"
 #include "GroundSupport.h"
@@ -178,7 +179,7 @@ void EnemyEntity::Initialize(ModelCommon* modelCommon, const Vector3& startPos, 
     animationState_ = VisualAnim::kAttack;
     object_->SetEnableLighting(true);
     object_->SetScale({ kBodyScale, kBodyScale, kBodyScale });
-    object_->SetPosition(pos_);
+    object_->SetPosition(VisualPosition());
     object_->Update();
 
     // WeaponType の並び順に、手に持たせる武器の見た目
@@ -274,14 +275,17 @@ void EnemyEntity::Update(float playerX) {
     // 非打ち上げ中の高さは UpdateTerrain() が地形に合わせる
 
     // 飛ぶ種類は出現位置の高さを中心に上下にゆらゆらさせる
-    if (archetype_->Hovers() && !isLaunched_ && !defeated_) {
-        pos_.y = spawnY_ + std::sin(archetypeTimer_ * tuning.flyingBobSpeed) * tuning.flyingBobAmplitude;
+    // （打ち上げや急降下でずれた高さから一気に戻すと瞬間移動に見えるので、のけぞり中はその場に留め、明けたら少しずつ戻す）
+    if (archetype_->Hovers() && !isLaunched_ && !defeated_ && !IsInHitstun()) {
+        const float hoverY = spawnY_ + std::sin(archetypeTimer_ * tuning.flyingBobSpeed) * tuning.flyingBobAmplitude;
+        pos_.y += (hoverY - pos_.y) * kHoverReturnRate;
     }
 
     // 本体・落とした武器・手持ちの武器の位置を反映し、攻撃できる種類なら攻撃の状態を進める
-    object_->SetPosition(pos_);
+    const Vector3 visualPos = VisualPosition();
+    object_->SetPosition(visualPos);
     UpdateDroppedWeapon();
-    PlaceWeapon(pos_);
+    PlaceWeapon(visualPos);
 
     if (climbing_) {
         // 登っている間は攻撃を始めない（壁に向かって振らないように）
@@ -307,7 +311,9 @@ void EnemyEntity::Update(float playerX) {
     }
 
     // 体の傾きと武器の角度: 撃破後は倒れた姿勢、のけぞり中は反らせ、それ以外は攻撃の状態に合わせる
-    float bodyLean = defeated_ ? facingSign_ * kDefeatedBodyLean : 0.0f;
+    // 倒れたら寝かせる（膝をつくボスは少し前へ傾けるだけ）
+    const float defeatedLean = IsKneeling() ? BossExecutionTuningStore::Get().kneel.bodyLean : kDefeatedBodyLean;
+    float bodyLean = defeated_ ? facingSign_ * defeatedLean : 0.0f;
     float weaponSwing = defeated_ ? facingSign_ * kDefeatedWeaponTilt : kWeaponRestTilt;
     if (!defeated_ && !isLaunched_) {
         if (IsInHitstun()) {
@@ -477,7 +483,7 @@ void EnemyEntity::Draw() {
     if (!bodyHidden_) {
         object_->Draw();
     }
-    if (!bodyHidden_ || weaponDropped_ || defeated_) {
+    if ((!bodyHidden_ || weaponDropped_ || defeated_) && !weaponHidden_) {
         weaponObject_->Draw();
     }
 }
@@ -495,6 +501,8 @@ void EnemyEntity::SetMonsterVisual(ModelCommon* modelCommon, const std::string& 
     monsterBodyHalfWidth_ = def->bodyHalfWidth;
     monsterBodyHeight_ = def->bodyHeight;
     monsterYawOffset_ = def->yawOffset;
+    monsterDepthOffset_ = def->depthOffset;
+    monsterKind_ = kind;
     // 素材の色をそのまま見せる（回復役だけは緑で見分けられるようにする）
     SetColor(IsHealer() ? kHealerColor : kDefaultArchetypeColor);
     SyncMonsterVisual(false);
@@ -577,12 +585,15 @@ void EnemyEntity::SyncMonsterVisual(bool advanceBob) {
         monsterBobTimer_ += gameConstants::kFrameDeltaTime;
     }
     // 素材は静止モデルなので、生きている間はその場で小さく弾ませて動きを足す
-    const float bob = defeated_ ? 0.0f : std::sin(monsterBobTimer_ * kMonsterBobSpeed) * kMonsterBobAmplitude;
+    // 床より下へ沈まないよう、足元から上へだけ弾ませる
+    constexpr float kHalf = 0.5f;
+    const float bob = defeated_ ? 0.0f : (1.0f + std::sin(monsterBobTimer_ * kMonsterBobSpeed)) * kHalf * kMonsterBobAmplitude;
     const Vector3 bodyPos = object_->GetPosition();
     // 騎士の本体スケールに対する比（被弾した瞬間の膨らみ）をモンスターにも掛ける
     const float punch = object_->GetScale().x / kBodyScale;
     const float scale = monsterScale_ * punch;
-    monsterObject_->SetPosition({ bodyPos.x, bodyPos.y + bob, bodyPos.z });
+    // 大きい体は見た目だけ奥へずらし、重なったプレイヤーが体の中に隠れて消えたように見えないようにする
+    monsterObject_->SetPosition({ bodyPos.x, bodyPos.y + bob, bodyPos.z + monsterDepthOffset_ });
     Vector3 rotation = object_->GetRotation();
     rotation.y += monsterYawOffset_;
     monsterObject_->SetRotation(rotation);
@@ -674,7 +685,8 @@ void EnemyEntity::ApplyHomeRun(float dirX) {
 }
 /** @brief 持っている武器をその場に落とす（以後は本体から離れて地面に転がる） */
 void EnemyEntity::DropWeapon() {
-    if (weaponDropped_) {
+    // 膝をつくボスは武器を手放さない（倒れた後に地面へ突き立てて見せるため）
+    if (weaponDropped_ || kneelOnDefeat_) {
         return;
     }
     weaponDropped_ = true;

@@ -1,0 +1,1008 @@
+{
+  "_comment": "ステージ5（空中回廊）。A(動く足場の導入) → B(上下の段で飛ぶ敵と戦う) → C(横に動く足場と崩れる床を渡る上段、下段は近道だが敵が多い) → D(高台での2波) → E(鎌のボス、上の足場から攻める)",
+  "playerSpawn": [
+    4,
+    0.4,
+    0
+  ],
+  "enemySpawn": [
+    61,
+    0.4,
+    0
+  ],
+  "graphPath": "Resources/Graphs/level05_main.json",
+  "flagGraphs": [
+    {
+      "flag": "s5_zone_b",
+      "graphPath": "Resources/Graphs/level05_zone_b.json"
+    },
+    {
+      "flag": "s5_zone_c",
+      "graphPath": "Resources/Graphs/level05_zone_c.json"
+    },
+    {
+      "flag": "s5_zone_d",
+      "graphPath": "Resources/Graphs/level05_zone_d.json"
+    },
+    {
+      "flag": "s5_zone_boss",
+      "graphPath": "Resources/Graphs/level05_zone_boss.json"
+    },
+    {
+      "flag": "condition_s5_boss_defeated",
+      "graphPath": "Resources/Graphs/level05_boss_down.json"
+    }
+  ],
+  "checkpoints": [
+    {
+      "name": "cp_s5_room_b",
+      "position": [
+        15,
+        0.4,
+        0
+      ],
+      "activationRadius": 1.5
+    },
+    {
+      "name": "cp_s5_room_d",
+      "position": [
+        42,
+        0.4,
+        0
+      ],
+      "activationRadius": 1.5
+    },
+    {
+      "name": "cp_s5_boss",
+      "position": [
+        56,
+        0.4,
+        0
+      ],
+      "activationRadius": 1.5
+    }
+  ],
+  "triggers": [
+    {
+      "name": "t_s5_room_b",
+      "position": [
+        15,
+        0.4,
+        0
+      ],
+      "radius": 1.5,
+      "flag": "s5_zone_b",
+      "value": true,
+      "once": true
+    },
+    {
+      "name": "t_s5_zone_c",
+      "position": [
+        30.5,
+        1.4,
+        0
+      ],
+      "radius": 2.5,
+      "flag": "s5_zone_c",
+      "value": true,
+      "once": true
+    },
+    {
+      "name": "t_s5_room_d",
+      "position": [
+        42,
+        0.4,
+        0
+      ],
+      "radius": 1.5,
+      "flag": "s5_zone_d",
+      "value": true,
+      "once": true
+    },
+    {
+      "name": "t_s5_boss",
+      "position": [
+        56,
+        0.4,
+        0
+      ],
+      "radius": 1.5,
+      "flag": "s5_zone_boss",
+      "value": true,
+      "once": true
+    }
+  ],
+  "objects": [
+    {
+      "name": "floor",
+      "type": "row",
+      "kind": "prop",
+      "axis": "x",
+      "count": 62,
+      "step": 1,
+      "model": "Resources/block/block.obj",
+      "texture": "Resources/block/block.png",
+      "position": [
+        2,
+        -0.98,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "lighting": false,
+      "solid": true
+    },
+    {
+      "name": "ceiling",
+      "type": "row",
+      "kind": "prop",
+      "axis": "x",
+      "count": 62,
+      "step": 1,
+      "model": "Resources/block/block.obj",
+      "texture": "Resources/block/block.png",
+      "position": [
+        2,
+        13,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "lighting": false,
+      "solid": true
+    },
+    {
+      "name": "wall_left",
+      "type": "row",
+      "kind": "prop",
+      "axis": "y",
+      "count": 13,
+      "step": 1,
+      "model": "Resources/block/block.obj",
+      "texture": "Resources/block/block.png",
+      "position": [
+        2,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "lighting": false,
+      "solid": true
+    },
+    {
+      "name": "wall_right",
+      "type": "row",
+      "kind": "prop",
+      "axis": "y",
+      "count": 14,
+      "step": 1,
+      "model": "Resources/block/block.obj",
+      "texture": "Resources/block/block.png",
+      "position": [
+        64,
+        -0.98,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "lighting": false,
+      "solid": true
+    },
+    {
+      "name": "bg_buildings",
+      "type": "row",
+      "kind": "background",
+      "axis": "x",
+      "count": 5,
+      "step": 13,
+      "model": "Resources/DowntownCityMegaKit[Standard]/Exports/glTF (Godot)/Building_Small_1.gltf",
+      "texture": "Resources/DowntownCityMegaKit[Standard]/Textures/T_RedBrick_BaseColor.png",
+      "position": [
+        8,
+        -0.6,
+        6
+      ],
+      "scale": [
+        0.42,
+        0.42,
+        0.42
+      ],
+      "lighting": true,
+      "solid": false
+    },
+    {
+      "name": "guide_s5_a",
+      "type": "static",
+      "kind": "ui_text",
+      "position": [
+        24,
+        200,
+        0
+      ],
+      "textSpace": "screen",
+      "textScale": 1.35,
+      "textColor": [
+        0.85,
+        0.95,
+        1,
+        0.95
+      ],
+      "text": "空中回廊  足場は動き、崩れる  空中で攻撃を当てるとスタイルが伸びる"
+    },
+    {
+      "name": "s5_lift_a",
+      "type": "static",
+      "kind": "gimmick",
+      "model": "Resources/block/gimmick/gimmick_platform_move.obj",
+      "texture": "Resources/block/gimmick/gimmick_palette.png",
+      "position": [
+        9,
+        1,
+        0
+      ],
+      "scale": [
+        2.5,
+        0.45,
+        1
+      ],
+      "lighting": true,
+      "solid": true,
+      "gimmickMotion": "custom",
+      "motionMode": "pingpong",
+      "motionEase": "smooth",
+      "motionAxis": [
+        0,
+        1,
+        0
+      ],
+      "motionRotation": [
+        0,
+        0,
+        0
+      ],
+      "motionAmount": 1.6,
+      "motionSpeed": 0.9
+    },
+    {
+      "name": "s5_start_bat",
+      "type": "static",
+      "kind": "enemy_basic",
+      "position": [
+        11.5,
+        3,
+        0
+      ],
+      "spawnType": "flying",
+      "weaponType": "",
+      "enemyModel": "Bat",
+      "enemyGroup": "s5_start"
+    },
+    {
+      "name": "s5_start_slime",
+      "type": "static",
+      "kind": "enemy_basic",
+      "position": [
+        13,
+        -0.38,
+        0
+      ],
+      "spawnType": "basic",
+      "weaponType": "",
+      "enemyModel": "Slime",
+      "enemyGroup": "s5_start"
+    },
+    {
+      "name": "guide_s5_b",
+      "type": "static",
+      "kind": "ui_text",
+      "position": [
+        24,
+        200,
+        0
+      ],
+      "textSpace": "screen",
+      "textScale": 1.35,
+      "textColor": [
+        0.85,
+        0.95,
+        1,
+        0.95
+      ],
+      "activationFlag": "s5_zone_b",
+      "text": "上下の段  飛ぶ敵は打ち上げて空中コンボで落とせ"
+    },
+    {
+      "name": "s5_ledge_b1",
+      "type": "row",
+      "kind": "prop",
+      "axis": "x",
+      "count": 3,
+      "step": 1,
+      "model": "Resources/block/block.obj",
+      "texture": "Resources/DowntownCityMegaKit[Standard]/Textures/T_Concrete_BaseColor.png",
+      "position": [
+        17,
+        2,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "lighting": false,
+      "solid": true
+    },
+    {
+      "name": "s5_ledge_b2",
+      "type": "row",
+      "kind": "prop",
+      "axis": "x",
+      "count": 3,
+      "step": 1,
+      "model": "Resources/block/block.obj",
+      "texture": "Resources/DowntownCityMegaKit[Standard]/Textures/T_Concrete_BaseColor.png",
+      "position": [
+        23,
+        3.4,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "lighting": false,
+      "solid": true
+    },
+    {
+      "name": "s5_room_b_bat",
+      "type": "static",
+      "kind": "enemy_basic",
+      "position": [
+        19,
+        4,
+        0
+      ],
+      "spawnType": "flying",
+      "weaponType": "",
+      "enemyModel": "Bat",
+      "enemyGroup": "s5_room_b"
+    },
+    {
+      "name": "s5_room_b_bat2",
+      "type": "static",
+      "kind": "enemy_basic",
+      "position": [
+        25.5,
+        5,
+        0
+      ],
+      "spawnType": "flying",
+      "weaponType": "",
+      "enemyModel": "Bat",
+      "enemyGroup": "s5_room_b"
+    },
+    {
+      "name": "s5_room_b_spear",
+      "type": "static",
+      "kind": "enemy_basic",
+      "position": [
+        21,
+        -0.38,
+        0
+      ],
+      "spawnType": "basic",
+      "weaponType": "Spear",
+      "enemyGroup": "s5_room_b"
+    },
+    {
+      "name": "s5_room_b_dagger",
+      "type": "static",
+      "kind": "enemy_basic",
+      "position": [
+        24,
+        -0.38,
+        0
+      ],
+      "spawnType": "basic",
+      "weaponType": "Dagger",
+      "enemyGroup": "s5_room_b"
+    },
+    {
+      "name": "barrel_s5_b1",
+      "type": "static",
+      "kind": "breakable",
+      "model": "Resources/block/gimmick/gimmick_barrel.obj",
+      "texture": "Resources/block/gimmick/gimmick_palette.png",
+      "position": [
+        23.5,
+        4.25,
+        0
+      ],
+      "scale": [
+        0.9,
+        0.9,
+        0.9
+      ],
+      "lighting": true,
+      "solid": false,
+      "breakableHp": 2,
+      "breakableRadius": 3,
+      "breakablePlayerDamage": 4,
+      "breakableEnemyDamage": 3
+    },
+    {
+      "name": "s5_room_b_clear",
+      "type": "static",
+      "kind": "event_condition",
+      "position": [
+        21,
+        0,
+        0
+      ],
+      "conditionType": "enemy_group_defeated",
+      "enemyGroup": "s5_room_b"
+    },
+    {
+      "name": "door_s5_b",
+      "type": "static",
+      "kind": "gimmick",
+      "model": "Resources/block/gimmick/gimmick_door.obj",
+      "texture": "Resources/block/gimmick/gimmick_palette.png",
+      "position": [
+        28.5,
+        6,
+        0
+      ],
+      "scale": [
+        1,
+        13,
+        1
+      ],
+      "lighting": true,
+      "solid": true,
+      "activationFlag": "condition_s5_room_b_clear",
+      "activeWhenFlag": false,
+      "activationDelay": 1.2,
+      "gimmickMotion": "custom",
+      "motionMode": "once",
+      "motionEase": "smooth",
+      "motionAxis": [
+        0,
+        1,
+        0
+      ],
+      "motionRotation": [
+        0,
+        0,
+        0
+      ],
+      "motionAmount": 13.5,
+      "motionSpeed": 1
+    },
+    {
+      "name": "guide_s5_c",
+      "type": "static",
+      "kind": "ui_text",
+      "position": [
+        24,
+        200,
+        0
+      ],
+      "textSpace": "screen",
+      "textScale": 1.35,
+      "textColor": [
+        0.85,
+        0.95,
+        1,
+        0.95
+      ],
+      "activationFlag": "s5_zone_c",
+      "text": "上段は足場を渡って宝へ  下段は近道だが待ち伏せがいる"
+    },
+    {
+      "name": "stair_s5_1",
+      "type": "row",
+      "kind": "prop",
+      "axis": "x",
+      "count": 2,
+      "step": 1,
+      "model": "Resources/block/block.obj",
+      "texture": "Resources/DowntownCityMegaKit[Standard]/Textures/T_Concrete_BaseColor.png",
+      "position": [
+        30,
+        1.4,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "lighting": false,
+      "solid": true
+    },
+    {
+      "name": "s5_swing_1",
+      "type": "static",
+      "kind": "gimmick",
+      "model": "Resources/block/gimmick/gimmick_platform_move.obj",
+      "texture": "Resources/block/gimmick/gimmick_palette.png",
+      "position": [
+        33.5,
+        3.4,
+        0
+      ],
+      "scale": [
+        2.5,
+        0.45,
+        1
+      ],
+      "lighting": true,
+      "solid": true,
+      "gimmickMotion": "custom",
+      "motionMode": "pingpong",
+      "motionEase": "smooth",
+      "motionAxis": [
+        1,
+        0,
+        0
+      ],
+      "motionRotation": [
+        0,
+        0,
+        0
+      ],
+      "motionAmount": 2,
+      "motionSpeed": 0.8
+    },
+    {
+      "name": "s5_fall_1",
+      "type": "static",
+      "kind": "gimmick",
+      "model": "Resources/block/gimmick/gimmick_platform_fall.obj",
+      "texture": "Resources/block/gimmick/gimmick_palette.png",
+      "position": [
+        37.5,
+        4.6,
+        0
+      ],
+      "scale": [
+        2.5,
+        0.45,
+        1
+      ],
+      "lighting": true,
+      "solid": true,
+      "gimmickMotion": "fall",
+      "motionAmount": 6,
+      "motionSpeed": 0.9
+    },
+    {
+      "name": "s5_lift_c",
+      "type": "static",
+      "kind": "gimmick",
+      "model": "Resources/block/gimmick/gimmick_platform_move.obj",
+      "texture": "Resources/block/gimmick/gimmick_palette.png",
+      "position": [
+        40,
+        3,
+        0
+      ],
+      "scale": [
+        2.5,
+        0.45,
+        1
+      ],
+      "lighting": true,
+      "solid": true,
+      "gimmickMotion": "custom",
+      "motionMode": "pingpong",
+      "motionEase": "smooth",
+      "motionAxis": [
+        0,
+        1,
+        0
+      ],
+      "motionRotation": [
+        0,
+        0,
+        0
+      ],
+      "motionAmount": 2,
+      "motionSpeed": 1
+    },
+    {
+      "name": "pickup_s5_air_1",
+      "type": "static",
+      "kind": "pickup",
+      "model": "Resources/block/gimmick/gimmick_core.obj",
+      "texture": "Resources/block/gimmick/gimmick_palette.png",
+      "position": [
+        37.5,
+        5.8,
+        0
+      ],
+      "scale": [
+        0.35,
+        0.35,
+        0.35
+      ],
+      "lighting": false,
+      "solid": false,
+      "pickupRadius": 1,
+      "pickupGaugeAmount": 0.3
+    },
+    {
+      "name": "pickup_s5_air_2",
+      "type": "static",
+      "kind": "pickup",
+      "model": "Resources/block/gimmick/gimmick_core.obj",
+      "texture": "Resources/block/gimmick/gimmick_palette.png",
+      "position": [
+        40,
+        7,
+        0
+      ],
+      "scale": [
+        0.35,
+        0.35,
+        0.35
+      ],
+      "lighting": false,
+      "solid": false,
+      "pickupRadius": 1,
+      "pickupGaugeAmount": 0.5,
+      "pickupColor": [
+        1,
+        0.85,
+        0.3,
+        1
+      ]
+    },
+    {
+      "name": "s5_c_skeleton",
+      "type": "static",
+      "kind": "enemy_basic",
+      "position": [
+        34,
+        -0.38,
+        0
+      ],
+      "spawnType": "basic",
+      "weaponType": "",
+      "enemyModel": "Skeleton",
+      "enemyGroup": "s5_c"
+    },
+    {
+      "name": "s5_c_hammer",
+      "type": "static",
+      "kind": "enemy_basic",
+      "position": [
+        37,
+        -0.38,
+        0
+      ],
+      "spawnType": "basic",
+      "weaponType": "Hammer",
+      "enemyGroup": "s5_c"
+    },
+    {
+      "name": "s5_c_bat",
+      "type": "static",
+      "kind": "enemy_basic",
+      "position": [
+        39,
+        2.4,
+        0
+      ],
+      "spawnType": "flying",
+      "weaponType": "",
+      "enemyModel": "Bat",
+      "enemyGroup": "s5_c"
+    },
+    {
+      "name": "guide_s5_d",
+      "type": "static",
+      "kind": "ui_text",
+      "position": [
+        24,
+        200,
+        0
+      ],
+      "textSpace": "screen",
+      "textScale": 1.35,
+      "textColor": [
+        0.85,
+        0.95,
+        1,
+        0.95
+      ],
+      "activationFlag": "s5_zone_d",
+      "text": "高台の連戦  足場の上から打ち下ろし、落下攻撃でまとめて叩け"
+    },
+    {
+      "name": "s5_high_d",
+      "type": "row",
+      "kind": "prop",
+      "axis": "x",
+      "count": 4,
+      "step": 1,
+      "model": "Resources/block/block.obj",
+      "texture": "Resources/DowntownCityMegaKit[Standard]/Textures/T_Concrete_BaseColor.png",
+      "position": [
+        46,
+        2.6,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "lighting": false,
+      "solid": true
+    },
+    {
+      "name": "s5_room_d_sword",
+      "type": "static",
+      "kind": "enemy_basic",
+      "position": [
+        45,
+        -0.38,
+        0
+      ],
+      "spawnType": "basic",
+      "weaponType": "Sword",
+      "enemyGroup": "s5_room_d"
+    },
+    {
+      "name": "s5_room_d_bat",
+      "type": "static",
+      "kind": "enemy_basic",
+      "position": [
+        48,
+        5,
+        0
+      ],
+      "spawnType": "flying",
+      "weaponType": "",
+      "enemyModel": "Bat",
+      "enemyGroup": "s5_room_d"
+    },
+    {
+      "name": "s5_room_d_healer",
+      "type": "static",
+      "kind": "enemy_basic",
+      "position": [
+        51.5,
+        -0.38,
+        0
+      ],
+      "spawnType": "healer",
+      "weaponType": "Spear",
+      "enemyGroup": "s5_room_d"
+    },
+    {
+      "name": "s5_room_d_wave1",
+      "type": "static",
+      "kind": "event_condition",
+      "position": [
+        48,
+        0,
+        0
+      ],
+      "conditionType": "enemy_group_defeated",
+      "enemyGroup": "s5_room_d"
+    },
+    {
+      "name": "sp_s5_d_wave2_a",
+      "type": "static",
+      "kind": "spawn_point",
+      "position": [
+        44.5,
+        -0.38,
+        0
+      ],
+      "spawnType": "basic",
+      "weaponType": "Dagger",
+      "enemyGroup": "s5_room_d_wave2",
+      "activationFlag": "condition_s5_room_d_wave1",
+      "activationDelay": 0.8
+    },
+    {
+      "name": "sp_s5_d_wave2_b",
+      "type": "static",
+      "kind": "spawn_point",
+      "position": [
+        48,
+        4.5,
+        0
+      ],
+      "spawnType": "flying",
+      "weaponType": "",
+      "enemyGroup": "s5_room_d_wave2",
+      "activationFlag": "condition_s5_room_d_wave1",
+      "activationDelay": 1.1,
+      "enemyModel": "Bat"
+    },
+    {
+      "name": "sp_s5_d_wave2_c",
+      "type": "static",
+      "kind": "spawn_point",
+      "position": [
+        52,
+        -0.38,
+        0
+      ],
+      "spawnType": "basic",
+      "weaponType": "Spear",
+      "enemyGroup": "s5_room_d_wave2",
+      "activationFlag": "condition_s5_room_d_wave1",
+      "activationDelay": 1.5
+    },
+    {
+      "name": "s5_room_d_clear",
+      "type": "static",
+      "kind": "event_condition",
+      "position": [
+        48,
+        0,
+        0
+      ],
+      "conditionType": "enemy_group_defeated",
+      "enemyGroup": "s5_room_d_wave2"
+    },
+    {
+      "name": "door_s5_d",
+      "type": "static",
+      "kind": "gimmick",
+      "model": "Resources/block/gimmick/gimmick_door.obj",
+      "texture": "Resources/block/gimmick/gimmick_palette.png",
+      "position": [
+        54.5,
+        6,
+        0
+      ],
+      "scale": [
+        1,
+        13,
+        1
+      ],
+      "lighting": true,
+      "solid": true,
+      "activationFlag": "condition_s5_room_d_clear",
+      "activeWhenFlag": false,
+      "activationDelay": 1.2,
+      "gimmickMotion": "custom",
+      "motionMode": "once",
+      "motionEase": "smooth",
+      "motionAxis": [
+        0,
+        1,
+        0
+      ],
+      "motionRotation": [
+        0,
+        0,
+        0
+      ],
+      "motionAmount": 13.5,
+      "motionSpeed": 1
+    },
+    {
+      "name": "guide_s5_boss",
+      "type": "static",
+      "kind": "ui_text",
+      "position": [
+        24,
+        200,
+        0
+      ],
+      "textSpace": "screen",
+      "textScale": 1.35,
+      "textColor": [
+        1,
+        0.75,
+        0.25,
+        1
+      ],
+      "activationFlag": "s5_zone_boss",
+      "text": "鎌のボス  回り込むダッシュは着地を狙え  上の足場から落下攻撃"
+    },
+    {
+      "name": "s5_boss",
+      "type": "static",
+      "kind": "enemy_basic",
+      "position": [
+        61,
+        -0.38,
+        0
+      ],
+      "spawnType": "basic",
+      "weaponType": "Scythe",
+      "enemyGroup": "s5_boss",
+      "isStageBoss": true
+    },
+    {
+      "name": "s5_boss_defeated",
+      "type": "static",
+      "kind": "event_condition",
+      "position": [
+        61,
+        0,
+        0
+      ],
+      "conditionType": "enemy_group_defeated",
+      "enemyGroup": "s5_boss"
+    },
+    {
+      "name": "s5_boss_lift",
+      "type": "static",
+      "kind": "gimmick",
+      "model": "Resources/block/gimmick/gimmick_platform_move.obj",
+      "texture": "Resources/block/gimmick/gimmick_palette.png",
+      "position": [
+        59,
+        3.2,
+        0
+      ],
+      "scale": [
+        2.5,
+        0.45,
+        1
+      ],
+      "lighting": true,
+      "solid": true,
+      "gimmickMotion": "custom",
+      "motionMode": "pingpong",
+      "motionEase": "smooth",
+      "motionAxis": [
+        1,
+        0,
+        0
+      ],
+      "motionRotation": [
+        0,
+        0,
+        0
+      ],
+      "motionAmount": 2.5,
+      "motionSpeed": 0.6
+    },
+    {
+      "name": "guide_s5_done",
+      "type": "static",
+      "kind": "ui_text",
+      "position": [
+        24,
+        200,
+        0
+      ],
+      "textSpace": "screen",
+      "textScale": 1.35,
+      "textColor": [
+        0.45,
+        1,
+        0.65,
+        1
+      ],
+      "activationFlag": "condition_s5_boss_defeated",
+      "text": "撃破完了  {Steal} で鎌を奪ってステージクリア"
+    }
+  ]
+}

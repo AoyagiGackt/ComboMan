@@ -22,7 +22,7 @@ public:
     static constexpr int kCharH = 16;
     static constexpr int kCols = 16;
     static constexpr int kRows = 6;
-    static constexpr int kAtlasW = kCharW * kCols; // 128
+    static constexpr int kAtlasW = kCharW * kCols; // 128（マスの大きさで数えた幅。絵はこの kAtlasPixelScale 倍）
     static constexpr int kAtlasH = kCharH * kRows; // 96
     static constexpr int kCharBase = 32;
     // HUDの文字に影を重ねて描く箇所が増え、1文字あたり2スプライト消費するようになったため、
@@ -34,6 +34,8 @@ public:
     // JP アトラス定数（ひらがな・カタカナ・漢字）
     static constexpr int kJpCharW = 16;
     static constexpr int kJpCharH = 16;
+    /** @brief 文字の絵をマスの大きさの何倍の細かさで作るか（並べる間隔は kCharW などのまま。引き伸ばしても文字がにじまないように） */
+    static constexpr int kAtlasPixelScale = 2;
     static constexpr int kJpCols = 64; // JIS第二水準まで焼くため横長にして縦の行数を抑える
 
     // Regular（非Bold）用スプライトプール文字数上限

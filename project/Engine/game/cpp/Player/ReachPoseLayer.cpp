@@ -15,6 +15,7 @@ using engine::graphics::Skeleton;
 namespace engine::game {
 namespace {
 constexpr Quaternion kIdentity = { 0.0f, 0.0f, 0.0f, 1.0f };
+constexpr Vector3 kBoneAxis = { 0.0f, 1.0f, 0.0f }; ///< 骨が伸びるローカルの向き（子ボーンが無い時に使う）
 
 /** @brief 最初に見つかった子ボーンの番号（子が無ければ空） */
 std::optional<int32_t> FirstChildOf(const Skeleton& skeleton, int32_t index) {
@@ -62,13 +63,12 @@ void ReachPoseLayer::Collect(const Skeleton& skeleton, std::vector<PoseLayerRota
         if (reach.weight <= 0.0f || !index.has_value()) {
             continue;
         }
+        // 子ボーンが無い骨（すねの先に足が付いていない等）は、骨の伸びる向きのローカル +Y を使う
         const std::optional<int32_t> child = FirstChildOf(skeleton, *index);
-        if (!child.has_value()) {
-            continue;
-        }
+        const Vector3 localDirection = child.has_value() ? skeleton.GetJoint(*child).transform.translate : kBoneAxis;
         // 今の姿勢でのボーンの向き（子ボーンの付け根への向き）を、モデルの座標で求める
         const Quaternion boneRotation = ModelRotation(skeleton, *index, out);
-        const Vector3 boneDirection = RotateVector(boneRotation, skeleton.GetJoint(*child).transform.translate);
+        const Vector3 boneDirection = RotateVector(boneRotation, localDirection);
         // モデルの座標での回し方を割合ぶんだけにし、ボーンのローカル軸での差分（G の逆 × 回転 × G）へ直す
         const Quaternion turn = Slerp(kIdentity, MakeRotationFromTo(boneDirection, reach.direction), (std::min)(reach.weight, 1.0f));
         const Quaternion delta = Multiply(Multiply(Conjugate(boneRotation), turn), boneRotation);

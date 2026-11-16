@@ -26,6 +26,8 @@ bool sNextDebugClearByGun = false;
 /** @brief クリアの決め演出を始める（ボスを倒した最後の一撃が銃なら弾痕、それ以外なら斬線） */
 void GamePlayScene::StartClearFinish() {
     CrashBreadcrumbs::Add("game", std::string("クリアの決め演出を開始（") + (bossFinishedByGun_ ? "銃" : "斬撃") + "）");
+    // とどめの途中で確認用ボタンからクリアした時も、演出を閉じて技の姿勢から戻す
+    bossExecution_.End();
     // ラン中は結果画面を決めた秒数だけ見せ、サンドボックスは割れ落ちたらすぐクリア画面へ
     ClearFinish::Setup setup;
     setup.style = bossFinishedByGun_ ? ClearFinish::Style::kGun : ClearFinish::Style::kBlade;

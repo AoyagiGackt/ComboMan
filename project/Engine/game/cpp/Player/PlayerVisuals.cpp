@@ -33,6 +33,9 @@ const PlayerTuning& Tuning() {
 
 // 差し替えモデルの高さが取れない時の既定スケール
 constexpr float kMinModelHeight = 0.001f;
+constexpr float kStanceFadeInPerSecond = 6.0f; // 技を振り終えてから武器の構えへ戻る速さ（1秒あたりの効き具合）
+constexpr float kStanceFadeOutPerSecond = 20.0f; // 技や回避を始めた時に武器の構えを薄める速さ
+constexpr const char* kStanceClipPrefix = "stance_"; // combo_motion.json の構えのクリップ名（stance_<武器種別名>）
 
 // 状態ごとの本体の色
 constexpr Vector4 kWhite = { 1.0f, 1.0f, 1.0f, 1.0f };
@@ -365,6 +368,7 @@ void Player::SyncMotionLayer() {
     // 同時入力では銃のクリップだけを選び、同じ骨への二重加算を防ぐ
     const GunShotDef* shot = gunCombo_.GetActive();
     const ComboMotionLibrary* gunLibrary = ComboMotionLibrary::GetInstance();
+    SyncStanceLayer(shot != nullptr || meleeCombo_.GetActive() != nullptr);
     if (shot != nullptr) {
         motionLayer_.SetClip(gunLibrary->IsEnabled() ? gunLibrary->Find(rig_->motionRigId, shot->id) : nullptr,
             gunCombo_.GetMotionProgress());
@@ -376,6 +380,24 @@ void Player::SyncMotionLayer() {
         ? library->Find(rig_->motionRigId, attack->id)
         : nullptr;
     motionLayer_.SetClip(clip, meleeCombo_.GetProgress());
+}
+
+/** @brief 持っている武器の構えを、技を振っていない間だけ重ねる（技の間は素早く薄める） */
+void Player::SyncStanceLayer(bool attacking) {
+    const auto* wm = WeaponManager::GetInstance();
+    const ComboMotionLibrary* library = ComboMotionLibrary::GetInstance();
+    // 武器を持ち、立ち回りの最中（技・回避・ワープ・水中・やられ中でない）だけ構える
+    const bool canHoldStance = wm->HasEquippedWeapon() && library->IsEnabled() && !weaponsDropped_ && !inWater_;
+    const bool wantsStance = canHoldStance && !attacking && !dodgeActive_ && !warpActive_;
+    const float rate = wantsStance ? kStanceFadeInPerSecond : kStanceFadeOutPerSecond;
+    const float target = wantsStance ? 1.0f : 0.0f;
+    const float step = rate * gameConstants::kFrameDeltaTime;
+    stanceWeight_ = target > stanceWeight_ ? (std::min)(stanceWeight_ + step, target) : (std::max)(stanceWeight_ - step, target);
+    // 武器を持っていなければ構えのクリップ自体を外す
+    const MotionClip* stance = canHoldStance
+        ? library->Find(rig_->motionRigId, std::string(kStanceClipPrefix) + WeaponTypeName(wm->GetCurrent().type))
+        : nullptr;
+    motionLayer_.SetStance(stance, stanceWeight_);
 }
 
 /** @brief 近接の段を指定時刻の姿勢で見せる（モーション編集のプレビュー用） */
@@ -553,9 +575,9 @@ void Player::Draw() {
         staticOverrideObject_->Draw();
         return;
     }
-    // 残像（プレイヤーより先に描画して後ろに見えるようにする）
-    afterImageRenderer_.Draw();
+    // 本体を先に描き、半透明の残像は後から重ねる（残像も奥行きを書くので、先に描くと重なった所の本体が隠れて透明に見える）
     DrawBodyAndWeapons();
+    afterImageRenderer_.Draw();
 }
 
 /** @brief 残像を除いて本体と持っている武器だけを描く（コマンド表の見本用） */

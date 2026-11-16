@@ -1,9 +1,9 @@
 {
-  "_comment": "ラスボス戦（3面クリアの後に続く）の調整値。stage.level のレベルで戦う。秒・距離はシーンの座標と実時間。確認用は game_rules.json の debugFinalBossButton（ゲーム中に F4）",
+  "_comment": "ラスボス戦（最後のステージをクリアした後に続く）の調整値。stage.level のレベルで戦う。秒・距離はシーンの座標と実時間。",
   "stage": {
     "level": "Resources/Levels/final_arena.json",
     "bossName": "黒き刃の影",
-    "introLine": "……その刀、返してもらう",
+    "introLine": "",
     "rageLine": "まだだ……！",
     "stealLine": "落とした刀に近づいて J で奪え",
     "bossMaxHp": 90,

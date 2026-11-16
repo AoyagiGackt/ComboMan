@@ -5,6 +5,7 @@
 #pragma once
 #include "MakeAffine.h"
 #include <random>
+#include <vector>
 
 namespace engine::graphics {
 class BladeFlashEffect;
@@ -38,12 +39,23 @@ void EmitBeatBlades(engine::graphics::BladeFlashEffect& blades, const Vector3& c
 void EmitReleaseBlades(engine::graphics::BladeFlashEffect& blades, engine::graphics::SpaceDistortionEffect& warp,
     const Vector3& center);
 
-/** @brief 溜めた斬撃線を白く光らせてから消し、center を通る太く短い斬撃線を重ねる */
-void SpawnReleaseSlashes(std::mt19937& rng, const Vector3& center, const Vector3& cameraPos);
+/**
+ * @brief 溜めた斬撃線を白く光らせてから消し、center を通る太く短い斬撃線を重ねる
+ * @param released nullptr でなければ、引いた斬撃線を後ろへ足す（画面を割る線に使う）
+ */
+void SpawnReleaseSlashes(std::mt19937& rng, const Vector3& center, const Vector3& cameraPos,
+    std::vector<BeatSlash>* released = nullptr);
 
 /** @brief world を画面の UV へ投影し、そこから画面が割れる演出を始める（カメラの後ろなら中心は前回のまま） */
 void StartShatterAt(engine::graphics::GlassShatterEffect& shatter, const engine::graphics::Camera& camera,
     const Vector3& world);
+
+/**
+ * @brief 斬撃線に沿って画面を割り、破片が落ちて素の世界を見せる演出を始める（線が無ければ world から放射状に割る）
+ * @param slashes 割る線にする斬撃線（ワールド座標。カメラの後ろの線は使わない）
+ */
+void StartSlashShatterAt(engine::graphics::GlassShatterEffect& shatter, const engine::graphics::Camera& camera,
+    const Vector3& world, const std::vector<BeatSlash>& slashes);
 
 /** @brief カメラ前方のワールド座標を画面UVへ変換する。背後の場合は出力を変更せずfalseを返す */
 bool ProjectToUv(const engine::graphics::Camera& camera, const Vector3& world, Vector2& uv);
