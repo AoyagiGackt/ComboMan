@@ -41,6 +41,8 @@ void GamePlaySceneInitializer::InitializeStageActors(GamePlayScene& scene) {
     AudioBridge::GetInstance()->SetAudio(scene.audio_);
     auto* runData = RunData::GetInstance();
     if (runData->IsRunActive()) {
+        // ステージは毎回HP満タンから始める（途中で抜けた時や前のステージの減ったHPを、遊び直しや次のステージへ持ち越さない）
+        runData->Heal(runData->GetMaxHp());
         Player::SkillMods mods;
         mods.blinkDistMult = runData->HasSkill(RunData::Skill::kBlinkPlus) ? PlayerTuning::Get().skillBlinkPlusDistanceMult : 1.0f;
         mods.comboMaxBonus = runData->HasSkill(RunData::Skill::kComboExtend) ? PlayerTuning::Get().skillComboExtendBonus : 0;
@@ -67,6 +69,10 @@ void GamePlayScene::OnEditorLevelLoaded() {
     weaponFinisherPending_ = false;
     bossSlamWarningActive_ = false;
     floorElapsedSeconds_ = 0.0f;
+    acquireBannerTimer_ = 0.0f;
+    hasSafeGround_ = false;
+    ResetAlly();
+    bugWatch_.playerTrail.clear();
     lockedEnemy_ = nullptr;
 
     bossInstanceId_ = 0;
@@ -123,6 +129,7 @@ void GamePlayScene::BindEditorBoss() {
     // ステージのボスは倒れると武器を地面に突き立てて膝をつき、とどめを待つ（ラスボス戦は専用の演出がある）
     enemy_->SetKneelOnDefeat(!IsFinalBossMode());
     bossDirector_.Bind(enemy_, WeaponTypeName(boss->weaponType));
+    bossMotion_.Reset();
     bossSlamRequested_ = false;
     // エディタでステージを開き直した時も、前のステージで飛ばした爆弾を残さない
     kickedBombs_.Clear();

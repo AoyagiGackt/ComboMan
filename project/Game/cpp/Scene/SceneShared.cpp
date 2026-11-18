@@ -16,6 +16,7 @@
 #include "FontRenderer.h"
 #include "GameConstants.h"
 #include "GameSettings.h"
+#include "GunCombo.h"
 #include "Input.h"
 #include "JsonHelper.h"
 #include "Object3d.h"
@@ -340,6 +341,20 @@ const char* AutoComboLabel() {
     return GameSettingsManager::GetInstance()->Get().autoCombo ? "< ON >" : "< OFF >";
 }
 
+/** @brief 武器の合体の ON/OFF を切り替えて保存する（選択音も鳴らす） */
+void ToggleWeaponFusion(Audio* audio) {
+    GameSettings settings = GameSettingsManager::GetInstance()->Get();
+    settings.weaponFusion = !settings.weaponFusion;
+    audio->PlayMenuChoice();
+    GameSettingsManager::GetInstance()->Apply(settings);
+    GameSettingsManager::GetInstance()->Save();
+}
+
+/** @brief オプション欄に出す武器の合体の状態表示（< ON > / < OFF >） */
+const char* WeaponFusionLabel() {
+    return GameSettingsManager::GetInstance()->Get().weaponFusion ? "< ON >" : "< OFF >";
+}
+
 namespace {
 // 武器一覧HUDの文字の既定値（hud.json の weapon_list.* で上書きできる）
 constexpr float kWeaponListDefaultScale = 1.15f;
@@ -424,6 +439,8 @@ void DrawControlsHud(FontRenderer& fontRenderer, const Vector2& anchor, const wc
     row(L"{Awaken}", L": 覚醒発動");
     row(L"{Finisher}", L": フィニッシャー");
     row(L"{Pause}", L": ポーズ・音量設定");
+    // 全画面の切り替えはキーボードだけ（パッドに割り当てが無いので、機器に関係なく F11 と出す）
+    row(L"[F11]", L": 全画面の切り替え");
 
     DrawControlsPanel(fontRenderer, anchor, header, rows);
 }
@@ -459,6 +476,40 @@ void EmitFinisherCharge(ParticleManager* pm,
     }
 
     pm->EmitRing(ringGroup, pos, kChargeRingSpeed, kFinisherGlowColor, kChargeRingCount, kChargeRingLifetime, kChargeRingSize);
+}
+
+/** @brief 銃口から的へ飛ぶ見た目の弾を出す */
+void EmitGunShotParticles(const HitEffectPlayer& fx, const Vector3& muzzle, const Vector3& target, const GunShotDef* shot,
+    const Vector4& color) {
+    const auto& visuals = HitEffectLibrary::GetInstance()->SceneParticles();
+    const int bullets = (shot != nullptr) ? (std::max)(shot->bullets, visuals.minBullets) : visuals.fallbackBullets;
+    const float spread = (shot != nullptr) ? shot->spreadDeg * gameConstants::kDegToRad : visuals.fallbackSpread;
+    // 寿命のうちに的へ届く速さにする
+    const float lifetime = HitEffectLibrary::GetInstance()->Particle("gun_shot").lifetime;
+    const float perSecond = lifetime > 0.0f ? 1.0f / lifetime : 0.0f;
+    // 銃のモデルを持たないので、体の中心から少し撃つ向きへ出した所を銃口にする
+    const Vector3 toTarget = { target.x - muzzle.x, target.y - muzzle.y, target.z - muzzle.z };
+    const float distance = std::sqrt(toTarget.x * toTarget.x + toTarget.y * toTarget.y + toTarget.z * toTarget.z);
+    const float forward = distance > visuals.muzzleForward ? visuals.muzzleForward / distance : 0.0f;
+    const Vector3 origin = { muzzle.x + toTarget.x * forward, muzzle.y + toTarget.y * forward, muzzle.z + toTarget.z * forward };
+    const Vector3 aim = { (target.x - origin.x) * perSecond, (target.y - origin.y) * perSecond, (target.z - origin.z) * perSecond };
+    // 銃口の光
+    fx.Particle("gun_muzzle_flash", origin);
+    // 散弾は上下へ扇状に広げる（単発は的へまっすぐ）
+    for (int i = 0; i < bullets; ++i) {
+        const float t = (bullets > 1) ? (i / (bullets - 1.0f) - visuals.halfRange) : 0.0f;
+        const float speed = visuals.fanSpeedBase + i * visuals.fanSpeedStep;
+        const Vector3 velocity = { aim.x, aim.y + speed * spread * t, aim.z };
+        fx.Particle("gun_shot", origin, { .color = color, .velocity = velocity });
+        // 少しずつ遅い粒を同じ向きへ放ち、弾の後ろに伸びる光の尾にする（後ろの粒ほど小さく薄い）
+        for (int k = 1; k <= visuals.tracerCount; ++k) {
+            const float lag = (std::max)(1.0f - visuals.tracerSpeedStep * static_cast<float>(k), 0.0f);
+            const float fade = (std::max)(1.0f - visuals.tracerAlphaStep * static_cast<float>(k), 0.0f);
+            const float shrink = (std::max)(1.0f - visuals.tracerSizeStep * static_cast<float>(k), 0.0f);
+            fx.Particle("gun_tracer", origin, { .scale = shrink, .color = color, .alphaScale = fade,
+                .velocity = Vector3 { velocity.x * lag, velocity.y * lag, velocity.z * lag } });
+        }
+    }
 }
 
 /** @brief 締めの斬線を画面に出す */

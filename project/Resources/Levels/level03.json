@@ -144,7 +144,7 @@
       "type": "row",
       "kind": "prop",
       "axis": "x",
-      "count": 62,
+      "count": 63,
       "step": 1,
       "model": "Resources/block/block.obj",
       "texture": "Resources/block/block.png",
@@ -548,7 +548,7 @@
         0.95
       ],
       "activationFlag": "s3_zone_upper",
-      "text": "宝物庫  槍の壁と鎚の壁が続く  持ち替えて一気に壊せ  下の道からも先へ進める"
+      "text": "宝物庫  光る壁が続く  壊して敵ごと吹き飛ばせ  下の道からも先へ進める"
     },
     {
       "name": "s3_wall_spear",
@@ -572,7 +572,6 @@
       "breakableRadius": 0,
       "breakablePlayerDamage": 0,
       "breakableEnemyDamage": 0,
-      "breakableWeapon": "Spear",
       "breakableColor": [
         0.55,
         0.75,
@@ -602,7 +601,6 @@
       "breakableRadius": 0,
       "breakablePlayerDamage": 0,
       "breakableEnemyDamage": 0,
-      "breakableWeapon": "Hammer",
       "breakableColor": [
         0.7,
         0.7,

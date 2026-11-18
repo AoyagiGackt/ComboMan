@@ -20,6 +20,8 @@ constexpr JsonField<ContinueData> kContinueFields[] = {
     { "continue", "selected_weapon_slot", &ContinueData::selectedWeaponSlot },
     { "continue", "pending_weapon_index", &ContinueData::pendingWeaponIndex },
     { "continue", "ranged_weapon_index", &ContinueData::rangedWeaponIndex },
+    { "continue", "boss_weapon_index", &ContinueData::bossWeaponIndex },
+    { "continue", "boss_partner_index", &ContinueData::bossPartnerIndex },
     { "continue", "valid", &ContinueData::valid },
     { "continue", "hp", &ContinueData::hp },
     { "continue", "max_hp", &ContinueData::maxHp },
@@ -277,6 +279,8 @@ void SaveDataManager::SaveContinue(const RunData& rd) {
     continue_.selectedWeaponSlot = equipment.selectedSlot;
     continue_.pendingWeaponIndex = equipment.pendingWeaponIndex;
     continue_.rangedWeaponIndex = equipment.rangedIndex;
+    continue_.bossWeaponIndex = equipment.bossWeapon;
+    continue_.bossPartnerIndex = equipment.bossPartner;
     Save();
 }
 
@@ -303,6 +307,8 @@ void SaveDataManager::LoadContinue(RunData& rd) const {
     equipment.selectedSlot = continue_.selectedWeaponSlot;
     equipment.pendingWeaponIndex = continue_.pendingWeaponIndex;
     equipment.rangedIndex = continue_.rangedWeaponIndex;
+    equipment.bossWeapon = continue_.bossWeaponIndex;
+    equipment.bossPartner = continue_.bossPartnerIndex;
     manager->RestoreSnapshot(equipment);
 }
 

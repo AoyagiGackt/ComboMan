@@ -177,6 +177,11 @@ void GamePlayScene::UpdateFinisherSlash(float dt) {
     sceneShared::EmitFinisherRelease(pm_, "hit_ring", "hit_spark", epos);
 }
 
+/** @brief フィニッシャーのどれかの段階の最中か（溜め・斬撃線・解放の画面の割れ・敵の破片）。とどめやクリアはこれが終わってから始める */
+bool GamePlayScene::IsFinisherBusy() const {
+    return finisherActive_ || enemySlice_.IsActive() || finisherShatter_.IsActive() || player_->IsFinisherCharging();
+}
+
 /** @brief ステージのクリア条件を満たしたかを調べる */
 void GamePlayScene::CheckClearCondition() {
     const auto& visuals = HitEffectLibrary::GetInstance()->SceneParticles();
@@ -184,7 +189,7 @@ void GamePlayScene::CheckClearCondition() {
 
     // 最終敵の撃破後にgame_rules.jsonで指定した武器を奪い、スロットを完成させる
     if (enemy_ && !weaponStealTriggered_ && enemy_->IsDefeated()
-        && !finisherActive_ && !enemySlice_.IsActive()) {
+        && !IsFinisherBusy()) {
         // 打ち飛ばされて武器を落としていれば、本体ではなく落ちた武器の場所で奪う
         const Vector3 epos = enemy_->GetWeaponPickupPosition();
         const Vector3& ppos = player_->GetPosition();
@@ -219,6 +224,7 @@ void GamePlayScene::CheckClearCondition() {
             if (enemy_->HasDroppedWeapon()) {
                 enemy_->PullDroppedWeaponToward(absorbTarget, visuals.absorbPullRate);
             } else {
+                enemy_->BeginCorpsePull();
                 enemy_->MoveTowardXY(absorbTarget, visuals.absorbPullRate);
                 enemy_->RefreshVisualTransforms();
             }
@@ -230,7 +236,7 @@ void GamePlayScene::CheckClearCondition() {
 
     // ローグライト: 敵撃破でクリア（大技・切断演出は見せ切ってから遷移する）
     if (enemy_ && rules.requireBossWeaponSteal && !clearTriggered_ && enemy_->IsDefeated() && weaponStealTriggered_
-        && !finisherActive_ && !enemySlice_.IsActive()
+        && !IsFinisherBusy()
         /** @brief RunData の唯一のインスタンスを取得する */
         && RunData::GetInstance()->IsRunActive()) {
         requestClear_ = true;
@@ -238,7 +244,7 @@ void GamePlayScene::CheckClearCondition() {
 
     // ノードグラフ（RequestStageClear/SetFlag）やステージのトリガーがクリアフラグを立てた場合もクリアへ進む
     if (!clearTriggered_ && !rules.clearFlag.empty() && GameFlags::GetInstance()->GetFlag(rules.clearFlag)
-        && !finisherActive_ && !enemySlice_.IsActive()) {
+        && !IsFinisherBusy()) {
         GameFlags::GetInstance()->SetFlag(rules.clearFlag, false); // 次のステージへ持ち越さない
         requestClear_ = true;
     }
@@ -360,6 +366,8 @@ void GamePlayScene::DrawWorldAndActors() {
 
     // HUDより前にエディタ管理の配置物（収集物・壊せる物を含む）を描画し、BaseScene側の二重描画を抑止する
     GetStageEditor().DrawObjects();
+    // 味方のボスは配置物の敵と同じ描画の設定で描く
+    DrawAlly();
 
     // 攻撃で吹き飛ばした爆弾
     SetupModelRenderState();
@@ -374,6 +382,8 @@ void GamePlayScene::DrawWorldAndActors() {
         for (const auto& g : ghostTrail_) {
             float alpha = (1.0f - g.age / visuals.ghostLifetime) * visuals.ghostMaxAlpha;
             ghostObject_->SetPosition(g.pos);
+            ghostObject_->SetScale({ g.scale, g.scale, g.scale });
+            ghostObject_->SetRotation({ 0.0f, g.yaw, 0.0f });
             ghostObject_->SetColor({ visuals.ghostColor.x, visuals.ghostColor.y, visuals.ghostColor.z, alpha });
             ghostObject_->Update();
             ghostObject_->Draw();

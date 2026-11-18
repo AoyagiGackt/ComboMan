@@ -4,6 +4,7 @@
  */
 #pragma once
 #include "Animation.h"
+#include "BossMotion.h"
 #include "CollisionConfig.h"
 #include "EnemyTuning.h"
 #include "IEnemyEntity.h"
@@ -14,9 +15,11 @@
 #include "SkinCommon.h"
 #include "SkinnedModel.h"
 #include "SkinnedObject3d.h"
+#include "Vector4.h"
 #include "Weapon.h"
 #include <algorithm>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 namespace engine::game {
@@ -26,6 +29,20 @@ using engine::graphics::Object3d;
 using engine::graphics::SkinCommon;
 using engine::graphics::SkinnedModel;
 using engine::graphics::SkinnedObject3d;
+
+/** @brief 武器の属性で敵に残る状態（燃焼・凍結など）。中身はシーンが属性の設定から入れて、毎フレーム進める */
+struct EnemyElementStatus {
+    std::string element; ///< 属性名（空なら状態なし）
+    Vector4 color = { 1.0f, 1.0f, 1.0f, 1.0f }; ///< 演出の色
+    float remaining = 0.0f; ///< 残りの秒数
+    float tickTimer = 0.0f; ///< 次の継続ダメージまでの秒数
+    float emitTimer = 0.0f; ///< 次に状態の粒を出すまでの秒数
+
+    /** @brief 状態が続いているか */
+    bool IsActive() const {
+        return remaining > 0.0f && !element.empty();
+    }
+};
 
 /**
  * @brief ローグライト戦闘シーンで使用する汎用の敵エンティティクラス
@@ -62,6 +79,31 @@ public:
      * @note Update() で歩いた後、壁からの押し出しの前に呼ぶ
      */
     void UpdateTerrain(const std::vector<engine::AABB>& solids);
+    /** @brief 飛ぶ種類が上下の動きで足場に入った時、浅い方（上か下）へ押し出す（UpdateTerrain から呼ぶ） */
+    void PushHoverOutOfBlocksVertically(const std::vector<engine::AABB>& solids);
+    /**
+     * @brief 飛ぶ種類が足場の下に入り込んだ時、横につながった足場の近い方の端へ少しずつずらす（真上が塞がれて元の高さへ戻れないため）
+     * @param block 上から塞いでいる足場
+     * @param solids 当たり判定の一覧（つながった足場を探す）
+     * @param halfWidth 体の半分の幅
+     */
+    void SlideOutFromUnderBlock(const engine::AABB& block, const std::vector<engine::AABB>& solids, float halfWidth);
+
+    /**
+     * @brief 吹き飛ばされた敵が、壁を突き抜けたり屋根の上などの届かない所へ行ったら倒す
+     * @param solids 地形のブロック（敵の体を含まない。閉じた扉も含む）
+     * @return この呼び出しで倒した時 true
+     * @note Update() の後、UpdateTerrain() と壁からの押し出しの前に呼ぶ（押し出されると突き抜けたか分からなくなる）
+     */
+    bool ResolveBlownAway(const std::vector<engine::AABB>& solids);
+
+    /**
+     * @brief このフレームの横の動きで新しく壁へ入った・壁をまたいだ敵を、来た側の壁際で止める（勢いも消す）
+     * @param solids 地形のブロック（敵の体を含まない。閉じた扉も含む）
+     * @return 壁際で止めた時 true
+     * @note ResolveBlownAway() の後、UpdateTerrain() の前に呼ぶ。前のフレームから埋まっていた壁は壁からの押し出しに任せる
+     */
+    bool StopAtWallsEnteredThisFrame(const std::vector<engine::AABB>& solids);
 
     /** @brief 壁と当たる体の横幅の半分を返す（モンスターは素材の大きさに合わせる） */
     float WallBodyHalfWidth(float fallback) const override {
@@ -187,6 +229,28 @@ public:
     void SetWeaponHidden(bool hidden) {
         weaponHidden_ = hidden;
     }
+    /** @brief 属性で残った状態（燃焼・凍結など）を読み書きする */
+    EnemyElementStatus& ElementStatus() {
+        return elementStatus_;
+    }
+    /** @brief 属性の状態で歩く速さに掛ける倍率を設定する（1で元どおり） */
+    void SetStatusSpeedScale(float scale) {
+        statusSpeedScale_ = scale;
+    }
+    /**
+     * @brief 属性の状態による継続ダメージを与える（端数は持ち越し、HPは1より下げない）
+     * @note 倒す処理（膝つき・とどめ・武器を落とす）は攻撃が当たった時の流れに任せるため、継続ダメージでは倒さない
+     */
+    void TakeStatusDamage(float amount) {
+        if (defeated_ || hp_ <= 1) {
+            return;
+        }
+        damageCarry_ += (std::max)(amount, 0.0f);
+        const int whole = (std::min)(static_cast<int>(damageCarry_), hp_ - 1);
+        damageCarry_ -= static_cast<float>(whole);
+        hp_ -= whole;
+    }
+
     /** @brief 指定秒数だけ行動を遅くする */
     void ApplySlow(float seconds) {
         slowTimer_ = (std::max)(slowTimer_, seconds);
@@ -272,8 +336,14 @@ public:
         homeRunSpinTimer_ = 0.0f;
         defeated_ = false;
         corpseFallStarted_ = false;
+        corpseFloorY_.reset();
+        corpsePulled_ = false;
         kneelPoseApplied_ = false;
         weaponHidden_ = false;
+        motionActive_ = false;
+        motionApplied_ = false;
+        motionAnimOverride_ = motionAnimOverride_ || !motionAnimName_.empty();
+        motionAnimName_.clear();
         if (object_) {
             object_->SetAnimSpeed(1.0f);
             object_->SetPoseLayer(nullptr);
@@ -284,16 +354,8 @@ public:
         }
     }
 
-    /**
-     * @brief HP を回復する（maxHp を超えない、撃破済みは復活しない）
-     * @param amount 回復量
-     */
-    void Heal(int amount) {
-        if (defeated_) {
-            return;
-        }
-        hp_ = (std::min)(hp_ + amount, maxHp_);
-    }
+    /** @brief HP を amount だけ回復する（maxHp を超えない、撃破済みは復活しない。増えた時は体を一瞬緑に光らせる） */
+    void Heal(int amount);
 
     /**
      * @brief AIを止めている間（ポーズ・開始演出など）も、向きだけは指定したX座標の方へ合わせる
@@ -305,20 +367,30 @@ public:
     bool NeedsCorpseFloor() const {
         return defeated_ && !corpseFallStarted_;
     }
+    /** @brief 倒れた体が落ち終えて止まっているか（足場が消えた時に落とし直すため、StageEditor が毎フレーム真下の床を確かめる） */
+    bool IsCorpseResting() const {
+        return defeated_ && corpseFallStarted_ && !isLaunched_ && !corpsePulled_;
+    }
+    /** @brief 武器の回収で体ごと吸い寄せ始めたことを知らせる（以後は床へ合わせ直さず、吸い寄せる位置をそのまま使う） */
+    void BeginCorpsePull() {
+        corpsePulled_ = true;
+    }
     /**
-     * @brief 倒れた体を指定した高さまで重力で落とす（宙で倒れた敵が浮いたまま止まらないように）
-     * @param floorY 落ち着く位置のY（床の上面に足元を合わせた高さ）
+     * @brief 倒れた体を真下の床まで重力で落とす（宙で倒れた敵や、乗っていた足場が消えた体が浮いたまま止まらないように）
+     * @param floorY 落ち着く位置のY（床の上面に足元を合わせた高さ）。真下に床が無ければ空
+     * @param allowFallOut 乗っていた床が無くなり下にも床が無い時、画面の下まで落としてよいか（武器を奪わないと進めないボスは落とさない）
+     * @note 最初から床の無い所で倒れた体はその高さに留める
      */
-    void DropCorpseTo(float floorY);
+    void DropCorpseTo(const std::optional<float>& floorY, bool allowFallOut);
 
     /**
      * @brief 位置だけ再計算する（AI/物理は一切進めない、StageEditor等が外部からpos_を書き換えた後の追従用）
      */
-    void RefreshVisualTransforms() override {
-        object_->SetPosition(VisualPosition());
-        object_->Update();
-        SyncMonsterVisual(false);
-    }
+    void RefreshVisualTransforms() override;
+    /** @brief AI を止めて外から動かす間のアニメを、動いているかで待機か走りに合わせる（開始演出や巡回の間に使う） */
+    void PlayHeldAnimation(bool moving);
+    /** @brief 台本で動かしている時に、攻撃の見た目を頭から出す（味方のボスの攻撃に使う） */
+    void PlayScriptedAttackAnimation();
 
     /** @brief 撃破済みかどうかを返す */
     bool IsDefeated() const {
@@ -371,6 +443,15 @@ public:
     void SetBodyHidden(bool hidden) {
         bodyHidden_ = hidden;
     }
+    /** @brief ボスの技の動き（体の傾き・骨の向き・手元の武器）を、ふだんの姿勢の上から掛ける（毎フレーム渡す） */
+    void SetMotionFrame(const BossMotionFrame& frame) {
+        motionFrame_ = frame;
+        motionActive_ = true;
+    }
+    /** @brief ボスの技の動きを外す（次のフレームからふだんの姿勢に戻る） */
+    void ClearMotion() {
+        motionActive_ = false;
+    }
 
     /** @brief 切断演出などが参照するモデルを返す */
     Model* GetModel() const {
@@ -388,9 +469,14 @@ public:
     /** @brief 位置を値として受け取りワールド座標を更新する */
     void SetPosition(const Vector3& position) override {
         pos_ = position;
+        // 置き直しは動きではないので、出現などで遠くへ移した時に途中の壁をまたいだと見なさないよう、動く前の位置もそろえる
+        previousX_ = position.x;
     }
 
 private:
+    /** @brief 吹き飛び始めを記録する（もう吹き飛んでいる間は、最初に立っていた高さを残す） */
+    void BeginBlownAway();
+
     // 攻撃間隔・索敵距離・重力などのゲームプレイ調整値はResources/Config/enemy_params.json（EnemyTuning::Basic()）で持つ。
     // ここに残す定数は見た目（装備の位置・傾き・被弾リアクションの倍率）だけ
 
@@ -427,7 +513,11 @@ private:
     static constexpr float kDefeatedBodyLean = 1.35f; // 撃破後に倒れ込む本体の傾き
     static constexpr float kDefeatedWeaponTilt = 1.15f; // 撃破後に落とした武器の傾き
     static constexpr float kKnockbackStopSpeed = 0.001f; // これ未満の水平ノックバックは止まっているとみなす
+    static constexpr float kHalfRatio = 0.5f; // 2点の真ん中を求める割合
+    static constexpr float kHoverBlockClearance = 0.001f; // 飛ぶ種類を足場の上下へ押し出した時に空けるすき間
     static constexpr float kHoverReturnRate = 0.12f; // 飛ぶ種類が殴られてずれた高さから、ゆらゆらの高さへ1フレームで戻る割合
+    static constexpr float kHoverSlideSpeedScale = 1.5f; // 足場の下から横へ抜け出す速さ（歩く速さに対する倍率）
+    static constexpr float kHoverSlideJoinGap = 0.05f; // これ以下のすき間で並んだ足場は1つにつながったものとみなす
     static constexpr float kCeilingBounceFactor = -0.1f; // 天井に当たった時の跳ね返り（負で下向きに返す）
 
     // 攻撃ステートマシン（Idle→Telegraph→Active→Idle を固定時間で巡回する）
@@ -467,6 +557,8 @@ private:
     static constexpr float kOfferRiseSeconds = 0.6f; // 手元（落ちた場所）から浮かぶ位置まで上がる長さ
     static constexpr float kOfferHeight = 0.8f; // 回収位置からどれだけ上に浮かべるか
     static constexpr float kCorpseCenterHeight = 0.75f; // 立った時の体の真ん中の高さ（足元を軸に倒れた体の真ん中を求めるのに使う）
+    static constexpr float kCorpseFallOutDistance = 60.0f; // 乗っていた床が無くなり、下にも床が無い体を落とす距離（画面の外まで）
+    static constexpr float kSameFloorTolerance = 0.05f; // 落とした武器が体と同じ床に置かれているとみなす高さの差
     static constexpr float kOfferHoverSpeed = 2.5f; // 上下にゆれる速さ（ラジアン毎秒）
     static constexpr float kOfferHoverAmplitude = 0.15f; // 上下にゆれる幅
     static constexpr float kOfferTilt = 0.2f; // 浮かべた武器の前への傾き
@@ -539,12 +631,13 @@ private:
     float speedScale_ = 1.0f; ///< 近づく速さの倍率
     bool defeated_ = false;
     bool visible_ = true;
-    bool scripted_ = false; ///< 台本で動かしているか（SetScripted）
-    bool bodyHidden_ = false; ///< 本体と手持ちの武器を描かないか（SetBodyHidden）
+    bool scripted_ = false; ///< 台本で動かしているか
+    bool bodyHidden_ = false; ///< 本体と手持ちの武器を描かないか
     /** @brief 台本で動かす間の1フレーム（位置・向き・武器の位置を見た目へ反映するだけで、AI と物理は進めない） */
     void UpdateScripted();
     Vector4 baseColor_ = { 1.0f, 1.0f, 1.0f, 1.0f };
     float hitFlashTimer_ = 0.0f;
+    float healFlashTimer_ = 0.0f; ///< 回復されて緑に光る残り秒数
     float damageCarry_ = 0.0f; ///< TakeDamageScaled()で1に満たなかったダメージの持ち越し
 
     Vector3 pos_ = { };
@@ -557,9 +650,15 @@ private:
     bool hasTargetHeight_ = false; ///< プレイヤーの高さを教えられているか
     bool climbing_ = false; ///< 壁を登っている途中か（登っている間は攻撃しない）
     bool isLaunched_ = false;
-    bool corpseFallStarted_ = false; ///< 倒れた体を床へ落とし始めたか（DropCorpseTo() を一度だけ受け付ける）
+    bool corpseFallStarted_ = false; ///< 倒れた体を床へ落とし始めたか（倒れた直後の床探しを一度で済ませる）
+    std::optional<float> corpseFloorY_; ///< 倒れた体が乗っている床に合わせた高さ（床が無ければ空。床が上がった分だけ体を持ち上げ、無くなった時だけ画面の下まで落とす）
+    bool corpsePulled_ = false; ///< 武器の回収で体ごと吸い寄せ始めたか（以後は床へ合わせ直さない）
     bool justLanded_ = false;
     float launchOriginY_ = 0.0f; ///< 打ち上げ直前のpos_.y（着地時にここへ戻す。Launch()の最初の呼び出しでだけ更新する）
+    bool blownAway_ = false; ///< 打ち上げか締めの大きな吹き飛びを受けて、まだ落ち着いていないか
+    float blownFromY_ = 0.0f; ///< 吹き飛ぶ前に立っていた高さ（落ち着いた先がこれより高すぎれば届かない所とみなす）
+    float blownSettleTimer_ = 0.0f; ///< 吹き飛びが止まってからの秒数（地形に合わせ終わるのを待つ）
+    float previousX_ = 0.0f; ///< このフレームに動く前の横位置（吹き飛んで壁を突き抜けたかを調べる）
     WeaponType weaponType_ = WeaponType::kSword;
     float spawnY_ = 0.0f;
     float archetypeTimer_ = 0.0f;
@@ -598,6 +697,8 @@ private:
     const IArchetype* archetype_ = nullptr; ///< コンストラクタでbasicを入れる
     float knockVelX_ = 0.0f;
     float slowTimer_ = 0.0f;
+    EnemyElementStatus elementStatus_; ///< 属性で残った状態
+    float statusSpeedScale_ = 1.0f; ///< 属性の状態で歩く速さに掛ける倍率
     float airComboTimer_ = 0.0f;
     float hitstunTimer_ = 0.0f; ///< 被弾硬直の残り秒数
     float homeRunSpinTimer_ = 0.0f; ///< 打ち飛ばされて回転している残り秒数
@@ -610,10 +711,32 @@ private:
     bool droppedWeaponLanded_ = false;
     float offerTimer_ = 0.0f; ///< 撃破されて武器を浮かべ始めてからの秒数
     bool weaponPulled_ = false; ///< 回収で落ちた武器を吸い寄せ始めたか（以後は浮かべない）
-    bool kneelOnDefeat_ = false; ///< 倒れた時に膝をつくか（SetKneelOnDefeat）
+    bool kneelOnDefeat_ = false; ///< 倒れた時に膝をつくか
     bool kneelPoseApplied_ = false; ///< 膝をつく姿勢のポーズレイヤーを掛けたか
-    bool weaponHidden_ = false; ///< 武器を描かないか（SetWeaponHidden）
+    bool weaponHidden_ = false; ///< 武器を描かないか
     ReachPoseLayer kneelLayer_; ///< 膝をつく姿勢へボーンを曲げるレイヤー
+    BossMotionFrame motionFrame_; ///< 最後に受け取ったボスの技の動き
+    bool motionActive_ = false; ///< 動きを受け取っているか
+    bool motionApplied_ = false; ///< 前のフレームに動きを体へ掛けたか
+    bool motionAnimOverride_ = false; ///< 動きの側で下のアニメを差し替えたか（外した後にふだんのアニメを掛け直す）
+    std::string motionAnimName_; ///< 動きの側で流しているアニメの名前
+    ReachPoseLayer motionLayer_; ///< 技の動きで骨を曲げるレイヤー
+    /** @brief 今のフレームに技の動きを掛けられるか（ふだんの近接の振りの最中は、その振りを見せるため掛けない） */
+    bool CanApplyMotion() const;
+    /** @brief 動きの側が下のアニメを決めているか（ふだんのアニメの切り替えを止める） */
+    bool MotionOwnsAnimation() const;
+    /** @brief 回復されて光っている間、渡した色を緑へ寄せて返す（advance なら光の残り時間も進める） */
+    Vector4 ApplyHealGlow(const Vector4& color, bool advance);
+    /** @brief 技の動きの体の部分（向き・傾き・持ち上げ・骨・アニメ）を掛ける（行列の更新の前に呼ぶ。掛けたら true） */
+    bool ApplyMotionBody();
+    /** @brief 技の動きで武器を手元へ付ける（体の行列を更新した後に呼ぶ） */
+    void PlaceMotionWeapon();
+    /** @brief 技の動きを掛けるのをやめた最初のフレームに、骨の曲げとアニメの速さを戻す */
+    void EndMotion();
+    /** @brief 騎士の模型のアニメを名前で探す（初回だけ読み込む。知らない名前は nullptr） */
+    static const engine::graphics::Animation* FindKnightAnimation(const std::string& name);
+    /** @brief 技の動きで使う騎士のアニメを全部読み込んでおく（戦闘の途中で初めて読むと、素材の記録に載らず pak だけの配布版で読めない） */
+    static void PreloadKnightAnimations();
 
     // モンスターの見た目（設定されていれば騎士の代わりにこれを描画する）
     std::unique_ptr<Object3d> monsterObject_;

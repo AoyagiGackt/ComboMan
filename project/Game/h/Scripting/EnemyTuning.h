@@ -4,6 +4,7 @@
  * @note EnemyEntity/KnightEnemy/GamePlaySceneが参照する。数値の変更にコードのリビルドが要らないようにする
  */
 #pragma once
+#include "Vector4.h"
 #include <map>
 #include <string>
 #include <vector>
@@ -52,12 +53,16 @@ struct BasicEnemyTuning {
     float healerCastSeconds = 0.5f;
     float healerRange = 7.0f;
     int healerAmount = 4;
+    float healFlashSeconds = 0.6f; ///< 回復された敵の体が緑に光っている秒数
+    Vector4 healFlashColor = { 0.3f, 1.0f, 0.45f, 1.0f }; ///< 回復された瞬間の体の色
     float corpseFootOffset = 0.1f; ///< 倒れた体を落とす時、床の上面からどれだけ上に位置を置くか（配置した敵の足元と同じ）
     float climbSpeed = 0.06f; ///< 壁を登る速さ（1フレームあたり）
     float climbMaxHeight = 4.0f; ///< 足元からこの高さまでの壁を登る（閉じた扉はこれより高くして、部屋の区切りを保つ）
     float climbChaseHeight = 1.2f; ///< プレイヤーが自分よりこれだけ高い所にいる時は、間合いの中でも近づいて登る
     float climbChaseStopDistance = 0.3f; ///< プレイヤーが高い所にいる時に、横の差がこれ以下なら止まる
     float stepUpHeight = 0.35f; ///< この高さまでの段差は歩いたまま乗り越える
+    float blownAwayKillRise = 3.0f; ///< 吹き飛んだ敵が、元の高さよりこれ以上高い所で止まったら届かない所とみなして倒す
+    float blownAwaySettleSeconds = 0.3f; ///< 吹き飛びが止まってから、止まった場所を調べるまで待つ秒数
 };
 
 /** @brief ナイト型敵(KnightEnemy)の調整値 */

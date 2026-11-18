@@ -58,6 +58,14 @@ public:
     /** @brief コンボを強制的に打ち切る（被弾・銃切替・乱舞開始時など） */
     void Reset();
 
+    /**
+     * @brief 指定した段を指定時刻の姿勢にする（演出の見本用）
+     * @param def            見せる段（nullptrなら撃っていない状態へ戻す）
+     * @param normalizedTime 段の経過割合（0〜1）
+     * @note 発砲・前後移動・先行入力などの進行処理は一切行わない（Update()を呼ばない前提）
+     */
+    void SetPreviewPose(const GunShotDef* def, float normalizedTime);
+
     /** @brief このフレームに撃ったかを返す */
     bool JustShot() const {
         return justShot_;

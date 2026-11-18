@@ -32,6 +32,7 @@ constexpr const char* kStageLayoutName = "gameplay"; ///< ステージの操作�
 /** @brief ステージの最初の操作説明の調整値（controls_guide.json。初期値はJSONに項目が無い時の既定値） */
 struct StageGuideTuning {
     std::string level = "Resources/Levels/level01.json"; ///< 操作説明を出すレベル（空なら出さない）
+    std::string extraLevel = "Resources/Levels/tutorial.json"; ///< ほかにも操作説明を出すレベル（どちらかで一度見せたら、もう一方では出さない）
     std::string title = "操作説明";
     std::string lines = "{Move}  移動\n{Jump}  ジャンプ\n{Attack}  攻撃（続けて押すとコンボ）\n{Down}+{Attack}  打ち上げ\n{Shoot}  射撃\n{Dodge}  回避（攻撃に合わせるとジャスト回避）\n{Skill}  武器の固有技\n{Steal}  倒した敵の武器を奪う\n{Awaken}  覚醒    {Finisher}  フィニッシャー\n{Pause}  ポーズ・音量設定";
     std::string confirm = "{Attack} / 決定キー で始める";
@@ -41,6 +42,7 @@ struct StageGuideTuning {
 
 constexpr JsonField<StageGuideTuning> kStageGuideFields[] = {
     { "stage", "level", &StageGuideTuning::level },
+    { "stage", "extraLevel", &StageGuideTuning::extraLevel },
     { "stage", "title", &StageGuideTuning::title },
     { "stage", "lines", &StageGuideTuning::lines },
     { "stage", "confirm", &StageGuideTuning::confirm },
@@ -95,7 +97,9 @@ void GuidePanel::Queue(FontRenderer& font, const std::string& layoutName, const 
 
 /** @brief このレベルで出すなら出す準備をする */
 void StageControlsGuide::Arm(const std::string& levelPath) {
-    armed_ = !sStageGuideShown && !StageTune().level.empty() && levelPath == StageTune().level;
+    const StageGuideTuning& tune = StageTune();
+    const bool listed = (!tune.level.empty() && levelPath == tune.level) || (!tune.extraLevel.empty() && levelPath == tune.extraLevel);
+    armed_ = !sStageGuideShown && listed;
 }
 
 /** @brief 1フレーム進める（開いていて閉じ始めていない間と、閉じた攻撃ボタンが離されるまでは true） */

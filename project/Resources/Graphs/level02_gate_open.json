@@ -1,7 +1,7 @@
 {
   "comments": {
     "c0": {
-      "text": "ハンマーで壁(gate_wall)を壊した瞬間（フラグ broken_gate_wall）に走る。案内文を消し、揺れとリングで開通を見せる",
+      "text": "壁(gate_wall)を壊した瞬間（フラグ broken_gate_wall）に走る。案内文を消し、揺れとリングで開通を見せる",
       "x": -20.0, "y": -120.0, "w": 560.0, "h": 90.0,
       "colorR": 0.6, "colorG": 0.8, "colorB": 0.9
     }

@@ -44,7 +44,7 @@ void ImpactRadialBlurEffect::SetParams(float centerU, float centerV, float stren
 
 /** @brief バックバッファをキャプチャし、ブラーを掛けて描き戻す（3D描画の後、UIの前に呼ぶ） */
 void ImpactRadialBlurEffect::CaptureAndApply() {
-    pipelineHelper::CaptureAndDrawFullscreen(IsActive(), dxCommon_, srvManager_, captureTexture_.Get(),
+    pipelineHelper::CaptureAndDrawFullscreen(IsActive(), dxCommon_, srvManager_, captureTexture_,
         rootSignature_.Get(), pipelineState_.Get(), cbResource_.Get(), captureSrvIndex_);
 }
 

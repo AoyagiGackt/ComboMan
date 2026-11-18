@@ -50,6 +50,11 @@ constexpr float kUnitHalfExtent = 0.5f; // 拡縮1の箱の半分の大きさ
 struct BreakablePulseStyle {
     float speed = GraphicsTuning::Float("breakable.pulseSpeed", 4.0f);
     float amplitude = GraphicsTuning::Float("breakable.pulseAmplitude", 0.25f, 0.0f, 0.5f);
+    float wallSpeed = GraphicsTuning::Float("breakable.wallPulseSpeed", 3.0f);
+    float wallStrength = GraphicsTuning::Float("breakable.wallPulseStrength", 0.85f, 0.0f, 1.0f);
+    Vector3 wallHintColor = { GraphicsTuning::Float("breakable.wallHintR", 1.0f, 0.0f, 1.0f),
+        GraphicsTuning::Float("breakable.wallHintG", 0.55f, 0.0f, 1.0f),
+        GraphicsTuning::Float("breakable.wallHintB", 0.1f, 0.0f, 1.0f) };
 };
 
 /** @brief 描画設定を初回だけ読み込み、フレーム間で共有する */
@@ -196,7 +201,8 @@ int GamePlayScene::ComputeWeaponEnemyDamage(const WeaponEnemyHit& hit) const {
         ? static_cast<float>(CombatTune().weaponEnemySlamBaseDamage + slamBonus)
         : baseDamage * damageMult / CombatTune().meleeDamageDivisor * (hit.skill ? CombatTune().weaponEnemySkillDamageMult : 1.0f);
     // 覚醒などの全体倍率をかけ、最低でも1は入れる
-    return (std::max)(1, static_cast<int>(std::round(rawDamage * CurrentDamageMult())));
+    const float fusionMult = (hit.melee || hit.skill) ? FusionDamageMult() : 1.0f;
+    return (std::max)(1, static_cast<int>(std::round(rawDamage * CurrentDamageMult() * fusionMult)));
 }
 
 /** @brief 命中した武器敵にダメージ・吹き飛び・のけぞりを与え、演出を出す */
@@ -223,9 +229,11 @@ void GamePlayScene::ApplyWeaponEnemyHit(WeaponEnemyEntry& entry, WeaponEnemyHit&
     entry.enemy->TakeDamageScaled(static_cast<float>(damage) * hit.fatigueMult);
     RegisterFatigueHit(fatigueIndex, hit.melee ? CombatTune().weaponFatiguePerHit : CombatTune().gunFatiguePerHit);
 
-    // 吹き飛び: 固有技の連続技の締めは場外まで飛ばし、それ以外は段ごとの高さで押し出す
+    // 吹き飛び: 固有技の連続技の締めは倒して場外まで飛ばし、それ以外は段ごとの高さで押し出す
+    // （生きたまま壁の向こうへ落ちると部屋の残りの敵に数えられて扉が開かない）
     const float knockY = (hit.skill ? CombatTune().skillKnockY : (hit.attack != nullptr ? hit.attack->knockY : CombatTune().defaultKnockY)) * knockbackMult;
     if (skillSequence && hit.attack != nullptr && hit.attack->finisher) {
+        entry.enemy->TakeDamage(entry.enemy->GetHp());
         entry.enemy->ApplyHomeRun(player_->GetLastDirX());
     } else {
         // 手前へ引き寄せる段（鎌の刈り込みなど）は押し出す向きを反転する
@@ -245,6 +253,11 @@ void GamePlayScene::ApplyWeaponEnemyHit(WeaponEnemyEntry& entry, WeaponEnemyHit&
         entry.enemy->ApplySlow(slowSeconds);
     }
     EmitWeaponEnemyHitEffects(entry.enemy->GetPosition(), hit);
+    ApplyWeaponEnemyElementStatus(*entry.enemy, hit);
+    // 合体している武器なら相棒の属性も乗せ、耐久を減らす
+    if (hit.melee || hit.skill) {
+        ApplyFusionHit(entry.enemy, hit.skill ? CombatTune().skillElementScale : 1.0f);
+    }
 }
 
 /** @brief 道中の敵へのこのフレームの命中を、種類ごとに一度だけスタイルへ加える */
@@ -379,6 +392,7 @@ void GamePlayScene::UpdateWeaponSteal(WeaponEnemyEntry& entry) {
     if (entry.enemy->HasDroppedWeapon()) {
         entry.enemy->PullDroppedWeaponToward(absorbTarget, pullRate);
     } else {
+        entry.enemy->BeginCorpsePull();
         entry.enemy->MoveTowardXY(absorbTarget, pullRate);
         entry.enemy->RefreshVisualTransforms();
     }
@@ -387,7 +401,11 @@ void GamePlayScene::UpdateWeaponSteal(WeaponEnemyEntry& entry) {
         entry.weaponAcquired = true;
         entry.enemy->SetVisible(false);
         const WeaponManager::AcquireResult acquired = WeaponManager::GetInstance()->Acquire(entry.weaponType);
-        ApplyWeaponAcquireResult(acquired);
+        // 枠が満杯なら今持っている武器に合体させ、そうでなければふだんどおり枠へ入れる
+        if (!TryFuseAcquiredWeapon(acquired, entry.weaponType)) {
+            ApplyWeaponAcquireResult(acquired);
+            PlayWeaponAcquireEffect(entry.weaponType);
+        }
     }
 }
 
@@ -439,9 +457,18 @@ void GamePlayScene::UpdateExplosiveBarrels() {
 
         // 赤く脈動させて攻撃で壊せる設置物だと分かりやすくする（表示行列の更新はStageEditor側が毎フレーム行う）
         const auto& pulseStyle = BreakablePulse();
-        const float pulse = 1.0f - pulseStyle.amplitude
-            + std::sin(explosiveBarrelPulse_ * pulseStyle.speed) * pulseStyle.amplitude;
-        barrel.SetColor({ desc.color.x, desc.color.y * pulse, desc.color.z, desc.color.w });
+        if (desc.isWall) {
+            // 壁はただの地形と見分けにくいので、元の色と目印の色の間をはっきり行き来させる
+            const float wave = (std::sin(explosiveBarrelPulse_ * pulseStyle.wallSpeed) + 1.0f) * 0.5f;
+            const float t = wave * pulseStyle.wallStrength;
+            const Vector3& hint = pulseStyle.wallHintColor;
+            barrel.SetColor({ desc.color.x + (hint.x - desc.color.x) * t, desc.color.y + (hint.y - desc.color.y) * t,
+                desc.color.z + (hint.z - desc.color.z) * t, desc.color.w });
+        } else {
+            const float pulse = 1.0f - pulseStyle.amplitude
+                + std::sin(explosiveBarrelPulse_ * pulseStyle.speed) * pulseStyle.amplitude;
+            barrel.SetColor({ desc.color.x, desc.color.y * pulse, desc.color.z, desc.color.w });
+        }
 
         const AABB barrelBounds = BreakableBounds(barrel);
 
@@ -465,16 +492,6 @@ void GamePlayScene::UpdateExplosiveBarrels() {
             hit = Collision::CheckCollision(range, barrelBounds);
         }
 
-        // 武器指定つき（壊せる壁など）は、その武器の近接攻撃・固有技でしか壊れない。銃では壊れない
-        if (hit && !desc.requiredWeapon.empty()) {
-            const bool weaponMatches = wm->HasEquippedWeapon()
-                && wm->GetCurrent().type == ParseWeaponTypeName(std::string(desc.requiredWeapon));
-            const bool meleeOrSkillHit = player_->JustComboHit() || !player_->JustFired();
-            if (!weaponMatches || !meleeOrSkillHit) {
-                fx.Star("breakable_deflect", barrel.GetPosition()); // 弾かれた手応え
-                hit = false;
-            }
-        }
         if (!hit) {
             continue;
         }
@@ -495,6 +512,11 @@ void GamePlayScene::UpdateExplosiveBarrels() {
         barrel.Destroy();
         GameFlags::GetInstance()->SetFlag("broken_" + std::string(desc.name), true);
         ApplyBombBlast(barrel.GetPosition(), payload);
+
+        // 壁は砕けた勢いでプレイヤーの反対側へ吹き飛び、途中の敵を巻き込む
+        if (desc.isWall) {
+            LaunchBrokenWall(barrel, desc);
+        }
 
         // 崩落の土煙は破壊前の箱の下端中央に置く
         const Vector3 footPosition = { (barrelBounds.min.x + barrelBounds.max.x) * 0.5f,

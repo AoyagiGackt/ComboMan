@@ -48,29 +48,6 @@ namespace engine::game {
 namespace {
 constexpr Vector4 kFinisherOverlayTint = { 0.0f, 0.0f, 0.05f, 0.0f }; // アルファはHitEffectLibrary::GetInstance()->SceneParticles().finisherOverlayAlpha
 
-// 以下は既定の配置（F2のエディタで動かした値は Resources/Config/UI/gameplay.json に保存される）
-constexpr const char* kLayoutName = "gameplay";
-
-// ノードグラフの ShowMessage で出す文字（画面の下寄り中央。最後の時間で薄く消える）
-constexpr float kScriptMessageY = 560.0f;
-constexpr float kScriptMessageScale = 1.6f;
-constexpr Vector4 kScriptMessageColor = { 1.0f, 1.0f, 1.0f, 1.0f };
-constexpr Vector4 kScriptMessageShadowColor = { 0.0f, 0.0f, 0.0f, 0.85f };
-constexpr float kScriptMessageShadowOffset = 2.0f;
-constexpr float kScriptMessageFadeSeconds = 0.3f;
-
-// 武器の疲労警告はデバッグボタンの下に配置する
-constexpr Vector2 kFatigueWarningPosition = { gameConstants::kScreenCenterX, 140.0f };
-constexpr float kFatigueTitleScale = 1.6f;
-constexpr float kFatigueDetailScale = 1.2f;
-constexpr float kFatigueDetailOffsetY = 34.0f;
-constexpr Vector4 kFatigueMildColor = { 1.0f, 0.85f, 0.25f, 1.0f }; // 効きが落ち始めた
-constexpr Vector4 kFatigueSevereColor = { 1.0f, 0.3f, 0.2f, 1.0f }; // ほとんど効かない
-constexpr float kFatigueSevereThreshold = 0.5f; // 落ち幅がこの割合を超えたら強い警告に切り替える
-constexpr float kFatigueBlinkSpeed = 10.0f;
-constexpr float kFatigueBlinkMinAlpha = 0.45f;
-constexpr float kPercent = 100.0f;
-
 // プレイヤーHPの数値表示（HPバーの中の真ん中に、影を付けて重ねる）
 constexpr float kInfoScale = 1.5f;
 constexpr Vector4 kInfoColor = { 1.0f, 1.0f, 1.0f, 1.0f };
@@ -107,39 +84,9 @@ constexpr int kGuideOpenerSteps = 2; // この段数に達するまでは追撃�
 // ラスボス戦の操作説明パネルの既定位置
 constexpr Vector2 kGameplayControlsAnchor = { 1020.0f, 12.0f };
 
-// 右上の短い操作の一覧（よく使う操作だけ。全部はポーズの操作説明で見せる）。位置は一覧の右端と上端（ランクとヒット数の下）
-constexpr Vector2 kShortControlsAnchor = { 1256.0f, 252.0f }; // ヒット数が一番大きくなった時の 最高 N 連続 の行（y=235 付近）より下
-constexpr float kShortControlsScale = 0.95f;
-constexpr float kShortControlsLineGap = 4.0f; // 行と行の間
-constexpr Vector4 kShortControlsKeyColor = { 1.0f, 0.85f, 0.3f, 1.0f }; // ボタン名（明るい床の上でも読めるよう黄色）
-constexpr Vector4 kShortControlsTextColor = { 0.95f, 0.95f, 0.95f, 1.0f }; // 操作の名前
-constexpr Vector4 kShortControlsPanelColor = { 0.0f, 0.0f, 0.0f, 0.55f }; // 文字の後ろに敷く板
-constexpr float kShortControlsPadding = 8.0f; // 板の文字のまわりの余白
-
-/** @brief 右上の短い操作の一覧の1行（ボタンと操作の名前） */
-struct ShortControl {
-    const wchar_t* key;
-    const wchar_t* label;
-};
-/** @brief 右上に出す操作（上から順に） */
-constexpr ShortControl kShortControls[] = {
-    { L"[{Attack}]", L"攻撃" },
-    { L"[{Jump}]", L"ジャンプ" },
-    { L"[{Dodge}]", L"回避" },
-    { L"[{Skill}]", L"固有技" },
-    { L"[{Shoot}]", L"射撃" },
-    { L"[{Pause}]", L"ポーズ・操作説明" },
-};
-
-// 文字を左右の中央にそろえる
-constexpr float kCenterFactor = 0.5f;
-
 // 武器回収の操作表示（届く距離の一番近い1体だけに出し、ほかは小さな印だけ）
 constexpr float kWeaponStealPromptScale = 1.3f;
 constexpr Vector4 kWeaponStealPromptColor = { 0.55f, 0.9f, 1.0f, 1.0f };
-constexpr float kWeaponStealMarkScale = 1.0f;
-constexpr Vector4 kWeaponStealMarkColor = { 0.55f, 0.9f, 1.0f, 0.7f };
-constexpr float kWeaponStealPromptHeight = 2.0f; // 武器の位置から上へ出す高さ（ロックオンの印 y+1.6 と重ならない）
 
 // ロックオンマーカー
 constexpr float kLockMarkerHeight = 1.6f;
@@ -157,11 +104,6 @@ constexpr Vector4 kExchangeWeaponColor = { 0.8f, 0.95f, 1.0f, 1.0f };
 constexpr Vector2 kExchangeHelpPosition = { 245.0f, 330.0f };
 constexpr float kExchangeHelpScale = 1.35f;
 constexpr Vector4 kExchangeHelpColor = { 1.0f, 1.0f, 1.0f, 1.0f };
-
-// 収集物の個数表示
-constexpr Vector2 kPickupCounterPosition = { 24.0f, 540.0f };
-constexpr float kPickupCounterScale = 1.35f;
-constexpr Vector4 kPickupCounterColor = { 0.3f, 0.9f, 1.0f, 1.0f };
 }
 
 /** @brief HPバー・ランク・武器欄・エディタ配置UIなどHUDのスプライトを描く（一時停止中は呼ばない） */
@@ -175,11 +117,12 @@ void GamePlayScene::DrawHudSprites() {
         bossHpBarFg_->Draw();
     }
     for (auto& entry : weaponEnemies_) {
-        if (entry.enemy && !entry.enemy->IsDefeated()) {
+        if (entry.enemy && !entry.enemy->IsDefeated() && entry.hpBarPlaced) {
             entry.hpBarBg->Draw();
             entry.hpBarFg->Draw();
         }
     }
+    DrawAllyHpBar();
     if (RunData::GetInstance()->IsRunActive()) {
         playerHpBarBg_->Draw();
         playerHpBarFg_->Draw();
@@ -199,14 +142,13 @@ void GamePlayScene::DrawOverlaysAndUI() {
     spriteCommon_->CommonDrawSettings();
 
     // 一時停止中と開始演出・やられ演出・最初の操作説明の間はHUDを隠す
+    // ボスへのとどめの演出の間も、HPバーなどは映さない
     if (hudReady_ && !pauseMenu_.IsPaused() && !stageIntro_.IsPlaying() && !playerDefeat_.IsActive() && !clearTriggered_
-        && !finalBoss_.BlocksGameplay() && !stageGuide_.IsShowing()) {
+        && !finalBoss_.BlocksGameplay() && !stageGuide_.IsShowing() && !bossExecution_.IsActive()) {
         DrawHudSprites();
-        debugGameOverButton_.Draw();
-        debugClearButton_.Draw();
     }
-    // ラスボス戦の体力バー・黒帯・名乗り（演出の間も出す）
-    if (!pauseMenu_.IsPaused() && !playerDefeat_.IsActive() && !clearTriggered_) {
+    // ラスボス戦の体力バー・黒帯・名乗り（演出の間も出す）。ステージボスの画面下のバーは、とどめの間は出さない
+    if (!pauseMenu_.IsPaused() && !playerDefeat_.IsActive() && !clearTriggered_ && !bossExecution_.IsActive()) {
         finalBoss_.DrawHud();
         if (!finalBoss_.IsActive() && bossDirector_.IsEngaged()) {
             stageBossHud_.Draw();
@@ -241,8 +183,9 @@ void GamePlayScene::DrawOverlaysAndUI() {
 
     if (pauseMenu_.IsPaused()) {
         pauseMenu_.Draw(input_);
-    } else if (!stageIntro_.IsPlaying() && !playerDefeat_.IsActive() && !clearTriggered_ && !stageGuide_.IsShowing() && ShowsStageGuideText()) {
-        // ゲームプレイ UI テキスト（レベルJSONの案内文）
+    } else if (!stageIntro_.IsPlaying() && !playerDefeat_.IsActive() && !clearTriggered_ && !stageGuide_.IsShowing() && ShowsStageGuideText()
+        && !bossExecution_.IsActive()) {
+        // ゲームプレイ UI テキスト（レベルJSONの案内文）。ボスへのとどめの演出の間は出さない
         GetStageEditor().DrawUIText(fontRenderer_);
     }
     // 1面の最初の操作説明（文字と同じく最後に積んで、HUD の上に出す）
@@ -322,6 +265,7 @@ void GamePlayScene::UpdateEnemyHpBars() {
         }
         const float ratio = static_cast<float>(entry.enemy->GetHp()) / static_cast<float>(entry.enemy->GetMaxHp());
         layoutBar(entry.hpBarBg.get(), entry.hpBarFg.get(), entry.enemy->GetPosition(), ratio);
+        entry.hpBarPlaced = true;
     }
 }
 
@@ -377,14 +321,10 @@ void GamePlayScene::DrawStyleUI() {
     stageIntro_.QueueText(fontRenderer_);
 
     UpdateEnemyHpBars();
+    UpdateAllyHud();
     UpdatePlayerHpBar();
     DrawStageGuide();
     DrawRogueliteHUD();
-    // 確認用ボタンの文字（F2 の編集中は Update を通らないので、ここで配置を読み直してから積む）
-    debugGameOverButton_.RefreshLayout();
-    debugGameOverButton_.QueueText(fontRenderer_);
-    debugClearButton_.RefreshLayout();
-    debugClearButton_.QueueText(fontRenderer_);
     styleRankHud_.UpdateHud(fontRenderer_); // 右上のスタイリッシュランク（BattleTestSceneと同じ体裁）
 
     // 基本ルートは常時見せ、コンボ開始後は現在地点と次の入力へ表示を切り替える。
@@ -474,6 +414,10 @@ void GamePlayScene::DrawStyleUI() {
     }
     hud_.QueueText(fontRenderer_);
     DrawWeaponStealPrompts(weaponStealPromptScale, weaponStealPromptColor);
+    DrawWeaponAcquireBanner();
+    DrawOffscreenEnemyGuide();
+    DrawAllyMark();
+    DrawTwoPlayerHud();
 
     // ── ロックオン中の対象にマーカーを出す ────────────────────────
     if (lockedEnemy_ != nullptr) {
@@ -486,8 +430,9 @@ void GamePlayScene::DrawStyleUI() {
             lockMarkerScale, lockMarkerColor);
     }
 
-    // スロットが満杯の時の武器交換画面
+    // スロットが満杯の時の武器交換画面と、ボスの武器の主軸を選ぶ画面
     DrawWeaponExchange();
+    DrawBossMainChoice();
     // 開始演出の直後の1フレームは、HUDの配置が済んでから描画する
     hudReady_ = true;
 }
@@ -572,215 +517,16 @@ void GamePlayScene::SetupPauseMenu() {
         { "ステージセレクト", [] {
              auto* rd = RunData::GetInstance();
              // ラスボス戦の間は保存しない（最後のステージのクリアでコンティニューは消してあり、刀だけの一時的な持ち物を残さないため）
-             if (rd->IsRunActive() && !rd->IsFinalBossPending()) {
+             // チュートリアルの間も保存しない（練習で手に入れた武器を本編へ持ち込まないため）
+             if (rd->IsRunActive() && !rd->IsFinalBossPending() && !rd->IsTutorialActive()) {
                  SaveDataManager::GetInstance()->SaveContinue(*rd);
              }
              SceneFlow::GetInstance()->Transition(kSceneName, "pause_quit", "MAP");
          } });
     pauseMenu_.InitializeCommandPreview(modelCommon_.get());
+    pauseMenu_.EnableWeaponFusionOption();
+    pauseMenu_.EnableTwoPlayerGuide();
 }
-/** @brief プレイヤーの進行位置に対応する操作目標を描画する */
-void GamePlayScene::DrawStageGuide() {
-    // 区画ごとの案内文はレベルJSONのui_text（トリガーのフラグで切り替わる）が担当する。ここは収集物の個数だけ
-    int collectedPickups = 0;
-    int totalPickups = 0;
-    GetStageEditor().GetPickupCounts(collectedPickups, totalPickups);
-    if (totalPickups <= 0) {
-        return;
-    }
-    const std::wstring coreCount = L"エネルギーコア  "
-        + std::to_wstring(collectedPickups) + L" / "
-        + std::to_wstring(totalPickups);
-    UILayout& layout = UILayout::Get(kLayoutName);
-    const Vector2 counterPosition = layout.Pos("pickup_counter.pos", kPickupCounterPosition);
-    fontRenderer_.DrawStringW(coreCount, counterPosition.x, counterPosition.y,
-        layout.Float("pickup_counter.scale", kPickupCounterScale), layout.Color("pickup_counter.color", kPickupCounterColor));
-}
-/** @brief 今奪える武器を全部集める（ボスと道中の敵で、奪える距離が違う） */
-std::vector<GamePlayScene::StealTarget> GamePlayScene::CollectStealTargets() const {
-    std::vector<StealTarget> targets;
-    if (enemy_ && enemy_->IsDefeated() && !weaponStealTriggered_ && !mainWeaponAbsorbing_ && !finisherActive_ && !enemySlice_.IsActive()) {
-        targets.push_back({ enemy_, enemy_->GetWeaponPickupPosition(), CombatTune().weaponAbsorbRange });
-    }
-    for (const auto& weaponEnemy : weaponEnemies_) {
-        if (weaponEnemy.hasWeapon && weaponEnemy.enemy->IsDefeated() && !weaponEnemy.weaponAcquired && !weaponEnemy.absorbing) {
-            targets.push_back({ weaponEnemy.enemy, weaponEnemy.enemy->GetWeaponPickupPosition(), CombatTune().absorbRange });
-        }
-    }
-    return targets;
-}
-
-/** @brief 届く距離の中で一番近いものの番号を返す（無ければ targets.size()） */
-size_t GamePlayScene::FindNearestStealTarget(const std::vector<StealTarget>& targets) const {
-    const Vector3& playerPosition = player_->GetPosition();
-    size_t nearest = targets.size();
-    float nearestDistanceSq = FLT_MAX;
-    for (size_t i = 0; i < targets.size(); ++i) {
-        const float distanceSq = DistanceSquaredXY(playerPosition, targets[i].position);
-        if (distanceSq <= targets[i].range * targets[i].range && distanceSq < nearestDistanceSq) {
-            nearestDistanceSq = distanceSq;
-            nearest = i;
-        }
-    }
-    return nearest;
-}
-
-/** @brief このフレームに奪う相手を1体だけ決める（1回押して2体から同時に奪わないように） */
-void GamePlayScene::SelectStealTarget() {
-    const std::vector<StealTarget> targets = CollectStealTargets();
-    const size_t nearest = FindNearestStealTarget(targets);
-    selectedStealOwner_ = nearest < targets.size() ? targets[nearest].owner : nullptr;
-}
-
-/** @brief レベルに置いた案内文を出すか（操作を覚える1面だけ。ランの外のエディタのテストプレイでは、どのステージでも出す） */
-bool GamePlayScene::ShowsStageGuideText() const {
-    const RunData* runData = RunData::GetInstance();
-    return !runData->IsRunActive() || runData->GetPlayFloor() == 0;
-}
-
-/** @brief 右上のランクの下に、よく使う操作だけの短い一覧を出す（ボタン名は最後に使った機器の表記） */
-void GamePlayScene::DrawShortControls() {
-    UILayout& layout = UILayout::Get(kLayoutName);
-    const float scale = layout.Float("short_controls.scale", kShortControlsScale);
-    const Vector2 anchor = layout.Pos("short_controls.pos", kShortControlsAnchor);
-    const Vector4 keyColor = layout.Color("short_controls.key_color", kShortControlsKeyColor);
-    const Vector4 textColor = layout.Color("short_controls.text_color", kShortControlsTextColor);
-    // ボタン名の列の幅をそろえ、操作の名前を同じ位置から始める
-    std::vector<std::wstring> keys;
-    float keyWidth = 0.0f;
-    float labelWidth = 0.0f;
-    for (const ShortControl& control : kShortControls) {
-        keys.push_back(input_->ExpandPrompts(control.key) + L" ");
-        keyWidth = (std::max)(keyWidth, FontRenderer::MeasureStringW(keys.back(), scale).x);
-        labelWidth = (std::max)(labelWidth, FontRenderer::MeasureStringW(control.label, scale).x);
-    }
-    const float lineHeight = FontRenderer::kCharH * scale + kShortControlsLineGap;
-    const float width = keyWidth + labelWidth;
-    const float height = lineHeight * static_cast<float>(keys.size()) - kShortControlsLineGap;
-    // 右端と上端を合わせ、後ろに暗い板を敷いてから1行ずつ積む
-    const float left = anchor.x - width;
-    const float top = anchor.y;
-    fontRenderer_.DrawPanel(left - kShortControlsPadding, top - kShortControlsPadding, width + kShortControlsPadding * 2.0f,
-        height + kShortControlsPadding * 2.0f, layout.Color("short_controls.panel_color", kShortControlsPanelColor));
-    for (size_t i = 0; i < keys.size(); ++i) {
-        const float y = top + lineHeight * static_cast<float>(i);
-        fontRenderer_.DrawStringW(keys[i], left, y, scale, keyColor);
-        fontRenderer_.DrawStringW(kShortControls[i].label, left + keyWidth, y, scale, textColor);
-    }
-}
-
-/** @brief 奪える武器に印を出し、届く距離の一番近い1つだけに回収の操作を出す */
-void GamePlayScene::DrawWeaponStealPrompts(float promptScale, const Vector4& promptColor) {
-    UILayout& layout = UILayout::Get(kLayoutName);
-    const float markScale = layout.Float("steal_mark.scale", kWeaponStealMarkScale);
-    const Vector4 markColor = layout.Color("steal_mark.color", kWeaponStealMarkColor);
-    // 押せば奪えるもの（距離の中）のうち、一番近いものを選ぶ
-    const std::vector<StealTarget> targets = CollectStealTargets();
-    const size_t nearest = FindNearestStealTarget(targets);
-    // 選んだものには操作を、ほかは小さな印だけを、武器の上へ中央そろえで出す
-    const Vector3& cam = camera_->GetTranslate();
-    const std::wstring prompt = input_->ExpandPrompts(L"[{Steal}] 武器を回収");
-    const std::wstring mark = L"▼";
-    for (size_t i = 0; i < targets.size(); ++i) {
-        // 闘技場では専用の投影を使い、横スクロール用の印との重複を避ける。
-        if (finalBoss_.UsesArenaCamera()) {
-            DrawArenaWeaponStealPrompt(targets[i].position, i == nearest, promptScale, promptColor);
-            continue;
-        }
-        float sx = 0.0f;
-        float sy = 0.0f;
-        sceneShared::WorldToScreen(targets[i].position.x, targets[i].position.y + kWeaponStealPromptHeight, cam.x, cam.y, sx, sy);
-        const bool selected = i == nearest;
-        const std::wstring& text = selected ? prompt : mark;
-        const float scale = selected ? promptScale : markScale;
-        fontRenderer_.DrawStringW(text, sx - FontRenderer::MeasureStringW(text, scale).x * kCenterFactor, sy, scale,
-            selected ? promptColor : markColor);
-    }
-}
-/** @brief 同じ武器で当て続けて効きが落ちている時に、持ち替えを促す警告を出す */
-void GamePlayScene::DrawWeaponFatigueWarning() {
-    UILayout& layout = UILayout::Get(kLayoutName);
-    const float fatigueDetailOffsetY = layout.Float("fatigue.detail_offset_y", kFatigueDetailOffsetY);
-    const Vector4 fatigueMildColor = layout.Color("fatigue.mild_color", kFatigueMildColor);
-    const Vector4 fatigueSevereColor = layout.Color("fatigue.severe_color", kFatigueSevereColor);
-    // 今の武器の疲労で威力が落ちていなければ出さない
-    const float mult = WeaponFatigueDamageMult(lastFatigueIndex_);
-    if (mult >= 1.0f) {
-        return;
-    }
-    // 威力の落ち具合を 0〜1 にし、一定以上なら強い警告にする
-    const float minMult = CombatTuning::GetInstance()->Get().weaponFatigueMinDamageMult;
-    const float severity = minMult < 1.0f ? std::clamp((1.0f - mult) / (1.0f - minMult), 0.0f, 1.0f) : 0.0f;
-    const bool severe = severity >= kFatigueSevereThreshold;
-    // 持ち替え先として一番休めている武器（銃を含む）を探し、押すボタンまで具体的に示す
-    const auto* wm = WeaponManager::GetInstance();
-    int bestSlot = -1;
-    float bestFatigue = 1.0f;
-    for (int slot = 0; slot < WeaponManager::kSlotCount; ++slot) {
-        const int weaponIndex = wm->GetSlotWeaponIndex(slot);
-        if (weaponIndex < 0 || weaponIndex == lastFatigueIndex_ || weaponIndex >= static_cast<int>(weaponFatigue_.size())) {
-            continue;
-        }
-        if (weaponFatigue_[weaponIndex] < bestFatigue) {
-            bestFatigue = weaponFatigue_[weaponIndex];
-            bestSlot = slot;
-        }
-    }
-    // 銃のほうが休めていれば射撃を勧める
-    const int gunIndex = GunFatigueIndex();
-    const bool suggestGun = gunIndex != lastFatigueIndex_ && gunIndex < static_cast<int>(weaponFatigue_.size())
-        && (bestSlot < 0 || weaponFatigue_[gunIndex] < bestFatigue);
-    // 押す入力は最後に使った機器の表記にし、持ち替え先の武器の名前も添える
-    const std::wstring suggestion = (!suggestGun && bestSlot >= 0)
-        ? input_->ExpandPrompts(L"[{Slot" + std::to_wstring(bestSlot + 1) + L"}] ")
-            + WeaponTypeLabel(wm->GetList()[wm->GetSlotWeaponIndex(bestSlot)].type) + L"に持ち替えろ"
-        : input_->ExpandPrompts(L"[{Shoot}] 射撃を混ぜろ");
-    // 強い警告は点滅させ、見出しと 威力% と勧める操作 を2行で出す
-    const Vector2 pos = layout.Pos("fatigue.pos", kFatigueWarningPosition);
-    Vector4 color = severe ? fatigueSevereColor : fatigueMildColor;
-    if (severe) {
-        const float blink = 0.5f + 0.5f * std::sin(floorElapsedSeconds_ * kFatigueBlinkSpeed);
-        color.w = kFatigueBlinkMinAlpha + (1.0f - kFatigueBlinkMinAlpha) * blink;
-    }
-    // 各行の実測幅で中央をそろえる
-    const std::wstring title = severe ? L"同じ武器ではもう効かない!" : L"同じ武器で効きが落ちてきた";
-    const int percent = static_cast<int>(std::round(mult * kPercent));
-    const std::wstring detail = L"威力 " + std::to_wstring(percent) + L"%    " + suggestion;
-    const float titleScale = layout.Float("fatigue.title_scale", kFatigueTitleScale);
-    const float detailScale = layout.Float("fatigue.detail_scale", kFatigueDetailScale);
-    fontRenderer_.DrawStringW(title, pos.x - FontRenderer::MeasureStringW(title, titleScale).x * kCenterFactor,
-        pos.y, titleScale, color);
-    fontRenderer_.DrawStringW(detail, pos.x - FontRenderer::MeasureStringW(detail, detailScale).x * kCenterFactor,
-        pos.y + fatigueDetailOffsetY, detailScale, color);
-}
-/** @brief 左上にステージ名の見出しを描画する（武器は左下の武器スロットHUDに出すので一覧は出さない） */
-void GamePlayScene::DrawWeaponListPanel() {
-    UILayout& layout = UILayout::Get(kLayoutName);
-    const Vector2 weaponHudAnchor = layout.Pos("weapon_list.pos", kDefaultHudWeaponAnchor);
-    sceneShared::DrawHudHeader(fontRenderer_, L"メインステージ", weaponHudAnchor);
-}
-/** @brief ノードグラフの ShowMessage で出した文字を画面中央に描画し、残り時間を減らす */
-void GamePlayScene::DrawScriptMessage() {
-    if (scriptMessageSeconds_ <= 0.0f || scriptMessage_.empty()) {
-        return;
-    }
-    scriptMessageSeconds_ -= gameConstants::kFrameDeltaTime;
-    UILayout& layout = UILayout::Get(kLayoutName);
-    const float y = layout.Float("script_message.y", kScriptMessageY);
-    const float scale = layout.Float("script_message.scale", kScriptMessageScale);
-    // 最後の少しの間で薄くして消す
-    const float alpha = std::clamp(scriptMessageSeconds_ / kScriptMessageFadeSeconds, 0.0f, 1.0f);
-    Vector4 shadow = kScriptMessageShadowColor;
-    shadow.w *= alpha;
-    Vector4 color = layout.Color("script_message.color", kScriptMessageColor);
-    color.w *= alpha;
-    // 影は少し右下にずらすため、中央揃えの位置を同じだけずらした文字で描く
-    const float width = FontRenderer::MeasureStringW(scriptMessage_, scale).x;
-    const float x = gameConstants::kScreenCenterX - width * kCenterFactor;
-    fontRenderer_.DrawStringW(scriptMessage_, x + kScriptMessageShadowOffset, y + kScriptMessageShadowOffset, scale, shadow);
-    fontRenderer_.DrawStringW(scriptMessage_, x, y, scale, color);
-}
-
 /** @brief ノードグラフのメッセージ・カメラ・操作停止の受け口を登録する */
 void GamePlayScene::RegisterScriptEffectHandlers() {
     auto* bridge = SceneEffectBridge::GetInstance();

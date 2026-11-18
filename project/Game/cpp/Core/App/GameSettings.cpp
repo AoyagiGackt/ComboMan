@@ -19,6 +19,7 @@ void GameSettingsManager::Load() {
         settings_.bgmVolume = j.value("bgm_volume", settings_.bgmVolume);
         settings_.seVolume = j.value("se_volume", settings_.seVolume);
         settings_.autoCombo = j.value("auto_combo", settings_.autoCombo);
+        settings_.weaponFusion = j.value("weapon_fusion", settings_.weaponFusion);
     } else {
         // ログ出力やデフォルト維持
     }
@@ -30,6 +31,7 @@ void GameSettingsManager::Save() {
     j["bgm_volume"] = settings_.bgmVolume;
     j["se_volume"] = settings_.seVolume;
     j["auto_combo"] = settings_.autoCombo;
+    j["weapon_fusion"] = settings_.weaponFusion;
     JsonHelper::Save(kFilePath, j);
 }
 

@@ -86,6 +86,10 @@ struct PlayerTuning {
     float rampageLaunchSpeed = 0.25f;
     float juggleRadius = 2.5f; ///< 敵からのスラッシュ距離
     int juggleMaxSlashes = 8;
+    float rampageSearchRange = 8.0f; ///< 乱舞が向かう相手を探す横の距離（これより遠い敵へは突進しない）
+    float rampageSearchHeight = 3.0f; ///< 乱舞が向かう相手を探す高さの差
+    float rampageLaunchMaxSeconds = 0.6f; ///< この秒数のうちに相手へ着かなければ突進をやめる
+    float juggleIdleSeconds = 1.0f; ///< 空中連撃で攻撃入力がこの秒数途切れたら連撃を終える
 
     // 固有技
     float dashDuration = 0.10f; ///< 踏み込み・突進系の技が移動しきる秒数

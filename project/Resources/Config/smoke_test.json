@@ -1,5 +1,5 @@
 {
-  "_comment": "自動テストプレイの手順（--smoke-test を付けて起動すると、この順にゲームを自分で遊ぶ）。action: waitScene=その画面になるまで待つ（timeout 秒で止まった扱い） waitSceneChange=画面が切り替わるまで待つ pressUntilScene=その画面になるまで key を interval 秒ごとに押す press=key を1回押す hold=keys を seconds 秒押し続ける random=keys からランダムに seconds 秒操作する wait=seconds 秒待つ changeScene=その画面へ直接行く mark=報告に目印を書く repeat=steps を count 回繰り返す。キーの名前は input_bindings.json と同じ（F5 F9 T Backspace なども使える。Escape はゲームが閉じるので使えない）。結果は smoke_test フォルダに出る",
+  "_comment": "自動テストプレイの手順（--smoke-test を付けて起動すると、この順にゲームを自分で遊ぶ）。action: waitScene=その画面になるまで待つ（timeout 秒で止まった扱い） waitSceneChange=画面が切り替わるまで待つ pressUntilScene=その画面になるまで key を interval 秒ごとに押す press=key を1回押す hold=keys を seconds 秒押し続ける random=keys からランダムに seconds 秒操作する wait=seconds 秒待つ changeScene=その画面へ直接行く mark=報告に目印を書く repeat=steps を count 回繰り返す。キーの名前は input_bindings.json と同じ（T Backspace なども使える。F5（すぐクリア）と F9（やられ演出）は自動テストプレイの間だけ効く近道。Escape はゲームが閉じるので使えない）。結果は smoke_test フォルダに出る",
   "settleSeconds": 0.5,
   "steps": [
     {

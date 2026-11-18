@@ -37,6 +37,7 @@
 #include "Collision.h"
 #include "ElementEffect.h"
 #include "EnemyEntity.h"
+#include "AllyBoss.h"
 #include "EnemyRegistry.h"
 #include "FontRenderer.h"
 #include "GlassShatterEffect.h"
@@ -57,7 +58,6 @@
 #include "SpaceDistortionEffect.h"
 #include "BossExecution.h"
 #include "ClearFinish.h"
-#include "DebugButton.h"
 #include "FinalBossBattle.h"
 #include "GuidePanel.h"
 #include "PlayerDefeat.h"
@@ -204,6 +204,8 @@ public:
 
 private:
     static constexpr const char* kSceneName = "GAMEPLAY"; ///< scene_flow.json のキー（SceneFactory の登録名と同じ）
+    static constexpr const char* kLayoutName = "gameplay"; ///< 画面UIの配置を引く名前（F2のエディタで動かした値は Resources/Config/UI/gameplay.json に保存される）
+    static constexpr float kCenterFactor = 0.5f; ///< 文字を左右の中央にそろえる時に、幅へ掛ける割合
 
     /** @brief シーンが所有するゲーム実体、描画資源、演出を責務順に初期化する */
     void InitializeCoreSystems();
@@ -249,10 +251,26 @@ private:
     bool BombTouchesEnemy(const Vector3& position, float radius) const;
     /** @brief 飛んでいる爆弾を進め、ぶつかった爆弾を爆発させる */
     void UpdateKickedBombs();
+    /** @brief 自動テストプレイの間だけ、遊んでいる様子からおかしな所を探して SmokeTestRunner へ知らせる */
+    void RunBugChecks();
+    /** @brief RunBugChecks の下請け プレイヤーの位置・体力・先へ進めるかを調べる */
+    void CheckPlayerForBugs(const AABB& stageBounds, bool hasBounds, const std::vector<AABB>& terrain, float elapsed);
+    /** @brief RunBugChecks の下請け 生きている敵が届かない所にいないか・生き返っていないかを調べる */
+    void CheckEnemiesForBugs(const AABB& stageBounds, bool hasBounds, const std::vector<AABB>& terrain, float elapsed);
+    /** @brief RunBugChecks の下請け 敵グループの全滅を待つ条件（扉など）が、倒し切ったのに成立しない所を探す */
+    void CheckEnemyGroupConditionsForBugs(const AABB& stageBounds, bool hasBounds, const std::vector<AABB>& terrain, float elapsed);
+    /** @brief プレイヤーから見て対象の向こう側の向き（真上や真下で決まらない時は向いている方） */
+    float AwayFromPlayerDirX(const Vector3& position) const;
+    /** @brief 壊した壁をプレイヤーの反対側へ吹き飛ばす（飛ばす枠が無い時は false） */
+    bool LaunchBrokenWall(const BreakableRef& wall, const BreakableSettings& settings);
+    /** @brief 飛んでいる壁の箱に重なった敵を、まだ巻き込んでいなければダメージを与えて吹き飛ばす */
+    void SweepEnemiesWithWall(const AABB& box, float dirX, std::vector<const void*>& alreadyHit);
     /** @brief その位置へボスを動かすと壁にめり込むか */
     bool IsBossBlockedAt(const Vector3& position) const;
     /** @brief ボスとプレイヤーの間に、壁や閉じた扉が無いか */
     bool BossCanSeePlayer() const;
+    /** @brief 敵とプレイヤーの間に、壁や閉じた扉があるか（敵の体の高さで横に細い箱を通して調べる。低い段差は数えない） */
+    bool IsWallBetweenEnemyAndPlayer(const Vector3& enemyPosition) const;
     /** @brief ボス戦の進行役を1フレーム進め、起きたことに合わせて演出と当たり判定を出す */
     void UpdateStageBoss(float dt);
     /** @brief 画面下の体力バーと名乗りの表示を更新する */
@@ -282,6 +300,14 @@ private:
     void ApplyPendingWeaponFinisher();
     /** @brief プレイヤーがその位置に立てるか（体が壁にめり込まず、足元に床がある） */
     bool CanPlayerStandAt(const Vector3& position) const;
+    /** @brief プレイヤーを今の位置から横へその位置まで動かす通り道に、壁や閉じた扉があるか（瞬間移動で壁を抜けないように） */
+    bool IsPlayerPathBlocked(const Vector3& position) const;
+    /** @brief プレイヤーを from から横へ to まで動かす通り道に、壁や閉じた扉があるか（高さは to で見る） */
+    bool IsPlayerSweepBlocked(const Vector3& from, const Vector3& to) const;
+    /** @brief プレイヤーが from から to へ動いた間に、体の高さにある壁や閉じた扉の真ん中を横切ったか */
+    bool DidPlayerCrossWall(const Vector3& from, const Vector3& to) const;
+    /** @brief 敵を from から横へ to まで動かす通り道に、壁や閉じた扉があるか（halfWidth は敵の体の幅の半分） */
+    bool IsEnemyPathBlocked(const Vector3& from, const Vector3& to, float halfWidth) const;
     /** @brief 前方の箱に重なる敵へ、関数を呼ぶ */
     void ForEachTargetInFront(float length, float halfHeight, const std::function<void(const FinisherTarget&)>& visit);
     /** @brief 槍: 前へ長く突き、当たった敵を横へ突き飛ばす */
@@ -367,12 +393,26 @@ private:
     bool TryStartBossExecution();
     /** @brief とどめの演出の間の1フレーム（操作・敵を止め、演出・切り分け・カメラだけを進め、終わったら武器を渡す） */
     void UpdateBossExecution();
+    /** @brief ボスの体の中に中心がめり込んでいる、まだ壊れていない爆弾の名前を返す（無ければ空） */
+    std::string FindBombInsideBoss();
+    /** @brief とどめの演出で、ボスにめり込んだ爆弾を壊して爆発を出す（プレイヤーと敵は巻き込まない） */
+    void DetonateExecutionBomb();
     /** @brief ボスの武器を手に入れ、ボス技を覚える（吸い寄せ・とどめのどちらで奪った時も同じ） */
     void CompleteBossWeaponSteal();
+    /** @brief 道中の武器敵の武器（倒して落ちている物も含む）を描かない・描くに切り替える（とどめの演出の画面に映さないため） */
+    void SetWeaponEnemyWeaponsHidden(bool hidden);
     /** @brief 敵（ボスと道中の武器敵）の見た目の行列だけを今のカメラで計算し直す */
     void RefreshEnemyVisualTransforms();
     /** @brief 立っている敵（倒れた敵と消えた敵は除く）の位置を集める */
     std::vector<Vector3> CollectStandingEnemyPositions() const;
+    /** @brief 乱舞の相手に向いた敵を選ぶ（ロック中の敵、いなければ近くで一番近い敵。届く所に誰もいなければ nullptr） */
+    EnemyEntity* PickRampageEnemy() const;
+    /** @brief 乱舞の相手を決め直し、向かう位置を返す（乱舞の途中は同じ相手を追い、乱舞していない時は近くの敵を選び直す） */
+    Vector3 UpdateRampageEnemy();
+    /** @brief 乱舞の打ち上げ・連撃・締めを向ける敵（相手を選べずその場で打ち上げた時は nullptr） */
+    EnemyEntity* RampageTargetEnemy() const;
+    /** @brief 今の戦闘の相手（ボスか道中の敵）の実体か（作り直しで消えた敵を指したままにしないための確認） */
+    bool IsCombatEnemy(const EnemyEntity* enemy) const;
     /** @brief カメラに映っている、まだ倒れていない敵（ステージの主の敵と道中の敵）を集める（フィニッシャーの当たる相手） */
     std::vector<EnemyEntity*> CollectOnScreenEnemies() const;
     /** @brief クリアの決め演出を始める（ボスを倒した最後の一撃が銃なら弾痕、それ以外なら斬線） */
@@ -414,8 +454,8 @@ private:
     void ApplyWeaponSkillStyleHit(const AABB& enemyAABB);
     /** @brief UpdateStyleAndUI()の下請け 銃コンボのヒット判定とスタイル加点を処理する */
     void ApplyGunShotStyleHit();
-    /** @brief UpdateStyleAndUI()の下請け 覚醒乱舞ラッシュのヒット判定とスタイル加点を処理する */
-    void ApplyRampageStyleHit(const AABB& enemyAABB);
+    /** @brief UpdateStyleAndUI()の下請け 覚醒乱舞ラッシュのヒット判定とスタイル加点を処理する（乱舞の相手に当てる） */
+    void ApplyRampageStyleHit();
     /** @brief 近接の一撃ぶんのスタイルを加える（ボスにも道中の敵にも共通） */
     void AwardMeleeStyle();
     /** @brief 武器固有技の一撃ぶんのスタイルを加える（ボスにも道中の敵にも共通） */
@@ -461,6 +501,90 @@ private:
     void DrawShortControls();
     /** @brief 奪える武器に印を出し、届く距離の一番近い1つだけに回収の操作を出す */
     void DrawWeaponStealPrompts(float promptScale, const Vector4& promptColor);
+    /** @brief 届く距離の外にある奪える武器を、揺れる矢印か画面端の矢印で指す（横スクロールのステージ用） */
+    void DrawWeaponPickupGuide(const Vector3& position);
+    /** @brief 画面に敵が1体もいない時に、画面外の一番近い敵の方向を画面端の矢印で指す（閉まった扉の向こうの敵は指さない） */
+    void DrawOffscreenEnemyGuide();
+    /** @brief 床を抜けてステージの一番下より落ちたら、最後に立っていた床へ戻す（毎フレーム、当たり判定の後に呼ぶ） */
+    void UpdateFallRescue();
+
+    // ── 味方のボスと 2人目（GamePlaySceneAlly.cpp） ──
+    /** @brief 2P が操作に使っている機器（kNone なら味方のボスは自動で戦う） */
+    enum class AllyDevice {
+        kNone,
+        kFirstPad, ///< 1台目のパッド（1P がキーボードの時だけ）
+        kSecondPad, ///< 2台目のパッド
+        kKeyboard, ///< キーボード（1P がパッドの時だけ）
+    };
+    /** @brief 2P の機器の画面に出す名前 */
+    static const wchar_t* AllyDeviceName(AllyDevice device);
+    /** @brief 味方のボスを呼べるか（ボスの武器どうしを合体させていて、倒れた後の待ちが明けている）。呼べない時は理由を返す */
+    std::wstring AllyUnavailableReason() const;
+    /** @brief 味方のボスを呼び出す（呼べない時は理由を出して false） */
+    bool SummonAlly();
+    /** @brief 2P を参加させる（味方がいなければ呼ぶ。呼べなければ参加しない） */
+    void JoinTwoPlayer(AllyDevice device);
+    /** @brief 2P を抜けさせる（味方のボスは残って自動で戦う。機器は 1P の操作へ戻す） @param message 出す知らせ（nullptr なら出さない） */
+    void LeaveTwoPlayer(const wchar_t* message);
+    /** @brief 指定した機器で、参加と抜けるの同時押しをしたか */
+    bool PressedJoinCombo(AllyDevice device) const;
+    /** @brief 2P の機器から、このフレームの操作を読む */
+    AllyControl ReadAllyControl() const;
+    /** @brief 呼び出し・参加・抜けるの操作を受け付ける */
+    void HandleAllyInput();
+    /** @brief 味方のボスを1フレーム進める（呼び出し・参加の操作、動き、味方と敵の当たり） */
+    void UpdateAlly();
+    /** @brief 味方の攻撃が当たった敵にダメージ（体力は1より下げない）・のけぞり・命中演出を出す */
+    void ApplyAllyHits(const AllySurroundings& around);
+    /** @brief 敵の攻撃と弾を味方に当てる（プレイヤーの体力は減らさない。倒れたら 2P も抜ける） */
+    void ApplyEnemyAttacksToAlly(const AllySurroundings& around);
+    /** @brief ラスボス戦の援護（2P の攻撃の合図か、2P がいなければ自動で時々、分身の横に現れて一撃入れて消える） */
+    void UpdateArenaAssist();
+    /**
+     * @brief ラスボス戦で援護に使うボスの武器を返す（刀だけに差し替える前のボスの枠。主軸と相棒がそろっていれば true）
+     * @param main 主軸の武器
+     * @param partner 相棒の武器
+     */
+    bool ArenaAssistWeapons(const WeaponData*& main, const WeaponData*& partner) const;
+    /** @brief 味方のボスの体を描く */
+    void DrawAlly();
+    /** @brief 味方の頭上の体力バーの位置を決める（毎フレーム、描く前に呼ぶ） */
+    void UpdateAllyHud();
+    /** @brief 味方の頭上の体力バーを描く */
+    void DrawAllyHpBar();
+    /** @brief 2P が操作している時だけ、画面の右下に 2P の操作の案内を出す */
+    void DrawTwoPlayerHud();
+    /** @brief 味方のボスの頭上に、敵と見分ける印を出す（ふだんは 味方、2P が操作している間は 2P） */
+    void DrawAllyMark();
+    /** @brief 味方の体力バーを作る（シーンの初期化で1回。ゲーム中に作ったり消したりしない） */
+    void InitializeAlly();
+    /** @brief ステージを読み直した時に、味方を引っ込めて 2P を抜けさせる */
+    void ResetAlly();
+    AllyBoss ally_; ///< 味方のボス
+    AllyDevice allyDevice_ = AllyDevice::kNone; ///< 2P が使っている機器
+    float allyIdleSeconds_ = 0.0f; ///< 2P が操作していない秒数
+    std::unique_ptr<Sprite> allyHpBarBg_; ///< 味方の頭上の体力バーの下地
+    std::unique_ptr<Sprite> allyHpBarFg_; ///< 味方の頭上の体力バーの残り
+    bool allyHpBarPlaced_ = false; ///< 味方の体力バーの位置をこのフレームに決めたか
+    /**
+     * @brief 自動テストプレイの時だけ、床抜けを直前の様子と一緒に知らせる
+     * @param position 落ちていた位置
+     */
+    void ReportPlayerFall(const Vector3& position);
+    /** @brief 自動テストプレイの見張りで、プレイヤーの今の様子を直前の記録に足す */
+    void RecordPlayerTrail(const Vector3& position);
+    /**
+     * @brief 自動テストプレイの見張りで、武器の持ち方におかしな所が無いか調べる（選ぶ画面が出たまま・合体の番号が範囲の外など）
+     * @param elapsed 前に調べてから過ぎた秒数
+     */
+    void CheckWeaponsForBugs(float elapsed);
+    /**
+     * @brief 自動テストプレイの見張りで、味方のボスにおかしな所が無いか調べる（離れすぎたまま・落ちたまま・体力が範囲の外）
+     * @param elapsed 前に調べてから過ぎた秒数
+     */
+    void CheckAllyForBugs(float elapsed);
+    Vector3 lastSafeGround_ {}; ///< プレイヤーが最後に床に立っていた位置（床抜けの救済で戻す先）
+    bool hasSafeGround_ = false; ///< lastSafeGround_ が入っているか
     /** @brief 倒れて武器を奪える敵1体ぶん（武器の位置と、奪える距離） */
     struct StealTarget {
         const EnemyEntity* owner = nullptr;
@@ -566,12 +690,78 @@ private:
     void EmitStyleRankUpParticles(const Vector3& ppos);
     /** @brief 近接コンボのモーション中、装備武器の色で手元にトレイル残像を発生させ続ける */
     void UpdateWeaponTrail();
+    /** @brief 攻撃していない間に武器へ属性をまとわせるか（覚醒中か、スタイルランクが高い時に確率で） */
+    bool ShouldEmitIdleAura();
+    /**
+     * @brief 当てた敵に属性の状態（燃焼・凍結など）を付ける。同じ属性なら残り時間を延ばし、違う属性なら上書きする
+     * @param enemy   当たった敵（nullptr なら何もしない）
+     * @param element 属性名
+     * @param color   演出の色
+     */
+    void ApplyElementStatus(EnemyEntity* enemy, const std::string& element, const Vector4& color);
+    /** @brief ボスと道中の敵に残っている属性の状態を進める（継続ダメージ・歩く速さ・体から出る粒） */
+    void UpdateElementStatuses(float dt);
+    /** @brief 敵1体の属性の状態を進める */
+    void UpdateElementStatus(EnemyEntity& enemy, float dt);
+    /** @brief 武器を手に入れた瞬間に、胸の高さへ属性の粒を出す（武器名は出さない） */
+    void PlayWeaponAcquireEffect(WeaponType type);
+    /**
+     * @brief 枠が満杯の時に奪った武器を、今持っている武器に合体させる
+     * @param result 奪った時の Acquire() の結果
+     * @param type 奪った武器の種類
+     * @return 合体させたら true（交換や覚醒ゲージへの転用などのふだんの後処理はしない）
+     */
+    bool TryFuseAcquiredWeapon(WeaponManager::AcquireResult result, WeaponType type);
+    /**
+     * @brief ボスから奪った武器をボスの枠へ入れる（空なら入れ、同じなら覚醒ゲージへ、別の種類なら主軸を選ぶ画面を出す）
+     * @param type ボスから奪った武器の種類
+     */
+    void AcquireBossWeapon(WeaponType type);
+    /** @brief 合体の主軸を選ぶ画面の入力（左右で選び、決定で決める。ゲームは止めておく） */
+    void UpdateBossMainChoice();
+    /** @brief 合体の主軸を選ぶ画面を描く */
+    void DrawBossMainChoice();
+    /** @brief ボスの枠の武器の効きの落ちの添字（銃の次） */
+    int BossFatigueIndex() const;
+    bool bossChoiceKeepCurrent_ = true; ///< 主軸を選ぶ画面で、今の主軸のままを選んでいるか
+    /**
+     * @brief 武器が合体した瞬間の演出（2本の色の輪・閃光・両方の属性の粒・合体した名前）
+     * @param slot 合体した枠
+     * @param bossWeapon ボスの武器どうしの合体か
+     */
+    void PlayWeaponFusionEffect(int slot, bool bossWeapon);
+    /** @brief 合体している武器の近接・固有技のダメージ倍率（合体していなければ 1） */
+    float FusionDamageMult() const;
+    /**
+     * @brief 合体している武器で当てた時に、相棒の属性の演出と状態を足し、耐久を減らす（尽きたら砕ける演出）
+     * @param enemy 当たった敵
+     * @param scale 属性演出の大きさ倍率
+     */
+    void ApplyFusionHit(EnemyEntity* enemy, float scale);
+    /**
+     * @brief 合体した武器が砕けた瞬間の演出
+     * @param weapon 砕けた武器
+     * @param partner 合体していた相棒の武器
+     */
+    void PlayWeaponFusionBreakEffect(const WeaponData& weapon, const WeaponData& partner);
+    /**
+     * @brief 画面の中央上に名前を一瞬出す（武器を合体させた時に使う）
+     * @param text  出す名前
+     * @param color 武器の演出色（読みやすいように白を混ぜて出す）
+     */
+    void ShowWeaponBanner(const std::wstring& text, const Vector4& color);
+    /** @brief 武器名の表示の残り時間を進める */
+    void UpdateWeaponAcquireBanner(float dt);
+    /** @brief 手に入れた武器の名前を画面の中央上に出す（出てすぐ大きく弾け、最後に薄く消える） */
+    void DrawWeaponAcquireBanner();
     /** @brief 刃の軌跡・締め演出・F6調整パネルを更新する @param gameAdvanced このフレームにプレイヤーが動いたか */
     void UpdateComboFeel(bool gameAdvanced);
     /** @brief 撃ったフレームに、ボス・道中の敵・壊せる物から銃口に一番近い1体を射撃の的に選ぶ */
     void BuildGunShotTarget();
     // フィニッシャースラッシュ演出（斬撃線を1本ずつ表示→本命ヒット）の更新
     void UpdateFinisherSlash(float dt);
+    /** @brief フィニッシャーのどれかの段階の最中か（溜め・斬撃線・解放の画面の割れ・敵の破片）。とどめやクリアはこれが終わってから始める */
+    bool IsFinisherBusy() const;
     // 敵撃破などのクリア条件判定
     void CheckClearCondition();
 
@@ -650,6 +840,7 @@ private:
         float absorbTimer = 0.0f;
         std::unique_ptr<Sprite> hpBarBg; // OnEditorLevelLoaded()で生成（レベル再読込のたびに作り直す）
         std::unique_ptr<Sprite> hpBarFg;
+        bool hpBarPlaced = false; ///< HPバーの位置を一度でも決めたか（決める前に描くと画面の右上に白い四角が映る）
         MonsterTraitState trait; ///< モンスターの個性の動きの状態
     };
     std::vector<WeaponEnemyEntry> weaponEnemies_;
@@ -687,6 +878,8 @@ private:
      * @param hit DetectWeaponEnemyHit() の結果（反応の強さを書き足す）
      */
     void ApplyWeaponEnemyHit(WeaponEnemyEntry& entry, WeaponEnemyHit& hit);
+    /** @brief 道中の敵への命中1回ぶんから、何で当てたかに合う属性の状態を付ける（効きが落ちた武器では付けない） */
+    void ApplyWeaponEnemyElementStatus(EnemyEntity& enemy, const WeaponEnemyHit& hit);
     /** @brief 道中の敵へのこのフレームの命中を、種類ごとに一度だけスタイルへ加える */
     void AwardWeaponEnemyStyle(const WeaponEnemyHit& hit, bool& meleeAwarded, bool& skillAwarded, bool& gunAwarded);
     /** @brief 命中時のダメージ量を武器・段・固有技から計算する */
@@ -704,6 +897,8 @@ private:
 
     /** @brief ロックオン中の敵（ボスも道中の敵も同じ扱い。ロックオン長押し中は最寄りの敵を自動追従し、離すとnullptr） */
     const EnemyEntity* lockedEnemy_ = nullptr;
+    /** @brief 乱舞の相手（乱舞を始める時に選び、終わるまで同じ敵を追う。使う前に IsCombatEnemy() で確かめる） */
+    EnemyEntity* rampageEnemy_ = nullptr;
 
     // 収集物（pickup）と壊せる物（breakable）はレベルJSONの配置物としてStageEditorが所有する。
     // ここでは壊せる物の脈動表示に使うタイマーだけを持つ
@@ -778,15 +973,32 @@ private:
 
     /** @brief 覚醒中の残像トレイル1コマ分の位置と経過秒数（設定された寿命を超えたら消える） */
     struct GhostEntry {
-        Vector3 pos;
+        Vector3 pos; ///< 本体の見た目と同じ置き場所（足元合わせ済み）
+        float scale; ///< 本体の見た目と同じ倍率
+        float yaw; ///< 残した時の向き
         float age;
     };
     std::deque<GhostEntry> ghostTrail_;
     std::unique_ptr<Object3d> ghostObject_;
     KickedBombPool kickedBombs_; ///< 攻撃で吹き飛ばした爆弾（見た目は初期化で作って使い回す）
+    /** @brief 自動テストプレイの見張りが、フレームをまたいで覚えておく様子 */
+    struct BugWatchState {
+        int framesUntilCheck = 0; ///< 次に調べるまでのフレーム数（毎フレームは重いので間を空ける）
+        bool wasExpectingProgress = false; ///< 前に調べた時、先へ進む操作をしていたか
+        float bestX = 0.0f; ///< 先へ進む操作を始めてから一番右まで行った位置
+        float stallSeconds = 0.0f; ///< 一番右の位置が伸びないまま過ぎた秒数
+        Vector3 lastGroundedPosition {}; ///< プレイヤーが最後に床に立っていた位置（床抜けの報告に添える）
+        Vector3 lastPlayerPosition {}; ///< 前に調べた時のプレイヤーの位置（高い壁や閉じた扉をすり抜けていないか調べる）
+        bool hasLastPlayerPosition = false; ///< lastPlayerPosition が入っているか
+        std::vector<std::string> playerTrail; ///< 直前のプレイヤーの様子（古い順。床抜けの報告に添える）
+        std::vector<std::pair<const EnemyEntity*, uint64_t>> defeatedSeen; ///< 倒されたのを見た敵（生き返りを見つける）
+        std::vector<std::pair<std::string, float>> suspectSeconds; ///< おかしな様子が続いている秒数（一瞬だけのものは数えない）
+    };
+    BugWatchState bugWatch_; ///< 自動テストプレイの見張りの様子
     ThrownWeaponPool thrownWeapons_; ///< 締めで投げた武器（見た目は初期化で作って使い回す）
     bool weaponFinisherPending_ = false; ///< このフレームに締めの動作を出すか（ボスへの通常の当たりの後で出す）
     BossBattleDirector bossDirector_; ///< ステージボス戦の進行役（名乗り・第2段階・武器ごとの技）
+    BossMotionPlayer bossMotion_; ///< ステージボスの技ごとの動きの再生役（boss_motion.json）
     FinalBossHud stageBossHud_; ///< ステージボスの画面下の体力バーと名乗り（ラスボスと同じ見せ方）
     bool bossSlamRequested_ = false; ///< 進行役が叩きつけを頼んだか（予告が始まったら下ろす）
     float bossWarningPulse_ = 0.0f; ///< 身構えの輪を次に出すまでの秒数
@@ -799,13 +1011,14 @@ private:
     float floorElapsedSeconds_ = 0.0f; ///< このフロアに入ってからの経過秒数（OnEditorLevelLoaded()でリセット、プレイログ用）
     /** @brief 右上のスタイリッシュランクHUD（採点はstyleMeter_側で行い、表示だけこれに委ねる） */
     StyleMeter styleRankHud_;
+    std::wstring acquireBannerText_; ///< 手に入れた武器の名前（炎の剣 など）
+    Vector4 acquireBannerColor_ = { 1.0f, 1.0f, 1.0f, 1.0f }; ///< 武器名の色（武器の演出色）
+    float acquireBannerTimer_ = 0.0f; ///< 武器名を出している残り秒数（0なら出さない）
     StageIntro stageIntro_; ///< ステージ開始演出（Resources/Config/stage_intro.json）
     StageControlsGuide stageGuide_; ///< 1面の最初に一度だけ出す操作説明（Resources/Config/controls_guide.json）
     bool stageIntroStarted_ = false; ///< エディタでレベルを読み直しても演出をやり直さないための印
     PlayerDefeat playerDefeat_; ///< プレイヤーのやられ演出（Resources/Config/player_defeat.json）
     BossExecution bossExecution_; ///< 膝をついたボスへのとどめの演出（Resources/Config/boss_execution.json）
-    DebugButton debugGameOverButton_; ///< やられ演出をすぐ見る確認用ボタン（game_rules.json の debugGameOverButton で出し入れ）
-    DebugButton debugClearButton_; ///< クリアの決め演出をすぐ見る確認用ボタン（game_rules.json の debugClearButton で出し入れ）
     FinalBossBattle finalBoss_; ///< ラスボス戦の進行役（Resources/Config/final_boss.json）
     int lastTechniqueId_ = -1;
     int repeatedTechniqueCount_ = 0;
@@ -869,6 +1082,7 @@ private:
     bool requestClear_ = false;
     bool glassShatterDebugTest_ = false; ///< 確認用の再生か（結果は見せるが、進行とセーブに反映しない）
     bool bossFinishedByGun_ = false; ///< ボスを倒した最後の一撃が銃だったか（クリアの決め演出の見せ方を変える）
+    std::string executionBombName_; ///< とどめの演出で爆発させる、ボスにめり込んだ爆弾の名前（爆弾の型でなければ空）
     ClearFinish clearFinish_; ///< クリアの決め演出（Resources/Config/clear_finish.json）
 
     ResultBackdrop resultBackdrop_; ///< クリアの結果画面の背景（ランクの色の帯・透かし・漂う破片）

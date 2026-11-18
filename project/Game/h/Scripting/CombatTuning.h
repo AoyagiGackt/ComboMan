@@ -76,6 +76,13 @@ struct CombatTuningData {
     float justDodgeDamageMult = 1.3f; ///< 強化窓中のダメージ倍率
     float airborneHitStyleBonus = 0.03f; ///< 空中で近接ヒットを当てた時の追加スタイル加点
     float duplicateWeaponAwakenBonus = 0.15f; ///< 所持済み武器タイプを再度奪った時に覚醒ゲージへ転用する量
+    // 武器の合体（枠が満杯の時に奪った武器を今の武器に合体させる。強いが、耐久が尽きると武器ごと砕ける）
+    int fusionDurability = 30; ///< 合体の耐久（近接・固有技を当てるたびに1減る）
+    float fusionDamageMult = 1.5f; ///< 合体している武器の近接・固有技のダメージ倍率
+    // ボスの枠の武器（入れ替わらず砕けない代わりに、当て続けると効きが早く落ちる）
+    float bossWeaponDamageMult = 1.3f; ///< ボスの枠の武器の近接・固有技のダメージ倍率（合体していない時）
+    float bossFusionDamageMult = 1.9f; ///< ボスの武器どうしを合体した時の近接・固有技のダメージ倍率
+    float bossWeaponFatigueMult = 2.5f; ///< ボスの枠の武器で当てた時にたまる効きの落ち（ほかの武器の何倍か）
     float styleRankAwakenGaugeBonus = 0.1f; ///< スタイルランク1段ごとに攻撃・ジャスト回避の覚醒ゲージ量へ足す倍率（D=1.0倍、SSS=1.6倍）
     // 武器の疲労（同じ武器で当て続けるとダメージが落ち、他の武器や銃で当てている間に回復する）
     float weaponFatiguePerHit = 0.1f; ///< 近接で当てるたびにその武器へたまる疲労（0〜1）

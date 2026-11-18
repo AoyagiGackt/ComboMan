@@ -4,4 +4,6 @@ struct VertexShaderOutput
     float2 texcoord : TEXCOORD0;
     float3 normal : TEXCOORD3;
     float4 color : COLOR0;
+    float2 maskcoord : TEXCOORD1; // 丸く切り抜くための、コマ送り前の UV
+    float4 params : TEXCOORD2; // x=焼け具合 y=熱さ z=1なら丸く切り抜かない
 };

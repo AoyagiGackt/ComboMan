@@ -120,7 +120,7 @@
       "type": "row",
       "kind": "prop",
       "axis": "x",
-      "count": 52,
+      "count": 53,
       "step": 1,
       "model": "Resources/block/block.obj",
       "texture": "Resources/block/block.png",
@@ -220,7 +220,7 @@
         1,
         0.95
       ],
-      "text": "探索区画  灰色の壁は奪ったハンマー(スロット切替 {Slot})の攻撃で壊せる"
+      "text": "探索区画  橙に光る壁はどの武器でも壊せる  壊すと敵を巻き込んで吹き飛ぶ"
     },
     {
       "name": "gate_wall",
@@ -244,7 +244,6 @@
       "breakableRadius": 0,
       "breakablePlayerDamage": 0,
       "breakableEnemyDamage": 0,
-      "breakableWeapon": "Hammer",
       "breakableColor": [
         0.7,
         0.7,

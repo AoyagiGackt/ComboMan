@@ -60,6 +60,11 @@ constexpr KeyName kKeyNames[] = {
     { "C", DIK_C, L"C" },
     { "P", DIK_P, L"P" },
     { "U", DIK_U, L"U" },
+    { "V", DIK_V, L"V" },
+    { "Period", DIK_PERIOD, L"." },
+    { "Slash", DIK_SLASH, L"/" },
+    { "RShift", DIK_RSHIFT, L"右Shift" },
+    { "RCtrl", DIK_RCONTROL, L"右Ctrl" },
     { "Left", DIK_LEFT, L"←" },
     { "Right", DIK_RIGHT, L"→" },
     { "Up", DIK_UP, L"↑" },
@@ -133,6 +138,7 @@ constexpr FixedPrompt kFixedPrompts[] = {
     { L"Slot1", L"十字↑", L"1" }, // 武器の枠1つずつ（十字キーは上・右・下の順）
     { L"Slot2", L"十字→", L"2" },
     { L"Slot3", L"十字↓", L"3" },
+    { L"Slot4", L"十字←", L"4" },
     { L"Confirm", L"A", L"Enter" },
     { L"Back", L"B", L"Backspace" },
 };
@@ -347,10 +353,10 @@ bool Input::PushAction(Action action) const {
         return actionOverridePressed_[idx];
     }
     const ActionBinding& binding = actionBindings_[idx];
-    const bool keyboard = (binding.primaryKey && key_[binding.primaryKey])
-        || (binding.secondaryKey && key_[binding.secondaryKey]);
-    return keyboard || (binding.gamepadButton && (state_.Gamepad.wButtons & binding.gamepadButton))
-        || StickHeld(action, state_, deadzone_);
+    const bool keyboard = primaryKeyboardEnabled_
+        && ((binding.primaryKey && key_[binding.primaryKey]) || (binding.secondaryKey && key_[binding.secondaryKey]));
+    return keyboard || (primaryGamepadEnabled_ && ((binding.gamepadButton && (state_.Gamepad.wButtons & binding.gamepadButton))
+        || StickHeld(action, state_, deadzone_)));
 }
 
 /** @brief 指定アクションが押された瞬間かを返す */
@@ -360,13 +366,14 @@ bool Input::TriggerAction(Action action) const {
         return actionOverridePressed_[idx] && !actionOverridePressedPrev_[idx];
     }
     const ActionBinding& binding = actionBindings_[idx];
-    const bool keyboard = (binding.primaryKey && key_[binding.primaryKey] && !keyPre_[binding.primaryKey])
-        || (binding.secondaryKey && key_[binding.secondaryKey] && !keyPre_[binding.secondaryKey]);
+    const bool keyboard = primaryKeyboardEnabled_
+        && ((binding.primaryKey && key_[binding.primaryKey] && !keyPre_[binding.primaryKey])
+            || (binding.secondaryKey && key_[binding.secondaryKey] && !keyPre_[binding.secondaryKey]));
     const bool gamepad = binding.gamepadButton
         && (state_.Gamepad.wButtons & binding.gamepadButton)
         && !(previousState_.Gamepad.wButtons & binding.gamepadButton);
     const bool stick = StickHeld(action, state_, deadzone_) && !StickHeld(action, previousState_, deadzone_);
-    return keyboard || gamepad || stick;
+    return keyboard || (primaryGamepadEnabled_ && (gamepad || stick));
 }
 
 /** @brief 指定アクションの押下状態を実機入力の代わりに強制する（タイトルデモ等の自動操作用） */
@@ -496,36 +503,36 @@ bool Input::TriggerStick(int axisX, int axisY) const {
 /** @brief メニューの上入力がこのフレームで押されたかを返す */
 bool Input::TriggerMenuUp() const {
     return (key_[DIK_W] && !keyPre_[DIK_W]) || (key_[DIK_UP] && !keyPre_[DIK_UP])
-        || TriggerButton(XINPUT_GAMEPAD_DPAD_UP) || TriggerStick(0, 1);
+        || PadTriggered(0, XINPUT_GAMEPAD_DPAD_UP) || TriggerStick(0, 1);
 }
 
 /** @brief メニューの下入力がこのフレームで押されたかを返す */
 bool Input::TriggerMenuDown() const {
     return (key_[DIK_S] && !keyPre_[DIK_S]) || (key_[DIK_DOWN] && !keyPre_[DIK_DOWN])
-        || TriggerButton(XINPUT_GAMEPAD_DPAD_DOWN) || TriggerStick(0, -1);
+        || PadTriggered(0, XINPUT_GAMEPAD_DPAD_DOWN) || TriggerStick(0, -1);
 }
 
 /** @brief メニューの左入力がこのフレームで押されたかを返す */
 bool Input::TriggerMenuLeft() const {
     return (key_[DIK_A] && !keyPre_[DIK_A]) || (key_[DIK_LEFT] && !keyPre_[DIK_LEFT])
-        || TriggerButton(XINPUT_GAMEPAD_DPAD_LEFT) || TriggerStick(-1, 0);
+        || PadTriggered(0, XINPUT_GAMEPAD_DPAD_LEFT) || TriggerStick(-1, 0);
 }
 
 /** @brief メニューの右入力がこのフレームで押されたかを返す */
 bool Input::TriggerMenuRight() const {
     return (key_[DIK_D] && !keyPre_[DIK_D]) || (key_[DIK_RIGHT] && !keyPre_[DIK_RIGHT])
-        || TriggerButton(XINPUT_GAMEPAD_DPAD_RIGHT) || TriggerStick(1, 0);
+        || PadTriggered(0, XINPUT_GAMEPAD_DPAD_RIGHT) || TriggerStick(1, 0);
 }
 
 /** @brief 決定（Space/Enter/Aボタン） */
 bool Input::TriggerMenuConfirm() const {
     return (key_[DIK_SPACE] && !keyPre_[DIK_SPACE]) || (key_[DIK_RETURN] && !keyPre_[DIK_RETURN])
-        || TriggerButton(XINPUT_GAMEPAD_A);
+        || PadTriggered(0, XINPUT_GAMEPAD_A);
 }
 
 /** @brief 戻る（Backspace/Bボタン。Escはアプリ終了なので含めない） */
 bool Input::TriggerMenuCancel() const {
-    return (key_[DIK_BACK] && !keyPre_[DIK_BACK]) || TriggerButton(XINPUT_GAMEPAD_B);
+    return (key_[DIK_BACK] && !keyPre_[DIK_BACK]) || PadTriggered(0, XINPUT_GAMEPAD_B);
 }
 
 /** @brief 演出を飛ばす（決定・攻撃・ジャンプのどれか） */
@@ -624,7 +631,20 @@ bool Input::TriggerKey(BYTE keyNumber) {
  */
 void Input::UpdateGamepad() {
     previousState_ = state_; // 前回の状態を保存
+    secondPadPreviousState_ = secondPadState_;
     gamepadConnectedPrevious_ = gamepadConnected_;
+
+    // ２台目の切断時は入力を残さない
+    secondPadConnected_ = XInputGetState(1, &secondPadState_) == ERROR_SUCCESS;
+    if (!secondPadConnected_) {
+        ZeroMemory(&secondPadState_, sizeof(XINPUT_STATE));
+    }
+    if (secondPadState_.Gamepad.bLeftTrigger > XINPUT_GAMEPAD_TRIGGER_THRESHOLD) {
+        secondPadState_.Gamepad.wButtons |= kGamepadLeftTrigger;
+    }
+    if (secondPadState_.Gamepad.bRightTrigger > XINPUT_GAMEPAD_TRIGGER_THRESHOLD) {
+        secondPadState_.Gamepad.wButtons |= kGamepadRightTrigger;
+    }
 
     // 0番目のコントローラーを取得
     DWORD result = XInputGetState(0, &state_);
@@ -654,8 +674,36 @@ void Input::UpdateGamepad() {
  * @brief スティックの正規化（遊びを考慮して 0.0 ~ 1.0 に変換）
  */
 Input::Stick Input::GetLeftStick() const {
-    float x = (float)state_.Gamepad.sThumbLX / kStickMax;
-    float y = (float)state_.Gamepad.sThumbLY / kStickMax;
+    return primaryGamepadEnabled_ ? PadLeftStick(0) : Stick { 0.0f, 0.0f };
+}
+
+/** @brief 指定したパッドのボタンが押されているかを返す */
+bool Input::PadPushed(int pad, WORD button) const {
+    return pad == 0 ? (state_.Gamepad.wButtons & button) != 0
+        : pad == 1 && (secondPadState_.Gamepad.wButtons & button) != 0;
+}
+
+/** @brief 指定したパッドのボタンが押された瞬間かを返す */
+bool Input::PadTriggered(int pad, WORD button) const {
+    if (pad == 0) {
+        return PadPushed(pad, button) && !(previousState_.Gamepad.wButtons & button);
+    }
+    return pad == 1 && PadPushed(pad, button) && !(secondPadPreviousState_.Gamepad.wButtons & button);
+}
+
+/** @brief 指定したパッドの接続状態を返す */
+bool Input::IsPadConnected(int pad) const {
+    return pad == 0 ? gamepadConnected_ : pad == 1 && secondPadConnected_;
+}
+
+/** @brief 指定したパッドの左スティックを返す */
+Input::Stick Input::PadLeftStick(int pad) const {
+    if (pad != 0 && pad != 1) {
+        return { 0.0f, 0.0f };
+    }
+    const XINPUT_STATE& state = pad == 0 ? state_ : secondPadState_;
+    float x = (float)state.Gamepad.sThumbLX / kStickMax;
+    float y = (float)state.Gamepad.sThumbLY / kStickMax;
 
     // デッドゾーンの処理
     if (std::abs(x) < deadzone_) {

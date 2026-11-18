@@ -77,6 +77,15 @@ void ImGuiManager::End() {
 #endif
 }
 
+/** @brief 描かずにImGuiのフレームを閉じる（次の Begin の前に呼ぶ） */
+void ImGuiManager::EndFrameWithoutRender() {
+#ifdef USE_IMGUI
+
+    ImGui::EndFrame();
+
+#endif
+}
+
 /** @brief ImGuiの実際の描画コマンドを積む */
 void ImGuiManager::Draw(DirectXCommon* dxCommon) {
 #ifdef USE_IMGUI

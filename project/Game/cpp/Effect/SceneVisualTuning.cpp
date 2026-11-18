@@ -152,6 +152,7 @@ const PlayerVisualSettings& SceneVisualTuning::Player() {
             { nullptr, "awakenPulseBase", &PlayerVisualSettings::awakenPulseBase },
             { nullptr, "awakenRed", &PlayerVisualSettings::awakenRed },
             { nullptr, "awakenGreen", &PlayerVisualSettings::awakenGreen },
+            { nullptr, "showGunModel", &PlayerVisualSettings::showGunModel },
         };
         auto settings = ReadSettings("playerVisuals", kFields);
 
@@ -253,6 +254,16 @@ const LevelVisualSettings& SceneVisualTuning::Level() {
             { nullptr, "healerBurstCount", &LevelVisualSettings::healerBurstCount },
             { nullptr, "healerBurstLifetime", &LevelVisualSettings::healerBurstLifetime },
             { nullptr, "healerBurstSize", &LevelVisualSettings::healerBurstSize },
+            { nullptr, "healBeamColor", &LevelVisualSettings::healBeamColor },
+            { nullptr, "healBeamCount", &LevelVisualSettings::healBeamCount },
+            { nullptr, "healBeamLifetime", &LevelVisualSettings::healBeamLifetime },
+            { nullptr, "healBeamSize", &LevelVisualSettings::healBeamSize },
+            { nullptr, "healRiseColor", &LevelVisualSettings::healRiseColor },
+            { nullptr, "healRiseCount", &LevelVisualSettings::healRiseCount },
+            { nullptr, "healRiseWidth", &LevelVisualSettings::healRiseWidth },
+            { nullptr, "healRiseSpeed", &LevelVisualSettings::healRiseSpeed },
+            { nullptr, "healRiseLifetime", &LevelVisualSettings::healRiseLifetime },
+            { nullptr, "healRiseSize", &LevelVisualSettings::healRiseSize },
             { nullptr, "pickupPulseSpeed", &LevelVisualSettings::pickupPulseSpeed },
             { nullptr, "pickupPulseAmplitude", &LevelVisualSettings::pickupPulseAmplitude },
             { nullptr, "pickupSpinSpeed", &LevelVisualSettings::pickupSpinSpeed },

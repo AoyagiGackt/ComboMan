@@ -23,6 +23,10 @@ struct ContinueData {
     int32_t pendingWeaponIndex = -1;
     /** @brief 選択中の射撃武器番号 */
     int32_t rangedWeaponIndex = 0;
+    /** @brief ボス専用の武器番号 */
+    int32_t bossWeaponIndex = -1;
+    /** @brief ボス専用の武器に合体した相棒の番号 */
+    int32_t bossPartnerIndex = -1;
     bool valid = false; ///< コンティニューデータが存在するか
 
     int32_t hp = 0; ///< 保存時点のHP

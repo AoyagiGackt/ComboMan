@@ -10,8 +10,11 @@
 #include "JsonHelper.h"
 #include "Logger.h"
 #include "ParticleManager.h"
+#include "StringUtility.h"
 #include <algorithm>
+#include <cmath>
 #include <memory>
+#include <numbers>
 #include <unordered_map>
 #include <vector>
 using namespace engine::graphics;
@@ -403,6 +406,134 @@ public:
     }
 };
 
+/** @brief JSONの "motion" の名前から粒の動き方を引く（無い名前は初速のまま進む） */
+ParticleMotion MotionFromName(const std::string& name) {
+    static const std::unordered_map<std::string, ParticleMotion> kMotions = {
+        { "linear", ParticleMotion::kLinear },
+        { "spiral", ParticleMotion::kSpiral },
+        { "flicker", ParticleMotion::kFlicker },
+        { "gravity", ParticleMotion::kGravity },
+        { "shrink", ParticleMotion::kShrinkFade },
+        { "flame", ParticleMotion::kFlame },
+        { "ember", ParticleMotion::kEmber },
+        { "mist", ParticleMotion::kMist },
+        { "crackle", ParticleMotion::kCrackle },
+    };
+    const auto it = kMotions.find(name);
+    if (it == kMotions.end()) {
+        Logger::LogWarning("ElementEffect: 粒の動き方 '" + name + "' は未対応です。linear で出します");
+        return ParticleMotion::kLinear;
+    }
+    return it->second;
+}
+
+/**
+ * @brief 動き方を選んでばらまく粒の設定
+ * @note 出す位置 = 中心（alongBlade なら刃の根元〜先端のどこか） + 半径 spread の中のどこか
+ *       速度 = 全方向へ speedMin〜speedMax + 上へ riseMin〜riseMax + 横へ ±driftX + 向き * facingSpeed
+ */
+struct BurstParams {
+    std::string motion = "linear";
+    float spread = 0.0f;
+    float spreadZ = 0.0f;
+    float speedMin = 0.0f;
+    float speedMax = 0.0f;
+    float riseMin = 0.0f;
+    float riseMax = 0.0f;
+    float driftX = 0.0f;
+    float facingSpeed = 0.0f;
+    float sizeJitter = 0.0f; ///< 大きさのばらつき（0〜1、大きさに対する割合）
+    float lifetimeJitter = 0.0f; ///< 寿命のばらつき（0〜1、寿命に対する割合）
+    bool scaleSpeed = false; ///< 速さと広がりにも拡大率を掛けるか
+    bool scaleCount = false; ///< 数にも拡大率を掛けるか
+    bool randomRotate = false; ///< 粒の向きをばらばらにするか
+    bool alongBlade = false; ///< 刃の根元〜先端に沿って出すか（刃が取れない時は中心から）
+};
+constexpr JsonField<BurstParams> kBurstFields[] = {
+    { nullptr, "motion", &BurstParams::motion },
+    { nullptr, "spread", &BurstParams::spread },
+    { nullptr, "spreadZ", &BurstParams::spreadZ },
+    { nullptr, "speedMin", &BurstParams::speedMin },
+    { nullptr, "speedMax", &BurstParams::speedMax },
+    { nullptr, "riseMin", &BurstParams::riseMin },
+    { nullptr, "riseMax", &BurstParams::riseMax },
+    { nullptr, "driftX", &BurstParams::driftX },
+    { nullptr, "facingSpeed", &BurstParams::facingSpeed },
+    { nullptr, "sizeJitter", &BurstParams::sizeJitter },
+    { nullptr, "lifetimeJitter", &BurstParams::lifetimeJitter },
+    { nullptr, "scaleSpeed", &BurstParams::scaleSpeed },
+    { nullptr, "scaleCount", &BurstParams::scaleCount },
+    { nullptr, "randomRotate", &BurstParams::randomRotate },
+    { nullptr, "alongBlade", &BurstParams::alongBlade },
+};
+
+/** @brief 動き方を選んでばらまく粒（炎・火の粉・もや・放電・渦など） */
+class BurstLayer final : public ParamLayer<BurstParams> {
+public:
+    /** @brief JSONからばらまき層の設定を読み込み、動き方の名前を引いておく */
+    explicit BurstLayer(const nlohmann::json& json)
+        : ParamLayer(json, kBurstFields) {
+        if (!json.contains("riseMax")) {
+            params_.riseMax = params_.riseMin;
+        }
+        if (!json.contains("speedMax")) {
+            params_.speedMax = params_.speedMin;
+        }
+        motion_ = MotionFromName(params_.motion);
+    }
+
+    /** @brief 中心（または刃に沿った位置）から、選んだ動き方で粒をばらまく */
+    void Emit(const ElementEffectContext& ctx, const Vector3& pos, const Vector4& weaponColor, float scale) const override {
+        if (!Chance(ctx.rng, base_.chance)) {
+            return;
+        }
+        constexpr float kTwoPi = 2.0f * std::numbers::pi_v<float>;
+        constexpr float kRoundHalf = 0.5f; // 数を四捨五入する
+        const float reach = params_.scaleSpeed ? scale : 1.0f;
+        const int count = params_.scaleCount
+            ? static_cast<int>(static_cast<float>(base_.count) * scale + kRoundHalf)
+            : base_.count;
+        const bool useBlade = params_.alongBlade && ctx.hasBlade;
+        for (int i = 0; i < count; ++i) {
+            const Vector3 origin = useBlade ? Lerp(ctx.bladeBase, ctx.bladeTip, RandomRange(ctx.rng, 0.0f, 1.0f)) : pos;
+            const Vector3 at = {
+                origin.x + RandomUnit(ctx.rng) * params_.spread * reach,
+                origin.y + RandomUnit(ctx.rng) * params_.spread * reach,
+                origin.z + RandomUnit(ctx.rng) * params_.spreadZ * reach,
+            };
+            const float angle = RandomRange(ctx.rng, 0.0f, kTwoPi);
+            const float speed = RandomRange(ctx.rng, params_.speedMin, params_.speedMax) * reach;
+            const Vector3 velocity = {
+                std::cos(angle) * speed + RandomUnit(ctx.rng) * params_.driftX + ctx.facingX * params_.facingSpeed * reach,
+                std::sin(angle) * speed + RandomRange(ctx.rng, params_.riseMin, params_.riseMax) * reach,
+                0.0f,
+            };
+            const float size = base_.Size(scale) * (1.0f + RandomUnit(ctx.rng) * params_.sizeJitter);
+            const float lifetime = base_.lifetime * (1.0f + RandomUnit(ctx.rng) * params_.lifetimeJitter);
+            const float rotate = params_.randomRotate ? RandomRange(ctx.rng, 0.0f, kTwoPi) : 0.0f;
+            ctx.particles.EmitMotion(base_.particle, at, velocity, color_.Pick(weaponColor, i, ctx.rng),
+                lifetime, size, motion_, rotate);
+        }
+    }
+
+private:
+    /** @brief a から b へ t の割合だけ進んだ位置 */
+    static Vector3 Lerp(const Vector3& a, const Vector3& b, float t) {
+        return { a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, a.z + (b.z - a.z) * t };
+    }
+
+    ParticleMotion motion_ = ParticleMotion::kLinear;
+};
+
+/** @brief 敵に残る状態の設定のJSONの項目 */
+constexpr JsonField<ElementStatusDef> kStatusFields[] = {
+    { nullptr, "duration", &ElementStatusDef::duration },
+    { nullptr, "tickInterval", &ElementStatusDef::tickInterval },
+    { nullptr, "tickDamage", &ElementStatusDef::tickDamage },
+    { nullptr, "speedScale", &ElementStatusDef::speedScale },
+    { nullptr, "emitInterval", &ElementStatusDef::emitInterval },
+};
+
 using LayerFactory = std::unique_ptr<IElementLayer> (*)(const nlohmann::json&);
 
 /** @brief JSONの設定から層を1つ作る */
@@ -421,6 +552,7 @@ const std::unordered_map<std::string, LayerFactory>& LayerFactories() {
         { "ellipse", &CreateLayer<EllipseLayer> },
         { "mote", &CreateLayer<MoteLayer> },
         { "pull", &CreateLayer<PullLayer> },
+        { "burst", &CreateLayer<BurstLayer> },
     };
     return kFactories;
 }
@@ -432,23 +564,58 @@ public:
     LayeredElementEffect(const std::string& element, const nlohmann::json& json) {
         ReadLayers(element, json.value("hit", nlohmann::json::array()), hitLayers_);
         ReadLayers(element, json.value("aura", nlohmann::json::array()), auraLayers_);
+        ReadLayers(element, json.value("idle", nlohmann::json::array()), idleLayers_);
+        ReadLayers(element, json.value("acquire", nlohmann::json::array()), acquireLayers_);
+        const nlohmann::json status = json.value("status", nlohmann::json::object());
+        ReadJsonFields(status, kStatusFields, status_);
+        ReadLayers(element, status.value("layers", nlohmann::json::array()), statusLayers_);
+        displayName_ = StringUtility::ConvertString(json.value("displayName", std::string()));
     }
 
     /** @brief 命中時の層をすべて出す */
     void EmitHit(const ElementEffectContext& ctx, const Vector3& pos, const Vector4& color, float scale) const override {
-        for (const auto& layer : hitLayers_) {
-            layer->Emit(ctx, pos, color, scale);
-        }
+        EmitLayers(hitLayers_, ctx, pos, color, scale);
     }
 
     /** @brief 武器にまとわせるオーラの層をすべて出す */
     void EmitAura(const ElementEffectContext& ctx, const Vector3& pos, const Vector4& color) const override {
-        for (const auto& layer : auraLayers_) {
-            layer->Emit(ctx, pos, color, 1.0f);
-        }
+        EmitLayers(auraLayers_, ctx, pos, color, 1.0f);
+    }
+
+    /** @brief 構えているだけの間の層をすべて出す */
+    void EmitIdle(const ElementEffectContext& ctx, const Vector3& pos, const Vector4& color) const override {
+        EmitLayers(idleLayers_, ctx, pos, color, 1.0f);
+    }
+
+    /** @brief 状態が残っている敵の体から出す層をすべて出す */
+    void EmitStatus(const ElementEffectContext& ctx, const Vector3& pos, const Vector4& color) const override {
+        EmitLayers(statusLayers_, ctx, pos, color, 1.0f);
+    }
+
+    /** @brief 武器を手に入れた瞬間の層をすべて出す */
+    void EmitAcquire(const ElementEffectContext& ctx, const Vector3& pos, const Vector4& color) const override {
+        EmitLayers(acquireLayers_, ctx, pos, color, 1.0f);
+    }
+
+    /** @brief 敵に残る状態の設定を返す */
+    const ElementStatusDef& Status() const override {
+        return status_;
+    }
+
+    /** @brief 武器名の前に付ける属性の呼び名を返す */
+    const std::wstring& DisplayName() const override {
+        return displayName_;
     }
 
 private:
+    /** @brief 層の並びを上から順にすべて出す */
+    static void EmitLayers(const std::vector<std::unique_ptr<IElementLayer>>& layers, const ElementEffectContext& ctx,
+        const Vector3& pos, const Vector4& color, float scale) {
+        for (const auto& layer : layers) {
+            layer->Emit(ctx, pos, color, scale);
+        }
+    }
+
     /** @brief JSONの層の一覧を読み、種類ごとの層を生成して追加する */
     static void ReadLayers(const std::string& element, const nlohmann::json& list,
         std::vector<std::unique_ptr<IElementLayer>>& out) {
@@ -466,6 +633,11 @@ private:
 
     std::vector<std::unique_ptr<IElementLayer>> hitLayers_;
     std::vector<std::unique_ptr<IElementLayer>> auraLayers_;
+    std::vector<std::unique_ptr<IElementLayer>> idleLayers_;
+    std::vector<std::unique_ptr<IElementLayer>> statusLayers_;
+    std::vector<std::unique_ptr<IElementLayer>> acquireLayers_;
+    ElementStatusDef status_;
+    std::wstring displayName_;
 };
 
 /** @brief 属性名からエフェクトを引く表を element_effects.json から作る */

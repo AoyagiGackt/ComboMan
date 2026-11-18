@@ -347,14 +347,7 @@ public:
             RecordUndo(editor);
         }
         capture(ImGui::ColorEdit4("表示色", &desc.breakableColor.x));
-        editorUI::HelpMarker("壊すとGameFlagsに broken_<名前> が立ちます");
-        constexpr const char* kBreakWeapons[] = { "何でも", "Sword", "Spear", "Hammer", "Dagger", "Ball", "Greatsword", "Scythe", "Axe" };
-        std::string breakWeapon;
-        if (ComboWithEmptyFirst("壊せる武器", desc.breakableWeapon, kBreakWeapons, breakWeapon)) {
-            RecordUndo(editor);
-            desc.breakableWeapon = breakWeapon;
-        }
-        editorUI::HelpMarker("武器を指定すると、その武器の近接攻撃でしか壊れません。当たり判定ONと爆風半径0にすると壊せる壁になります");
+        editorUI::HelpMarker("壊すとGameFlagsに broken_<名前> が立ちます。当たり判定ONと爆風半径0にすると壊せる壁になり、どの武器でも壊せて、壊すと敵を巻き込みながら吹き飛びます");
     }
     /** @brief 実行中の壊せる物の状態をインスペクターに出す */
     void DrawRuntimeStatus(const StageEditor& editor, int index) const override {

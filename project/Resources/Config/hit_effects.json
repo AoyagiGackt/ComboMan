@@ -1,6 +1,8 @@
 {
   "_comment": "ヒット・破壊・被弾などの演出レシピ。impacts=ヒットストップとカメラ揺れ rings=放射状のリング（speedは呼び出し側が半径を渡す時は倍率） sparks=左右へ飛び散る火花 slashes=斬線 flashes=画面フラッシュ stars=きらめき particles=1粒 trails=武器の残像 colors=色。色は[R,G,B,A]。コード側が色を差し替える演出では、レシピの色の不透明度が倍率になる 武器ごとの演出: weapons.json の hitStyle（sword/spear/hammer/dagger）ごとに、slashes.combo_step_<hitStyle>（無ければ combo_step）、近接が当たった時の weapon_hit_<hitStyle>、締めの weapon_finisher_<hitStyle>（rings/sparks/stars/impacts/flashes のうち書いてあるものだけ出す）。explosion=爆発の揺れと閃光 explosion_core=中心光 explosion_fire=炎の輪と火の粉 explosion_smoke=遅く残る煙の輪 explosion_debris=暗い破片 rubble=崩落の手応え rubble_debris=壁の破片 rubble_dust=崩落の足元の土煙 gate_dust=扉の足元の土煙 gate_open=扉の開き始めの揺れ bomb_kick=爆弾を吹き飛ばした瞬間の手応え bomb_kick_trail=飛んでいる爆弾の火の粉 boss_roar=ボスが第2段階へ入った咆哮 boss_charge_warning=突進の身構え boss_charge_trail=突進の土煙 boss_dash_warning=ダッシュの身構え boss_dash_trail=ダッシュの残り火",
   "impacts": {
+    "rampage_start": { "hitStopFrames": 3, "shakeAmount": 0.16, "shakeSeconds": 0.14 },
+    "rampage_finish": { "hitStopFrames": 0, "shakeAmount": 0.3, "shakeSeconds": 0.2 },
     "boss_roar": { "hitStopFrames": 6, "shakeAmount": 0.38, "shakeSeconds": 0.6 },
     "bomb_kick": { "hitStopFrames": 4, "shakeAmount": 0.1, "shakeSeconds": 0.1 },
     "explosion": { "hitStopFrames": 10, "shakeAmount": 0.42, "shakeSeconds": 0.28 },
@@ -188,6 +190,8 @@
     }
   },
   "rings": {
+    "rampage_start": { "particle": "awaken_aura", "speed": 6, "color": [0.5, 0.9, 1, 1], "count": 28, "lifetime": 0.45, "size": 0.45 },
+    "rampage_launch": { "particle": "hit_ring", "speed": 4, "color": [1, 1, 1, 1], "count": 20, "lifetime": 0.3, "size": 0.3 },
     "boss_roar": { "particle": "hit_ring", "speed": 8, "color": [1, 0.25, 0.2, 1], "count": 40, "lifetime": 0.8, "size": 0.45 },
     "boss_charge_warning": { "particle": "hit_ring", "speed": 2, "color": [1, 0.45, 0.2, 0.8], "count": 16, "lifetime": 0.25, "size": 0.22 },
     "boss_dash_warning": { "particle": "hit_ring", "speed": 1.5, "color": [0.6, 0.4, 1, 0.8], "count": 12, "lifetime": 0.2, "size": 0.2 },
@@ -851,6 +855,8 @@
     }
   },
   "sparks": {
+    "rampage_dash": { "particle": "land_dust", "speedXMin": 0.5, "speedXMax": 2, "riseMin": 0.3, "riseMax": 1.2, "count": 3, "color": [0.75, 0.92, 1, 0.7], "lifetime": 0.3, "size": 0.2 },
+    "rampage_launch": { "particle": "hit_spark", "speedXMin": 0, "speedXMax": 3, "riseMin": 3, "riseMax": 7, "count": 18, "color": [0.7, 0.95, 1, 1], "lifetime": 0.4, "size": 0.1 },
     "boss_charge_trail": { "particle": "land_dust", "speedXMin": 0.2, "speedXMax": 1.5, "riseMin": 0.5, "riseMax": 1.8, "count": 4, "color": [0.75, 0.68, 0.58, 0.7], "lifetime": 0.45, "size": 0.32 },
     "boss_dash_trail": { "particle": "hit_spark", "speedXMin": 0, "speedXMax": 0.6, "riseMin": 0.2, "riseMax": 0.9, "count": 3, "color": [0.6, 0.4, 1, 0.9], "lifetime": 0.3, "size": 0.18 },
     "bomb_kick_trail": { "particle": "hit_spark", "speedXMin": 0, "speedXMax": 0.8, "riseMin": 0.3, "riseMax": 1.2, "count": 2, "color": [1, 0.55, 0.15, 1], "altColor": [1, 0.9, 0.4, 1], "alternateColor": true, "lifetime": 0.3, "size": 0.14 },
@@ -1337,6 +1343,8 @@
     }
   },
   "flashes": {
+    "rampage_start": { "color": [0.5, 0.9, 1, 0.2], "seconds": 0.12 },
+    "rampage_finish": { "color": [1, 1, 1, 0.28], "seconds": 0.14 },
     "boss_roar": { "color": [1, 0.3, 0.25, 0.4], "seconds": 0.16 },
     "explosion": { "color": [1, 0.87, 0.65, 0.55], "seconds": 0.09 },
     "weapon_finisher_sword": {
@@ -1449,6 +1457,7 @@
     }
   },
   "stars": {
+    "rampage_slash": { "particle": "hit_spark", "color": [0.8, 0.95, 1, 1] },
     "weapon_hit_sword": {
       "particle": "hit_spark",
       "color": [
@@ -1636,8 +1645,10 @@
         1
       ],
       "lifetime": 0.12,
-      "size": 0.14
+      "size": 0.2
     },
+    "gun_tracer": { "particle": "gun_shot", "color": [1, 1, 1, 0.85], "lifetime": 0.12, "size": 0.16 },
+    "gun_muzzle_flash": { "particle": "hit_spark", "color": [1, 0.95, 0.7, 1], "lifetime": 0.06, "size": 0.55 },
     "skill_impact_core": {
       "particle": "hit_spark",
       "color": [
@@ -1779,6 +1790,8 @@
     "surfaceLerp": 0.3,
     "extraRingCountDivisor": 2,
     "chestHeight": 0.5,
+    "idleAuraMinRank": 4,
+    "idleAuraRankChance": 0.35,
     "comboSlashGrowthPerStep": 0.5625,
     "comboFinisherStep": 3,
     "burstColumns": 5,
@@ -1795,6 +1808,11 @@
     "fanSpeedBase": 7,
     "fanSpeedStep": 1,
     "halfRange": 0.5,
+    "tracerCount": 6,
+    "tracerSpeedStep": 0.07,
+    "tracerSizeStep": 0.12,
+    "tracerAlphaStep": 0.14,
+    "muzzleForward": 0.6,
     "sequenceSlashAngleStep": 1.1,
     "bladeCount": 12,
     "bladeRadius": 2.6,
@@ -2018,7 +2036,8 @@
     "awakenPulseAmplitude": 0.3,
     "awakenPulseBase": 0.7,
     "awakenRed": 0.15,
-    "awakenGreen": 0.55
+    "awakenGreen": 0.55,
+    "showGunModel": false
   },
   "gameplayVisuals": {
     "hpBarBackgroundColor": [
@@ -2135,7 +2154,7 @@
     ],
     "pulseRingCount": 24,
     "pulseRingLifetime": 0.65,
-    "pulseRingSize": 0.22,
+    "pulseRingSize": 0.3,
     "allyRingSpeed": 1.4,
     "allyRingColor": [
       0.25,
@@ -2145,7 +2164,7 @@
     ],
     "allyRingCount": 12,
     "allyRingLifetime": 0.55,
-    "allyRingSize": 0.16,
+    "allyRingSize": 0.24,
     "allyBurstColor": [
       0.55,
       1,
@@ -2154,7 +2173,7 @@
     ],
     "allyBurstCount": 8,
     "allyBurstLifetime": 0.7,
-    "allyBurstSize": 0.12,
+    "allyBurstSize": 0.2,
     "healerBurstColor": [
       0.4,
       1,
@@ -2163,7 +2182,17 @@
     ],
     "healerBurstCount": 14,
     "healerBurstLifetime": 1,
-    "healerBurstSize": 0.18,
+    "healerBurstSize": 0.26,
+    "healBeamColor": [0.45, 1, 0.6, 0.9],
+    "healBeamCount": 14,
+    "healBeamLifetime": 0.45,
+    "healBeamSize": 0.2,
+    "healRiseColor": [0.5, 1, 0.6, 1],
+    "healRiseCount": 7,
+    "healRiseWidth": 0.9,
+    "healRiseSpeed": 1.6,
+    "healRiseLifetime": 0.8,
+    "healRiseSize": 0.24,
     "pickupPulseSpeed": 5,
     "pickupPulseAmplitude": 0.15,
     "pickupSpinSpeed": 1.5,

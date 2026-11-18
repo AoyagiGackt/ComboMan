@@ -135,9 +135,24 @@ public:
 
     /** @brief 乱舞フェーズを強制終了する（外部から撃破時などに呼ぶ） */
     void EndRampage();
+    /**
+     * @brief 次の Update() で乱舞が向かう相手の位置を渡す（渡さなければ Update() の enemyPos を使う）
+     * @note 1回の Update() にだけ効く。毎フレーム Update() の前に呼ぶ
+     */
+    void SetRampageTarget(const Vector3& target) {
+        rampageTarget_ = target;
+        hasRampageTarget_ = true;
+    }
 
     /** @brief 武器奪取の刺突モーションを頭から再生する（外部トリガー用、既存の斬撃を流用） */
     void PlayStealStab();
+    /** @brief 持っている武器が砕けた時に、振っている途中のコンボと技を打ち切る */
+    void CancelAttacksForWeaponBreak();
+    /**
+     * @brief 床を抜けて落ちた時に、指定した所へ置き直す（落ちる速さ・前のフレームの位置・技の途中の動きも消す）
+     * @param position 置き直す位置
+     */
+    void PlaceAfterFallRescue(const Vector3& position);
 
     Player();
     ~Player();
@@ -364,7 +379,14 @@ public:
      * @param weapon         手に持たせて見せる武器（装備中の武器は変えない）
      */
     void PreviewMeleePose(const MeleeAttackDef* attack, float normalizedTime, WeaponType weapon);
-    /** @brief プレビューを終えて攻撃していない状態へ戻す */
+    /**
+     * @brief 射撃の段を指定時刻の姿勢で見せる（とどめの演出用）
+     * @param shot           見せる段（nullptrならプレビューを終える）
+     * @param normalizedTime 段の経過割合（0〜1）
+     * @note 弾・前後移動・入力は一切発生しない。土台のアニメは待機の構えで、通常どおり進む
+     */
+    void PreviewGunPose(const GunShotDef* shot, float normalizedTime);
+    /** @brief 近接と射撃のプレビューを終えて攻撃していない状態へ戻す */
     void EndMeleePreview();
     /** @brief 残像を除いて本体と持っている武器だけを描く（コマンド表の見本用） */
     void DrawBodyAndWeapons();
@@ -449,6 +471,14 @@ public:
         return rampage_->IsActive();
     }
     /** @brief このフレームに敵を打ち上げたかを返す */
+    /** @brief このフレームに覚醒乱舞を始めた（相手へ突進し始めた）か */
+    bool JustStartedRampage() const {
+        return HasFrameEvent(FrameEvent::kRampageStarted);
+    }
+    /** @brief 覚醒乱舞の、相手へ突進している途中か（打ち上げる前） */
+    bool IsRampageDashing() const {
+        return rampage_->IsActive() && !rampage_->IsJuggling();
+    }
     bool JustLaunched() const {
         return HasFrameEvent(FrameEvent::kLaunched);
     }
@@ -469,6 +499,10 @@ public:
     /** @brief このフレームに締めの斬撃（フィニッシャー）を出したかを返す */
     bool JustFinisherSlash() const {
         return HasFrameEvent(FrameEvent::kFinisherSlash);
+    }
+    /** @brief フィニッシャーを静止して溜めている最中か */
+    bool IsFinisherCharging() const {
+        return finisherCharging_;
     }
 
 private:
@@ -499,6 +533,7 @@ private:
     int visualPreset_ = -1; // -1=自動、0=Alien、1=Mech
     bool prevOnGround_ = true;
     float prevFrameX_ = 0.0f; ///< このフレームの移動前のX（壁にめり込んだ時に、入ってきた側へ押し戻すのに使う）
+    float prevFrameY_ = 0.0f; ///< このフレームの移動前のY（床の上面を上から越えたかを見る。速さから逆算すると空中攻撃で速さを弱めた分ずれる）
 
     bool inWater_ = false;
     bool prevInWater_ = false;
@@ -526,6 +561,7 @@ private:
         kRampageFinish,
         kFinisherSlash,
         kSwingStarted,
+        kRampageStarted,
         kCount
     };
     std::bitset<static_cast<size_t>(FrameEvent::kCount)> frameEvents_;
@@ -564,10 +600,10 @@ private:
 
     // 向き（最後に入力した横方向+1=右 -1=左）
     float lastDirX_ = 1.0f;
-    float visualYawOffset_ = 0.0f; ///< 見た目の向きだけに足す角度（SetVisualYawOffset）
-    bool strafeMoving_ = false; ///< 横へ回り込んでいて走りのアニメにするか（SetStrafeMoving）
-    bool gunHidden_ = false; ///< 銃を描かないか（SetGunHidden）
-    Vector3 heldGripOffset_ { }; ///< 近接武器の握りの回転に足す角度（SetHeldWeaponGripOffset）
+    float visualYawOffset_ = 0.0f; ///< 見た目の向きだけに足す角度
+    bool strafeMoving_ = false; ///< 横へ回り込んでいて走りのアニメにするか
+    bool gunHidden_ = false; ///< 銃を描かないか
+    Vector3 heldGripOffset_ { }; ///< 近接武器の握りの回転に足す角度
     /** @brief 見た目の縦軸回りの向き（左右の向きに SetVisualYawOffset の角度を足したもの） */
     float FacingYaw() const {
         return (lastDirX_ >= 0.0f ? gameConstants::kHalfPi : -gameConstants::kHalfPi) + visualYawOffset_;
@@ -596,6 +632,9 @@ private:
     /** @brief 持っている武器の構えを、技を振っていない間だけ重ねる（技の間は素早く薄める） */
     void SyncStanceLayer(bool attacking);
     const engine::graphics::Animation* previewAnim_ = nullptr; ///< プレビュー中に設定済みのベースアニメ（毎フレームのクリップ複製を避ける）
+    /** @brief プレビューで差し替えた攻撃の姿勢から、今の接地・構えに合った移動系のアニメへ入り直す */
+    void LeavePreviewAnimation();
+    bool gunPreviewActive_ = false; ///< 射撃の段をプレビューで見せているか
     bool previewWeaponActive_ = false; ///< プレビュー中に装備とは別の武器を持たせているか
     WeaponType previewWeapon_ { }; ///< プレビュー中に持たせている武器
     Vector3 previewOffset_ { }; ///< プレビュー中だけ見た目の位置に足すずれ
@@ -623,6 +662,9 @@ private:
     // 覚醒乱舞（Sword + 覚醒 + L）
     int juggleSlashCount_ = 0; // 今回の乱舞で何回切ったか
     int juggleAngleIdx_ = 0; // 次のスラッシュ角度インデックス
+    float rampageTimer_ = 0.0f; // 突進を始めてから、または最後に斬ってからの秒数（着かない・入力が止まった乱舞を打ち切る）
+    Vector3 rampageTarget_ = { }; // 乱舞が向かう相手の位置（SetRampageTarget() で渡された時だけ使う）
+    bool hasRampageTarget_ = false; // このフレームの乱舞の相手が渡されているか
 
     // リムライト（本体・手持ち武器で共通）
     static constexpr Vector3 kRimColor = { 0.4f, 0.9f, 1.0f };

@@ -13,6 +13,15 @@ class WeaponManager {
 public:
     /** @brief 同時に持てる近接武器の数（HUD・数字キー・交換画面もこの数に追従する） */
     static constexpr int kSlotCount = 3;
+    /** @brief ボスから奪った武器の専用の枠の番号（ふつうの枠の後ろ。選んでいる枠の番号としてだけ使う） */
+    static constexpr int kBossSlot = kSlotCount;
+
+    /** @brief ボスの武器を手に入れた結果 */
+    enum class BossAcquireResult {
+        kAdded, ///< ボスの枠が空いていたので入れた
+        kSame, ///< ボスの枠の武器か、その相棒と同じ種類だった（そのまま）
+        kNeedsMainChoice, ///< 別の種類だったので、合体の主軸をどちらにするか選ぶ
+    };
 
     /** @brief 武器入手をスロットへ反映した結果 */
     enum class AcquireResult {
@@ -84,8 +93,7 @@ public:
     }
     /** @brief 武器を装備しているかを返す */
     bool HasEquippedWeapon() const {
-        return selectedSlot_ >= 0 && selectedSlot_ < static_cast<int>(slots_.size())
-            && slots_[selectedSlot_] >= 0;
+        return GetSlotWeaponIndex(selectedSlot_) >= 0;
     }
     /**
      * @brief 武器を空きスロットへ追加し、満杯なら交換待ちにする
@@ -105,6 +113,76 @@ public:
     const WeaponData& GetPendingWeapon() const {
         return weapons_[pendingWeaponIndex_];
     }
+
+    /**
+     * @brief 道中で奪った武器を合体させるふつうの枠を選ぶ（選んでいる枠がふつうの枠ならそこ、ボスの枠なら合体していないふつうの枠）
+     * @return 合体させる枠（ふつうの枠が空なら -1）
+     */
+    int FindFusionSlot() const;
+    /**
+     * @brief 交換待ちの武器を、指定した枠の武器に合体させる（合体した武器は強いが、耐久が尽きると枠ごと砕ける）
+     * @param slot 合体させる枠
+     * @param durability 合体の耐久（当てるたびに1減る）
+     * @return 合体できたら true（枠が空なら合体せず、交換待ちはそのまま残す）
+     */
+    bool FusePendingInto(int slot, int durability);
+    /**
+     * @brief 指定した種類の武器を、指定した枠の武器に合体させる（もう持っている種類を奪った時に使う）
+     * @param slot 合体させる枠
+     * @param type 合体させる武器の種類
+     * @param durability 合体の耐久（当てるたびに1減る）
+     * @return 合体できたら true（枠が空・その種類の武器が無い時は false）
+     */
+    bool FuseInto(int slot, WeaponType type, int durability);
+    /**
+     * @brief ボスから奪った武器をボスの枠へ入れる（ボスの枠の武器は入れ替わらず、合体しても砕けない）
+     * @param type ボスから奪った武器の種類
+     * @return 入れたか・同じだったか・主軸を選ぶ必要があるか
+     */
+    BossAcquireResult AcquireBossWeapon(WeaponType type);
+    /** @brief ボスの枠に武器が入っているか */
+    bool HasBossWeapon() const {
+        return bossWeaponIndex_ >= 0;
+    }
+    /** @brief ボスの枠を選んでいるか */
+    bool IsBossSlotSelected() const {
+        return selectedSlot_ == kBossSlot && bossWeaponIndex_ >= 0;
+    }
+    /** @brief 合体の主軸を選ぶ待ちか（別の種類のボスの武器を手に入れた直後） */
+    bool HasPendingBossChoice() const {
+        return pendingBossIndex_ >= 0;
+    }
+    /** @brief 主軸を選ぶ待ちの、新しく手に入れたボスの武器 */
+    const WeaponData& GetPendingBossWeapon() const {
+        return weapons_[pendingBossIndex_];
+    }
+    /**
+     * @brief 合体の主軸を決める（選ばなかった方が相棒になり、前の相棒は外れる）
+     * @param keepCurrentMain true なら今の主軸のまま、false なら新しいボスの武器を主軸にする
+     */
+    void ChooseBossMain(bool keepCurrentMain);
+    /** @brief 主軸を選ぶ待ちの新しいボスの武器を手放す（合体を切っている時。今のボスの武器はそのまま） */
+    void DiscardPendingBossWeapon() {
+        pendingBossIndex_ = -1;
+    }
+    /** @brief すべての枠に武器が入っているか */
+    bool AreSlotsFull() const;
+    /** @brief 指定した枠の武器に合体している相棒の武器の番号を返す（合体していなければ -1） */
+    int GetFusedWeaponIndex(int slot) const;
+    /** @brief 指定した枠の合体の残り耐久の割合を返す（0〜1、合体していなければ 0） */
+    float GetFusionDurabilityRatio(int slot) const;
+    /** @brief 選んでいる枠の武器が合体しているか */
+    bool IsCurrentFused() const {
+        return GetFusedWeaponIndex(selectedSlot_) >= 0;
+    }
+    /** @brief 選んでいる枠の武器に合体している相棒の武器（合体していなければ nullptr） */
+    const WeaponData* GetCurrentFusionPartner() const;
+    /**
+     * @brief 選んでいる枠の合体の耐久を減らす。尽きたら枠の武器ごと砕き、ほかの枠の武器へ持ち替える
+     * @param amount 減らす量
+     * @return 砕けたら true
+     */
+    bool ConsumeFusionDurability(int amount);
 
     /**
      * @brief 指定タイプの武器を解放し、そのまま装備する（敵からの武器奪取用）
@@ -141,6 +219,13 @@ public:
      */
     void ResetForNewRun();
 
+    /** @brief 1枠ぶんの合体の状態（土台の武器が入れ替わったら無効として扱う） */
+    struct Fusion {
+        int baseIndex = -1; ///< 合体した時に枠に入っていた武器の番号
+        int partnerIndex = -1; ///< 合体させた相棒の武器の番号（-1 なら合体していない）
+        int durability = 0; ///< 残りの耐久
+        int maxDurability = 0; ///< 合体した時の耐久
+    };
     /** @brief 解放状況・装備状態の実行時スナップショット（タイトルデモ等、一時的にUnlockAll()する場面の退避・復元用） */
     struct Snapshot {
         std::vector<bool> unlocked;
@@ -149,6 +234,9 @@ public:
         int selectedSlot = -1;
         int pendingWeaponIndex = -1;
         int rangedIndex = 0;
+        std::array<Fusion, kSlotCount> fusions {}; ///< 枠ごとの合体（セーブには残さない）
+        int bossWeapon = -1; ///< ボスの枠の武器の番号（-1 なら空）
+        int bossPartner = -1; ///< ボスの枠に合体している相棒の番号（-1 なら合体していない）
     };
     /** @brief 現在の解放状況・装備状態を退避する */
     Snapshot SaveSnapshot() const;
@@ -163,6 +251,20 @@ private:
     std::vector<WeaponData> weapons_;
     std::vector<bool> unlocked_;
     std::array<int, kSlotCount> slots_ { -1, -1, -1 };
+    /** @brief 指定した枠の合体の状態が今も有効か（枠の武器が合体した時のままか） */
+    bool IsFusionValid(int slot) const;
+    /** @brief すべての枠の合体を解く */
+    void ClearFusions();
+    std::array<Fusion, kSlotCount> fusions_ {};
+    int bossWeaponIndex_ = -1; ///< ボスの枠の武器の番号（-1 なら空。ふつうの枠の武器とは別に持ち、unlocked_ には数えない）
+    int bossPartnerIndex_ = -1; ///< ボスの枠に合体している相棒の番号（-1 なら合体していない。耐久は無い）
+    int pendingBossIndex_ = -1; ///< 主軸を選ぶ待ちの新しいボスの武器の番号
+    /** @brief 指定した枠に武器が入っているか（ボスの枠も含む） */
+    bool IsSlotFilled(int slot) const {
+        return GetSlotWeaponIndex(slot) >= 0;
+    }
+    /** @brief 指定した枠の武器に相棒を合体させる（耐久を満タンにする） */
+    void SetFusion(int slot, int partnerIndex, int durability);
     std::vector<RangedWeaponData> rangedWeapons_;
     int index_ = 0;
     int selectedSlot_ = -1;

@@ -71,6 +71,11 @@ void GamePlayScene::UpdateStyleTechniqueParticles(float dt) {
     EmitWeaponSkillCastParticles(ppos);
     EmitAwakenParticles(ppos, dt);
     EmitStyleRankUpParticles(ppos);
+    // 乱舞で相手へ突進している間は、足元に覚醒色の土煙を残して走っていることを見せる
+    if (player_->IsRampageDashing()) {
+        const HitEffectPlayer fx(pm_, &cameraShaker_, &rng_);
+        fx.Sparks("rampage_dash", ppos);
+    }
 }
 
 /** @brief 敵に攻撃が当たった位置へ星・リング・火花を出す（どの攻撃が敵に入ったかを敵側で見せる） */
@@ -251,7 +256,6 @@ void GamePlayScene::EmitComboFinisherAccent(const Vector3& position) {
 
 /** @brief UpdateStyleTechniqueParticles()の下請け 銃発射時の弾煙パーティクルを発生させる */
 void GamePlayScene::EmitGunFireParticles(const Vector3& ppos) {
-    const auto& visuals = HitEffectLibrary::GetInstance()->SceneParticles();
     if (!player_->JustFired()) {
         return;
     }
@@ -260,20 +264,11 @@ void GamePlayScene::EmitGunFireParticles(const Vector3& ppos) {
     const GunShotDef* shot = player_->GetActiveGunShot();
     const RangedWeaponData& gun = wm->GetRanged();
     const float dir = player_->GetLastDirX();
-    const int bullets = (shot != nullptr) ? (std::max)(shot->bullets, visuals.minBullets) : visuals.fallbackBullets;
-    const float spread = (shot != nullptr) ? shot->spreadDeg * gameConstants::kDegToRad : visuals.fallbackSpread;
     const float rangeX = gun.range * ((shot != nullptr) ? shot->rangeMult : 1.0f);
-    // 弾は的（銃口に一番近い相手）で止まる。的が無ければ射程の端まで飛ぶ。寿命のうちに届く速さにする
+    // 弾は的（銃口に一番近い相手）で止まる。的が無ければ射程の端まで飛ぶ
     const float travel = gunShotPicker_.HasTarget() ? gunShotPicker_.GetHitDistance() : rangeX;
-    const float lifetime = HitEffectLibrary::GetInstance()->Particle("gun_shot").lifetime;
-    const float travelSpeed = lifetime > 0.0f ? travel / lifetime : 0.0f;
     const HitEffectPlayer fx(pm_, &cameraShaker_, &rng_);
-    for (int i = 0; i < bullets; ++i) {
-        const float t = (bullets > 1) ? (i / (bullets - 1.0f) - visuals.halfRange) : 0.0f;
-        const float speed = visuals.fanSpeedBase + i * visuals.fanSpeedStep;
-        fx.Particle("gun_shot", ppos,
-            { .color = ColorFromArray(gun.color), .velocity = Vector3 { dir * travelSpeed, speed * spread * t, 0.0f } });
-    }
+    sceneShared::EmitGunShotParticles(fx, ppos, { ppos.x + dir * travel, ppos.y, ppos.z }, shot, ColorFromArray(gun.color));
 }
 
 /** @brief UpdateStyleTechniqueParticles()の下請け 武器固有技（ダガー以外）発動時に技ごとの見た目を出す */
@@ -396,12 +391,32 @@ void GamePlayScene::EmitStyleRankUpParticles(const Vector3& ppos) {
 void GamePlayScene::UpdateWeaponTrail() {
     // 近接コンボのモーション中、装備武器の手元に色付きの残像を撒いて振りの軌跡を見せる
     const auto* wm = WeaponManager::GetInstance();
-    if (!wm->HasEquippedWeapon() || !player_->IsMeleeAttacking()) {
+    if (!wm->HasEquippedWeapon()) {
         return;
     }
     const WeaponData& weapon = wm->GetCurrent();
     const Vector4 color = ColorFromArray(weapon.effectColor);
     const Vector3 weaponPos = player_->GetActiveWeaponWorldPosition();
+    // 合体している間は、構えている時も振っている時も相棒の属性を武器にまとわせる
+    if (const WeaponData* partner = wm->GetCurrentFusionPartner()) {
+        const Vector4 partnerColor = ColorFromArray(partner->effectColor);
+        if (const IElementEffect* partnerEffect = IElementEffect::Find(partner->element)) {
+            partnerEffect->EmitIdle(ElementContext(), weaponPos, partnerColor);
+        }
+        if (player_->IsMeleeAttacking()) {
+            EmitWeaponElementAura(partner->element, partnerColor, weaponPos);
+        }
+    }
+    if (!player_->IsMeleeAttacking()) {
+        // 攻撃していない間は、覚醒中かスタイルランクが高い時だけ刃に属性をまとわせる（炎の剣なら刃が燃え続ける）
+        if (!ShouldEmitIdleAura()) {
+            return;
+        }
+        if (const IElementEffect* effect = IElementEffect::Find(weapon.element)) {
+            effect->EmitIdle(ElementContext(), weaponPos, color);
+        }
+        return;
+    }
     const HitEffectPlayer fx(pm_, &cameraShaker_, &rng_);
     fx.Trail("weapon_swing", weaponPos, color);
     EmitWeaponElementAura(weapon.element, color, weaponPos);
@@ -431,9 +446,11 @@ void GamePlayScene::EmitWeaponElementAura(const std::string& element, const Vect
     effect->EmitAura(ElementContext(), pos, color);
 }
 
-/** @brief 属性エフェクトに渡す粒子の発生先・乱数・プレイヤーの向きをまとめる */
+/** @brief 属性エフェクトに渡す粒子の発生先・乱数・プレイヤーの向き・刃の位置をまとめる */
 ElementEffectContext GamePlayScene::ElementContext() {
-    return { *pm_, rng_, player_->GetLastDirX() };
+    ElementEffectContext ctx { *pm_, rng_, player_->GetLastDirX() };
+    ctx.hasBlade = comboFeel_.GetBladeWorld(*player_, ctx.bladeBase, ctx.bladeTip);
+    return ctx;
 }
 
 /** @brief UpdateParticles()の下請け ボスの予告円→着弾ダメージのAoEスラム攻撃を処理する */

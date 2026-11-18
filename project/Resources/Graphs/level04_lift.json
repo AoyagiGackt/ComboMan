@@ -11,18 +11,8 @@
       "colorB": 1
     }
   },
-  "start": "n_msg",
+  "start": "n_loop",
   "nodes": {
-    "n_msg": {
-      "type": "ShowMessage",
-      "params": {
-        "text": "足場が動いている。上の宝物庫へ行けそうだ",
-        "seconds": 2
-      },
-      "next": "n_loop",
-      "editorX": 0,
-      "editorY": 0
-    },
     "n_loop": {
       "type": "Repeat",
       "params": {

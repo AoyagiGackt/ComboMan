@@ -102,6 +102,12 @@ public:
     };
     /** @brief 切断の破片に使う分身の見た目を返す（ラスボス戦の途中でなければ false） */
     bool GetSliceSource(SliceSource& out) const;
+    /**
+     * @brief 刀だけに差し替える前のボスの枠の主軸と相棒の番号を返す（差し替えていなければ今の持ち物）
+     * @param main 主軸の番号（無ければ -1）
+     * @param partner 相棒の番号（無ければ -1）
+     */
+    void GetSavedBossWeapons(int& main, int& partner) const;
     /** @brief 闘技場の空の回転（空はカメラの周りに置かれているので、闘技場の回転と同じだけ回す） */
     float GetSkyYaw() const {
         return arenaYaw_;

@@ -43,6 +43,8 @@ constexpr float kInfoDescLineHeight = 25.0f;
 constexpr float kInfoDescScale = 1.15f;
 constexpr Vector4 kInfoDescColor = { 1.0f, 1.0f, 1.0f, 1.0f };
 constexpr size_t kInfoDescMinWrapIndex = 10; // これより手前の全角スペースでは折り返さない
+constexpr float kTutorialLabelOffsetX = 60.0f; // チュートリアルの入口の名前を中央へ寄せる量
+constexpr float kTutorialLabelScale = 1.25f; // チュートリアルの入口の名前の大きさ
 } // namespace
 
 /** @brief 操作説明の後ろに暗い板を敷く（明るい背景でも読めるように） */
@@ -108,6 +110,16 @@ void MapScene::DrawStagePortalLabels(int floor) {
 
 /** @brief 選択中ノードの説明パネル（右側）を描画する */
 void MapScene::DrawSelectedNodeInfo(int curFloor, RunData::NodeType hoveredNode) {
+    if (curFloor >= static_cast<int>(floors_.size())) {
+        return;
+    }
+    // 戦闘に入るマスはステージの入口として、それ以外はマスの名前で見出しを出す
+    const NodeInfo& info = GetNodeInfo(hoveredNode);
+    DrawInfoPanel(info.entersCombat ? L"ステージ入口" : info.label, info.desc);
+}
+
+/** @brief 右側の説明パネルに見出しと説明を出す（説明は全角スペースで2行に折り返す） */
+void MapScene::DrawInfoPanel(const std::wstring& title, const std::wstring& desc) {
     // 説明パネルの下地を置いてから、見出しと説明文を重ねる
     UILayout& layout = UILayout::Get(kLayoutName);
     const Vector2 infoTitleOffset = layout.Vec2("info_title.offset", kInfoTitleOffset);
@@ -117,23 +129,20 @@ void MapScene::DrawSelectedNodeInfo(int curFloor, RunData::NodeType hoveredNode)
     const float infoDescLineHeight = layout.Float("info_desc.line_height", kInfoDescLineHeight);
     const float infoDescScale = layout.Float("info_desc.scale", kInfoDescScale);
     const Vector4 infoDescColor = layout.Color("info_desc.color", kInfoDescColor);
-    // 折り返した本文と見出しを測り、枠の左右に余白を確保する。
+    // 折り返した本文と見出しを測り、枠の左右に余白を確保する
     constexpr float kRightMargin = 16.0f;
     constexpr size_t kSeparatorLength = 1;
-    const NodeInfo& panelInfo = GetNodeInfo(hoveredNode);
-    const std::wstring panelTitle = panelInfo.entersCombat ? L"ステージ入口" : panelInfo.label;
-    const std::wstring panelDesc(panelInfo.desc);
-    const size_t panelBreak = panelDesc.find(L'　');
-    const bool panelWraps = panelBreak != std::wstring::npos && panelBreak > kInfoDescMinWrapIndex;
-    const std::wstring firstLine = panelWraps ? panelDesc.substr(0, panelBreak) : panelDesc;
-    const std::wstring secondLine = panelWraps ? panelDesc.substr(panelBreak + kSeparatorLength) : L"";
+    const size_t breakIndex = desc.find(L'　'); // 全角スペースで折り返しポイントを探す
+    const bool wraps = breakIndex != std::wstring::npos && breakIndex > kInfoDescMinWrapIndex;
+    const std::wstring firstLine = wraps ? desc.substr(0, breakIndex) : desc;
+    const std::wstring secondLine = wraps ? desc.substr(breakIndex + kSeparatorLength) : L"";
     const float descWidth = (std::max)(FontRenderer::MeasureStringW(firstLine, infoDescScale).x,
         FontRenderer::MeasureStringW(secondLine, infoDescScale).x);
     Vector2 panelSize = layout.Vec2("info_panel.size", kInfoPanelSize);
     panelSize.x = (std::max)(panelSize.x, (std::max)(
-        infoTitleOffset.x + FontRenderer::MeasureStringW(panelTitle, infoTitleScale).x + infoTitleOffset.x,
+        infoTitleOffset.x + FontRenderer::MeasureStringW(title, infoTitleScale).x + infoTitleOffset.x,
         infoDescOffset.x + descWidth + infoDescOffset.x));
-    // 枠全体を画面右端の余白より内側に配置する。
+    // 枠全体を画面右端の余白より内側に配置する
     Vector2 panelPosition = layout.Pos("info_panel.pos", kInfoPanelPosition);
     panelPosition.x = (std::min)(panelPosition.x, gameConstants::kScreenWidth - kRightMargin - panelSize.x);
     nodeSprite_->SetPosition(panelPosition);
@@ -141,28 +150,48 @@ void MapScene::DrawSelectedNodeInfo(int curFloor, RunData::NodeType hoveredNode)
     nodeSprite_->SetColor(layout.Color("info_panel.color", kInfoPanelColor));
     nodeSprite_->Update();
     nodeSprite_->Draw();
-    // ── 選択中ノードの説明（右側）──
-    if (curFloor >= static_cast<int>(floors_.size())) {
-        return;
-    }
-
-    // 戦闘に入るマスはステージの入口として、それ以外はマスの名前で見出しを出す
-    const NodeInfo& info = GetNodeInfo(hoveredNode);
-    const wchar_t* desc = info.desc;
-    fontRenderer_.DrawStringW(info.entersCombat ? L"ステージ入口" : info.label,
-        panelPosition.x + infoTitleOffset.x, panelPosition.y + infoTitleOffset.y, infoTitleScale, infoTitleColor);
+    fontRenderer_.DrawStringW(title, panelPosition.x + infoTitleOffset.x, panelPosition.y + infoTitleOffset.y, infoTitleScale, infoTitleColor);
     const float descX = panelPosition.x + infoDescOffset.x;
     const float descY = panelPosition.y + infoDescOffset.y;
-    // 説明を2行に折り返して表示
-    std::wstring descStr(desc);
-    size_t br = descStr.find(L'　'); // 全角スペースで折り返しポイントを探す
-    if (br != std::wstring::npos && br > kInfoDescMinWrapIndex) {
-        fontRenderer_.DrawStringW(descStr.substr(0, br).c_str(), descX, descY, infoDescScale, infoDescColor);
-        fontRenderer_.DrawStringW(descStr.substr(br + 1).c_str(), descX, descY + infoDescLineHeight,
-            infoDescScale, infoDescColor);
-    } else {
-        fontRenderer_.DrawStringW(desc, descX, descY, infoDescScale, infoDescColor);
+    fontRenderer_.DrawStringW(firstLine, descX, descY, infoDescScale, infoDescColor);
+    if (!secondLine.empty()) {
+        fontRenderer_.DrawStringW(secondLine, descX, descY + infoDescLineHeight, infoDescScale, infoDescColor);
     }
+}
+
+/** @brief チュートリアルの入口の上に名前と決定の案内、選んでいる時は説明を出す */
+void MapScene::DrawTutorialPortalLabel() {
+    if (!HasTutorialPortal()) {
+        return;
+    }
+    UILayout& layout = UILayout::Get(kLayoutName);
+    const float labelOffsetX = layout.Float("tutorial_label.offset_x", kTutorialLabelOffsetX);
+    const float labelY = layout.Float("portal_label.y", kLabelY);
+    const float labelScale = layout.Float("tutorial_label.scale", kTutorialLabelScale);
+    const Vector2 labelShadowOffset = layout.Vec2("portal_label.shadow_offset", kLabelShadowOffset);
+    const Vector4 labelShadowColor = layout.Color("portal_label.shadow_color", kLabelShadowColor);
+    const Vector4 labelColor = layout.Color("portal_label.color", kLabelColor);
+    const Vector4 labelNearColor = layout.Color("portal_label.near_color", kLabelNearColor);
+    const float screenX = (GameRules::GetInstance()->Get().tutorialPortalX - camera_->GetTranslate().x)
+            / gameConstants::kCameraHalfW * gameConstants::kScreenCenterX
+        + gameConstants::kScreenCenterX;
+    const std::wstring label = L"チュートリアル";
+    fontRenderer_.DrawStringW(label, screenX - labelOffsetX + labelShadowOffset.x, labelY + labelShadowOffset.y, labelScale, labelShadowColor);
+    fontRenderer_.DrawStringW(label, screenX - labelOffsetX, labelY, labelScale, tutorialSelected_ ? labelNearColor : labelColor);
+    if (!tutorialSelected_) {
+        return;
+    }
+    // 決定の案内はステージの入口と同じ位置に出し、やらなくても先へ進めることを説明に書く
+    const float enterHintOffsetX = layout.Float("enter_hint.offset_x", kEnterHintOffsetX);
+    const float enterHintY = layout.Float("enter_hint.y", kEnterHintY);
+    const float enterHintScale = layout.Float("enter_hint.scale", kEnterHintScale);
+    const Vector4 enterHintShadowColor = layout.Color("enter_hint.shadow_color", kEnterHintShadowColor);
+    const Vector4 enterHintColor = layout.Color("enter_hint.color", kEnterHintColor);
+    const char* enterHint = input_->IsUsingGamepad() ? "A" : "ENTER";
+    fontRenderer_.DrawString(enterHint, screenX - enterHintOffsetX + labelShadowOffset.x, enterHintY + labelShadowOffset.y,
+        enterHintScale, enterHintShadowColor);
+    fontRenderer_.DrawString(enterHint, screenX - enterHintOffsetX, enterHintY, enterHintScale, enterHintColor);
+    DrawInfoPanel(L"チュートリアル", L"操作と武器の合体を練習するステージ　やらなくてもステージ1へ進める");
 }
 
 } // namespace engine::game

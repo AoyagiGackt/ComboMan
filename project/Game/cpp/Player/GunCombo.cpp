@@ -267,6 +267,18 @@ void GunComboController::Reset() {
     moveDelta_ = 0.0f;
 }
 
+/** @brief 指定した段を指定時刻の姿勢にする（演出の見本用） */
+void GunComboController::SetPreviewPose(const GunShotDef* def, float normalizedTime) {
+    Reset();
+    if (def == nullptr) {
+        return;
+    }
+    // 見た目の計算（構えと反動・加算モーションの割合）は active_ と timer_ だけを読むので、それだけ合わせる
+    active_ = def;
+    timer_ = std::clamp(normalizedTime, 0.0f, 1.0f) * def->duration;
+    shotDone_ = true; // 見本の間に発砲扱いの処理が走らないようにする
+}
+
 /** @brief 発砲時刻を中央のキーへ写し、構えと反動のタイミングを同期する */
 float GunComboController::GetMotionProgress() const {
     if (active_ == nullptr) {

@@ -116,8 +116,8 @@ StageEditorGeneratedContent StageEditorContentFactory::CreateSlidingDoor(const V
     return result;
 }
 
-/** @brief 指定武器の近接攻撃でしか壊れない壁を生成する（solid、爆風なし） */
-StageEditorGeneratedContent StageEditorContentFactory::CreateBreakableWall(const Vector3& center, const std::string& weaponType, int& nextSerial) {
+/** @brief どの武器でも壊せる壁を生成する（solid、爆風なし。壊すと敵を巻き込みながら吹き飛ぶ） */
+StageEditorGeneratedContent StageEditorContentFactory::CreateBreakableWall(const Vector3& center, int& nextSerial) {
     constexpr float kWallHeight = 4.0f;
     constexpr int kWallHp = 3;
 
@@ -135,7 +135,6 @@ StageEditorGeneratedContent StageEditorContentFactory::CreateBreakableWall(const
     wall.breakableRadius = 0.0f;
     wall.breakablePlayerDamage = 0;
     wall.breakableEnemyDamage = 0;
-    wall.breakableWeapon = weaponType;
     wall.breakableColor = kBreakableWallColor;
     result.objects.push_back(std::move(wall));
     return result;

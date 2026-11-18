@@ -150,6 +150,8 @@ void EnemyEntity::SetArchetype(const std::string& archetype) {
 /** @brief モデルを生成し、ワールド座標を設定して初期化する */
 void EnemyEntity::Initialize(ModelCommon* modelCommon, const Vector3& startPos, WeaponType weaponType) {
     pos_ = startPos;
+    // 出てきたフレームに Update() を通らず壁の判定へ来ても、原点から動いてきたと見なさないよう、動く前の位置もここにそろえる
+    previousX_ = startPos.x;
     spawnX_ = startPos.x;
     spawnY_ = startPos.y;
     weaponType_ = weaponType;
@@ -175,8 +177,11 @@ void EnemyEntity::Initialize(ModelCommon* modelCommon, const Vector3& startPos, 
         kAnimatedKnightDirectory, kAnimatedKnightFile, "Run_swordRight");
     attackAnimation_ = LoadAnimationFile(
         kAnimatedKnightDirectory, kAnimatedKnightFile, "Run_swordAttack");
-    object_->SetAnimation(attackAnimation_);
-    animationState_ = VisualAnim::kAttack;
+    // ボスの技の動きが使うアニメも、ここで先に読んでおく
+    PreloadKnightAnimations();
+    // 最初は待機のアニメ（AI を止めた開始演出の間に、走るアニメのまま足踏みしないように）
+    object_->SetAnimation(idleAnimation_);
+    animationState_ = VisualAnim::kIdle;
     object_->SetEnableLighting(true);
     object_->SetScale({ kBodyScale, kBodyScale, kBodyScale });
     object_->SetPosition(VisualPosition());
@@ -217,6 +222,8 @@ void EnemyEntity::Initialize(ModelCommon* modelCommon, const Vector3& startPos, 
 
 /** @brief 物理・アニメーションを毎フレーム更新する */
 void EnemyEntity::Update(float playerX) {
+    // 吹き飛んで壁を突き抜けたかを ResolveBlownAway で調べるため、動く前の横位置を残す
+    previousX_ = pos_.x;
     // ヒットストップ中はプレイヤーと同じく世界ごと止める（止めないと吹き飛びだけが先に進んで手応えが薄れる）
     if (TimeManager::GetInstance()->IsHitStopped()) {
         UpdateDuringHitStop();
@@ -256,7 +263,7 @@ void EnemyEntity::Update(float playerX) {
         const bool playerAbove = hasTargetHeight_ && targetY_ - pos_.y > tuning.climbChaseHeight;
         const float stopDistance = playerAbove ? tuning.climbChaseStopDistance : tuning.engageRange;
         if (playerNearPost && withinLeash && std::abs(dx) > stopDistance) {
-            const float speed = tuning.approachSpeed * speedScale_;
+            const float speed = tuning.approachSpeed * speedScale_ * statusSpeedScale_;
             walkDirX_ = dx > 0.0f ? 1.0f : -1.0f;
             pos_.x += walkDirX_ * speed;
             walkedThisFrame = true;
@@ -303,7 +310,10 @@ void EnemyEntity::Update(float playerX) {
     const VisualAnim desiredAnimationState = !attackState_->IsIdle() ? VisualAnim::kAttack
         : walkedThisFrame                                                      ? VisualAnim::kRun
                                                                                : VisualAnim::kIdle;
-    if (!defeated_ && desiredAnimationState != animationState_) {
+    // ボスの技の動きが下のアニメを決めている間は切り替えない（外れた時は掛け直す）
+    const bool reapplyAnimation = desiredAnimationState != animationState_ || motionAnimOverride_;
+    if (!defeated_ && !MotionOwnsAnimation() && reapplyAnimation) {
+        motionAnimOverride_ = false;
         object_->SetAnimation(desiredAnimationState == VisualAnim::kAttack ? attackAnimation_
                 : desiredAnimationState == VisualAnim::kRun                ? runAnimation_
                                                                           : idleAnimation_);
@@ -363,6 +373,10 @@ void EnemyEntity::Update(float playerX) {
             tintedColor.w
         };
     }
+    // 回復された直後は緑に光らせる
+    if (!defeated_) {
+        flashColor = ApplyHealGlow(flashColor, true);
+    }
     // 決めた色と被弾時の膨らみを反映して行列を更新する
     SetBodyColor(flashColor);
     weaponObject_->SetColor(flashColor);
@@ -370,7 +384,10 @@ void EnemyEntity::Update(float playerX) {
     const float bodyScale = kBodyScale * (1.0f + kHitScalePunch * flash);
     object_->SetScale({ bodyScale, bodyScale, bodyScale });
 
+    // ボスの技の動きは体の行列を作る前に掛け、武器は体の行列ができてから手元へ付ける
+    ApplyMotionBody();
     object_->Update();
+    PlaceMotionWeapon();
     weaponObject_->Update();
     SyncMonsterVisual(true);
 }
@@ -507,12 +524,85 @@ void EnemyEntity::SetMonsterVisual(ModelCommon* modelCommon, const std::string& 
     SetColor(IsHealer() ? kHealerColor : kDefaultArchetypeColor);
     SyncMonsterVisual(false);
 }
+/** @brief 飛ぶ種類が上下の揺れや元の高さへ戻る動きで足場に入った時、浅い方（上か下）へ押し出す（横から入った分は壁からの押し出しに任せる） */
+void EnemyEntity::PushHoverOutOfBlocksVertically(const std::vector<engine::AABB>& solids) {
+    const EnemySeparationTuning& separation = EnemyTuning::GetInstance()->Separation();
+    const float halfWidth = WallBodyHalfWidth(separation.bodyHalfWidth);
+    // 飛ぶ種類は床に立たないので、歩く敵のように足元を少し空けず、足元から体として数える（足元が足場の上端より下に沈まないように）
+    constexpr float bandBottom = 0.0f;
+    const float bandTop = WallBodyHeight(separation.wallBandTop);
+    const float startY = pos_.y;
+    const float startX = pos_.x;
+    const engine::AABB* blockAbove = nullptr; // 元の高さへ戻るのを上から塞いでいる足場
+    for (const engine::AABB& block : solids) {
+        const float bodyBottom = pos_.y + bandBottom;
+        const float bodyTop = pos_.y + bandTop;
+        const bool overlaps = pos_.z >= block.min.z && pos_.z <= block.max.z && pos_.x + halfWidth > block.min.x
+            && pos_.x - halfWidth < block.max.x && bodyTop > block.min.y && bodyBottom < block.max.y;
+        if (!overlaps) {
+            continue;
+        }
+        const float verticalDepth = (std::min)(bodyTop, block.max.y) - (std::max)(bodyBottom, block.min.y);
+        const float horizontalDepth = (std::min)(pos_.x + halfWidth - block.min.x, block.max.x - (pos_.x - halfWidth));
+        if (verticalDepth >= horizontalDepth) {
+            continue;
+        }
+        // 体の真ん中が足場の真ん中より上なら上へ、下なら下へ出す
+        const float bodyCenter = (bodyBottom + bodyTop) * kHalfRatio;
+        const float blockCenter = (block.min.y + block.max.y) * kHalfRatio;
+        pos_.y = bodyCenter >= blockCenter ? block.max.y - bandBottom + kHoverBlockClearance : block.min.y - bandTop - kHoverBlockClearance;
+        if (bodyCenter < blockCenter && spawnY_ > block.max.y) {
+            blockAbove = &block;
+        }
+    }
+    // 足場の下へ入り込んで元の高さへ戻れない時は、つながった足場の近い方の端へ横にずれて、外へ出てから上がる
+    if (blockAbove != nullptr) {
+        SlideOutFromUnderBlock(*blockAbove, solids, halfWidth);
+    }
+    if (pos_.y != startY || pos_.x != startX) {
+        RefreshVisualTransforms();
+    }
+}
+
+/** @brief 飛ぶ種類が足場の下に入り込んだ時、横につながった足場の近い方の端へ少しずつずらす（真上が塞がれて元の高さへ戻れないため） */
+void EnemyEntity::SlideOutFromUnderBlock(const engine::AABB& block, const std::vector<engine::AABB>& solids, float halfWidth) {
+    // 同じ高さで横に接している足場をつなげ、足場全体の左右の端を求める
+    float left = block.min.x;
+    float right = block.max.x;
+    bool extended = true;
+    while (extended) {
+        extended = false;
+        for (const engine::AABB& other : solids) {
+            const bool sameBand = other.min.y < block.max.y && other.max.y > block.min.y;
+            if (!sameBand) {
+                continue;
+            }
+            if (other.min.x < left && other.max.x >= left - kHoverSlideJoinGap) {
+                left = other.min.x;
+                extended = true;
+            }
+            if (other.max.x > right && other.min.x <= right + kHoverSlideJoinGap) {
+                right = other.max.x;
+                extended = true;
+            }
+        }
+    }
+    // 近い方の端の外まで、体の幅ぶん出るように少しずつ動かす
+    const float toLeft = pos_.x - (left - halfWidth);
+    const float toRight = (right + halfWidth) - pos_.x;
+    const float step = EnemyTuning::GetInstance()->Basic().approachSpeed * kHoverSlideSpeedScale;
+    pos_.x += toLeft <= toRight ? -(std::min)(step, toLeft) : (std::min)(step, toRight);
+}
+
 /** @brief 地形に合わせて高さを変える（壁を登る・段差に乗る・足場から落ちる） */
 void EnemyEntity::UpdateTerrain(const std::vector<engine::AABB>& solids) {
-    // 打ち上げや倒れた後の落下は別の処理が動かし、飛ぶ種類は地形に関係なく浮く
+    // 打ち上げや倒れた後の落下は別の処理が動かし、飛ぶ種類は地形に関係なく浮く（上下から足場に入った分だけ押し出す）
     if (defeated_ || isLaunched_ || archetype_->Hovers() || IsScripted()) {
         climbing_ = false;
         fallVelY_ = 0.0f;
+        if (archetype_->Hovers() && !defeated_ && !isLaunched_ && !IsScripted()) {
+            PushHoverOutOfBlocksVertically(solids);
+        }
         return;
     }
     const BasicEnemyTuning& tuning = EnemyTuning::GetInstance()->Basic();
@@ -617,96 +707,5 @@ void EnemyEntity::FaceTowardX(float targetX) {
         weaponRotation.y = facingYaw;
         weaponObject_->SetRotation(weaponRotation);
     }
-}
-/** @brief 倒れた体を指定した高さまで重力で落とす（宙で倒れた敵が浮いたまま止まらないように） */
-void EnemyEntity::DropCorpseTo(float floorY) {
-    corpseFallStarted_ = true;
-    if (pos_.y <= floorY) {
-        return; // もう床の上にいる
-    }
-    // 打ち上げと同じ重力の処理で落とし、着地目標だけ床の高さへ差し替える（落ちた武器もここへ落ちる）
-    launchOriginY_ = floorY;
-    if (!isLaunched_) {
-        isLaunched_ = true;
-        velY_ = 0.0f;
-    }
-}
-/** @brief 上方向の初速を与えて打ち上げる */
-void EnemyEntity::Launch(float velY) {
-    // 台本で動かしている間は、位置を台本だけが決める
-    if (IsScripted()) {
-        return;
-    }
-    if (!isLaunched_) {
-        launchOriginY_ = pos_.y; // 最初の打ち上げ時点の高さを着地目標として記録する（空中コンボ中は上書きしない）
-    }
-    isLaunched_ = true;
-    velY_ = velY;
-    airComboTimer_ = EnemyTuning::GetInstance()->Basic().airComboHold;
-}
-/** @brief 近接コンボのヒットに対する吹き飛び・打ち上げを与える */
-void EnemyEntity::ApplyComboReaction(float knockDirX, float knockY,
-    bool switchPull, float playerX, bool finisher) {
-    if (defeated_ || IsScripted()) {
-        return;
-    }
-    if (switchPull) {
-        const float toPlayer = playerX - pos_.x;
-        knockVelX_ = std::clamp(toPlayer * kSwitchPullStrength, -kSwitchPullClamp, kSwitchPullClamp);
-        airComboTimer_ = EnemyTuning::GetInstance()->Basic().airComboHold + kSwitchPullAirComboBonus;
-    } else {
-        // 加算すると段を重ねるほど遠ざかって次の段が空振りするため、毎ヒット上書きして途中の段は前進距離より短く押すだけにする
-        knockVelX_ = knockDirX * (finisher ? kFinisherKnockDirXScale : kKnockDirXScale);
-    }
-    if (knockY > kLaunchThreshold) {
-        Launch(knockY);
-    }
-}
-/** @brief 被弾硬直を与える（硬直中は歩かず攻撃も進めず、のけぞった姿勢になる） */
-void EnemyEntity::ApplyHitstun(float seconds, bool interruptAttack) {
-    if (defeated_) {
-        return;
-    }
-    hitstunTimer_ = (std::max)(hitstunTimer_, seconds);
-    if (interruptAttack) {
-        ResetAttackState();
-        attackTimer_ = (std::max)(attackTimer_, kPostHitstunAttackDelay);
-    }
-}
-/** @brief 大技の締めで斜め上へ大きく打ち飛ばし、回転させながら飛ばす（撃破済みでも飛ばす） */
-void EnemyEntity::ApplyHomeRun(float dirX) {
-    // 撃破済みでも飛ばす（とどめの一撃で遠くまで打ち飛ばすのが見せ場なので、ApplyComboReactionの撃破ガードは通さない）
-    knockVelX_ = dirX * kHomeRunSpeedX;
-    Launch(kHomeRunLaunchY);
-    homeRunSpinTimer_ = kHomeRunSpinSeconds;
-    homeRunSpinAngle_ = 0.0f;
-    ResetAttackState();
-    DropWeapon();
-}
-/** @brief 持っている武器をその場に落とす（以後は本体から離れて地面に転がる） */
-void EnemyEntity::DropWeapon() {
-    // 膝をつくボスは武器を手放さない（倒れた後に地面へ突き立てて見せるため）
-    if (weaponDropped_ || kneelOnDefeat_) {
-        return;
-    }
-    weaponDropped_ = true;
-    droppedWeaponLanded_ = false;
-    droppedWeaponPos_ = { pos_.x + facingSign_ * kWeaponOffsetX, pos_.y + kWeaponOffsetY, pos_.z + kWeaponOffsetZ };
-    droppedWeaponVelY_ = kDroppedWeaponPopY;
-    droppedWeaponSpin_ = 0.0f;
-    // 打ち上げ中なら打ち上げ前の足元、地上ならいまの足元を地面とみなす
-    droppedWeaponGroundY_ = (isLaunched_ ? launchOriginY_ : pos_.y) + kDroppedWeaponRestHeight;
-}
-/** @brief 落とした武器を指定位置へ寄せる（武器回収の吸い込み演出用） */
-void EnemyEntity::PullDroppedWeaponToward(const Vector3& target, float rate) {
-    if (!weaponDropped_) {
-        return;
-    }
-    droppedWeaponLanded_ = true; // 吸い込み中は落下させない
-    weaponPulled_ = true; // 浮かべるのをやめ、吸い寄せる位置をそのまま使う
-    droppedWeaponPos_.x += (target.x - droppedWeaponPos_.x) * rate;
-    droppedWeaponPos_.y += (target.y - droppedWeaponPos_.y) * rate;
-    weaponObject_->SetPosition(droppedWeaponPos_);
-    weaponObject_->Update();
 }
 } // namespace engine::game

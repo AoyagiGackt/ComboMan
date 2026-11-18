@@ -104,6 +104,7 @@ struct PlayerVisualSettings {
     float awakenPulseBase = 0.7f;
     float awakenRed = 0.15f;
     float awakenGreen = 0.55f;
+    bool showGunModel = false; ///< 手に銃のモデルを持たせて描くか（描かない時は弾の光だけで射撃を見せる）
 };
 
 /** @brief 本編のヒットとフィニッシャー演出の調整値 */
@@ -185,6 +186,16 @@ struct LevelVisualSettings {
     int healerBurstCount = 14;
     float healerBurstLifetime = 1.0f;
     float healerBurstSize = 0.18f;
+    Vector4 healBeamColor = { 0.45f, 1.0f, 0.6f, 0.9f }; ///< 回復役から回復された敵へ走る光の筋の色
+    int healBeamCount = 14; ///< 光の筋に並べる粒の数
+    float healBeamLifetime = 0.45f; ///< 光の筋の粒が残る秒数
+    float healBeamSize = 0.2f; ///< 光の筋の粒の大きさ
+    Vector4 healRiseColor = { 0.5f, 1.0f, 0.6f, 1.0f }; ///< 回復された敵から立ちのぼる粒の色
+    int healRiseCount = 7; ///< 立ちのぼる粒の数
+    float healRiseWidth = 0.9f; ///< 立ちのぼる粒を横に並べる幅
+    float healRiseSpeed = 1.6f; ///< 立ちのぼる速さ（1秒あたり）
+    float healRiseLifetime = 0.8f; ///< 立ちのぼる粒が残る秒数
+    float healRiseSize = 0.24f; ///< 立ちのぼる粒の大きさ
     float pickupPulseSpeed = 5.0f; ///< 脈動の速さ
     float pickupPulseAmplitude = 0.15f; ///< 脈動によるスケールの揺れ幅
     float pickupSpinSpeed = 1.5f; ///< 回転の速さ（ラジアン毎秒）

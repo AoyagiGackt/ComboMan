@@ -1,0 +1,686 @@
+{
+  "_comment": "チュートリアル（マップの左端の入口から入る練習用のステージ。クリアしても進行度・スコア・セーブには数えず、戻ると持ち物と体力は入る前に戻る）。区画A(基本) → B(武器を奪う) → C(持ち替え) → D(合体) → E(ボス)。案内文は ui_text、区画の切り替えは triggers。生成は scratchpad の gen_tutorial.js",
+  "playerSpawn": [
+    4,
+    0.4,
+    0
+  ],
+  "enemySpawn": [
+    57,
+    0.4,
+    0
+  ],
+  "graphPath": "Resources/Graphs/level01_main.json",
+  "flagGraphs": [],
+  "checkpoints": [
+    {
+      "name": "cp_zone_b",
+      "position": [
+        14,
+        0.4,
+        0
+      ],
+      "activationRadius": 1.5
+    },
+    {
+      "name": "cp_zone_c",
+      "position": [
+        26,
+        0.4,
+        0
+      ],
+      "activationRadius": 1.5
+    },
+    {
+      "name": "cp_zone_d",
+      "position": [
+        38,
+        0.4,
+        0
+      ],
+      "activationRadius": 1.5
+    },
+    {
+      "name": "cp_zone_e",
+      "position": [
+        50,
+        0.4,
+        0
+      ],
+      "activationRadius": 1.5
+    }
+  ],
+  "triggers": [
+    {
+      "name": "t_zone_b",
+      "position": [
+        13.5,
+        0.4,
+        0
+      ],
+      "radius": 1.5,
+      "flag": "zone_b",
+      "value": true,
+      "once": true
+    },
+    {
+      "name": "t_zone_c",
+      "position": [
+        26,
+        0.4,
+        0
+      ],
+      "radius": 1.5,
+      "flag": "zone_c",
+      "value": true,
+      "once": true
+    },
+    {
+      "name": "t_zone_d",
+      "position": [
+        38,
+        0.4,
+        0
+      ],
+      "radius": 1.5,
+      "flag": "zone_d",
+      "value": true,
+      "once": true
+    },
+    {
+      "name": "t_zone_e",
+      "position": [
+        50,
+        0.4,
+        0
+      ],
+      "radius": 1.5,
+      "flag": "zone_e",
+      "value": true,
+      "once": true
+    }
+  ],
+  "objects": [
+    {
+      "name": "floor",
+      "type": "row",
+      "kind": "prop",
+      "axis": "x",
+      "count": 62,
+      "step": 1,
+      "model": "Resources/block/block.obj",
+      "texture": "Resources/block/block.png",
+      "position": [
+        2,
+        -0.98,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "lighting": false,
+      "solid": true
+    },
+    {
+      "name": "ceiling",
+      "type": "row",
+      "kind": "prop",
+      "axis": "x",
+      "count": 63,
+      "step": 1,
+      "model": "Resources/block/block.obj",
+      "texture": "Resources/block/block.png",
+      "position": [
+        2,
+        13,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "lighting": false,
+      "solid": true
+    },
+    {
+      "name": "wall_left",
+      "type": "row",
+      "kind": "prop",
+      "axis": "y",
+      "count": 13,
+      "step": 1,
+      "model": "Resources/block/block.obj",
+      "texture": "Resources/block/block.png",
+      "position": [
+        2,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "lighting": false,
+      "solid": true
+    },
+    {
+      "name": "wall_right",
+      "type": "row",
+      "kind": "prop",
+      "axis": "y",
+      "count": 14,
+      "step": 1,
+      "model": "Resources/block/block.obj",
+      "texture": "Resources/block/block.png",
+      "position": [
+        64,
+        -0.98,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "lighting": false,
+      "solid": true
+    },
+    {
+      "name": "bg_columns",
+      "type": "row",
+      "kind": "prop",
+      "axis": "x",
+      "count": 7,
+      "step": 8,
+      "model": "Resources/DowntownCityMegaKit[Standard]/Exports/glTF (Godot)/Brick_Column_Small.gltf",
+      "texture": "Resources/DowntownCityMegaKit[Standard]/Textures/T_RedBrick_BaseColor.png",
+      "position": [
+        9.5,
+        -0.1,
+        1.2
+      ],
+      "scale": [
+        1.5,
+        1.5,
+        1.5
+      ],
+      "lighting": true,
+      "solid": false
+    },
+    {
+      "name": "tutorial_note",
+      "type": "static",
+      "kind": "ui_text",
+      "position": [
+        24,
+        245,
+        0
+      ],
+      "textSpace": "screen",
+      "textScale": 1.1,
+      "textColor": [
+        1,
+        0.9,
+        0.35,
+        0.95
+      ],
+      "text": "練習用のステージです。やらなくてもステージ1へ進めます（{Pause} → ステージセレクトでマップへ）"
+    },
+    {
+      "name": "guide_a",
+      "type": "static",
+      "kind": "ui_text",
+      "position": [
+        24,
+        200,
+        0
+      ],
+      "textSpace": "screen",
+      "textScale": 1.3,
+      "textColor": [
+        0.85,
+        0.95,
+        1,
+        0.95
+      ],
+      "text": "1. 基本：{Move} 移動、{Jump} ジャンプ、{Attack} 攻撃（続けて押すとコンボ）。赤い箱は壊せる"
+    },
+    {
+      "name": "guide_b",
+      "type": "static",
+      "kind": "ui_text",
+      "position": [
+        24,
+        200,
+        0
+      ],
+      "textSpace": "screen",
+      "textScale": 1.3,
+      "textColor": [
+        0.85,
+        0.95,
+        1,
+        0.95
+      ],
+      "text": "2. 武器を奪う：{Down}+{Attack} で打ち上げ、{Dodge} で回避。倒した敵の武器は {Steal} で奪える",
+      "activationFlag": "zone_b"
+    },
+    {
+      "name": "guide_c",
+      "type": "static",
+      "kind": "ui_text",
+      "position": [
+        24,
+        200,
+        0
+      ],
+      "textSpace": "screen",
+      "textScale": 1.3,
+      "textColor": [
+        0.85,
+        0.95,
+        1,
+        0.95
+      ],
+      "text": "3. 持ち替え：{Slot1} {Slot2} {Slot3} で持ち替え。同じ武器ばかりだと効きが落ちる。{Skill} 固有技",
+      "activationFlag": "zone_c"
+    },
+    {
+      "name": "guide_d",
+      "type": "static",
+      "kind": "ui_text",
+      "position": [
+        24,
+        200,
+        0
+      ],
+      "textSpace": "screen",
+      "textScale": 1.3,
+      "textColor": [
+        0.85,
+        0.95,
+        1,
+        0.95
+      ],
+      "text": "4. 合体：枠が満杯で {Steal} すると今の武器に合体。強いが耐久が尽きると砕ける（ポーズで OFF 可）",
+      "activationFlag": "zone_d"
+    },
+    {
+      "name": "guide_e",
+      "type": "static",
+      "kind": "ui_text",
+      "position": [
+        24,
+        200,
+        0
+      ],
+      "textSpace": "screen",
+      "textScale": 1.3,
+      "textColor": [
+        0.85,
+        0.95,
+        1,
+        0.95
+      ],
+      "text": "5. ボス：{Awaken} で覚醒、ゲージが満タンなら {Finisher}。ボスを倒して武器を奪えばクリア",
+      "activationFlag": "zone_e"
+    },
+    {
+      "name": "a_slime",
+      "type": "static",
+      "kind": "enemy_basic",
+      "position": [
+        10,
+        -0.38,
+        0
+      ],
+      "spawnType": "basic",
+      "weaponType": "",
+      "enemyGroup": "zone_a",
+      "enemyModel": "Slime"
+    },
+    {
+      "name": "b_weapon",
+      "type": "static",
+      "kind": "enemy_basic",
+      "position": [
+        18,
+        -0.38,
+        0
+      ],
+      "spawnType": "basic",
+      "weaponType": "Spear",
+      "enemyGroup": "room_b"
+    },
+    {
+      "name": "b_slime",
+      "type": "static",
+      "kind": "enemy_basic",
+      "position": [
+        20.5,
+        -0.38,
+        0
+      ],
+      "spawnType": "basic",
+      "weaponType": "",
+      "enemyGroup": "room_b",
+      "enemyModel": "Slime"
+    },
+    {
+      "name": "c_weapon",
+      "type": "static",
+      "kind": "enemy_basic",
+      "position": [
+        30,
+        -0.38,
+        0
+      ],
+      "spawnType": "basic",
+      "weaponType": "Hammer",
+      "enemyGroup": "room_c"
+    },
+    {
+      "name": "c_slime",
+      "type": "static",
+      "kind": "enemy_basic",
+      "position": [
+        32.5,
+        -0.38,
+        0
+      ],
+      "spawnType": "basic",
+      "weaponType": "",
+      "enemyGroup": "room_c",
+      "enemyModel": "Slime"
+    },
+    {
+      "name": "d_weapon_1",
+      "type": "static",
+      "kind": "enemy_basic",
+      "position": [
+        41,
+        -0.38,
+        0
+      ],
+      "spawnType": "basic",
+      "weaponType": "Dagger",
+      "enemyGroup": "room_d"
+    },
+    {
+      "name": "d_weapon_2",
+      "type": "static",
+      "kind": "enemy_basic",
+      "position": [
+        44,
+        -0.38,
+        0
+      ],
+      "spawnType": "basic",
+      "weaponType": "Sword",
+      "enemyGroup": "room_d"
+    },
+    {
+      "name": "enemy_boss",
+      "type": "static",
+      "kind": "enemy_basic",
+      "position": [
+        57,
+        -0.38,
+        0
+      ],
+      "spawnType": "basic",
+      "weaponType": "Hammer",
+      "enemyGroup": "boss",
+      "isStageBoss": true
+    },
+    {
+      "name": "room_b_clear",
+      "type": "static",
+      "kind": "event_condition",
+      "position": [
+        20.5,
+        0,
+        0
+      ],
+      "conditionType": "enemy_group_defeated",
+      "enemyGroup": "room_b"
+    },
+    {
+      "name": "door_b",
+      "type": "static",
+      "kind": "gimmick",
+      "model": "Resources/block/gimmick/gimmick_door.obj",
+      "texture": "Resources/block/gimmick/gimmick_palette.png",
+      "position": [
+        24.5,
+        6,
+        0
+      ],
+      "scale": [
+        1,
+        13,
+        1
+      ],
+      "lighting": true,
+      "solid": true,
+      "activationFlag": "condition_room_b_clear",
+      "activeWhenFlag": false,
+      "activationDelay": 1.2,
+      "gimmickMotion": "custom",
+      "motionMode": "once",
+      "motionEase": "smooth",
+      "motionAxis": [
+        0,
+        1,
+        0
+      ],
+      "motionRotation": [
+        0,
+        0,
+        0
+      ],
+      "motionAmount": 13.5,
+      "motionSpeed": 1
+    },
+    {
+      "name": "room_c_clear",
+      "type": "static",
+      "kind": "event_condition",
+      "position": [
+        32.5,
+        0,
+        0
+      ],
+      "conditionType": "enemy_group_defeated",
+      "enemyGroup": "room_c"
+    },
+    {
+      "name": "door_c",
+      "type": "static",
+      "kind": "gimmick",
+      "model": "Resources/block/gimmick/gimmick_door.obj",
+      "texture": "Resources/block/gimmick/gimmick_palette.png",
+      "position": [
+        36.5,
+        6,
+        0
+      ],
+      "scale": [
+        1,
+        13,
+        1
+      ],
+      "lighting": true,
+      "solid": true,
+      "activationFlag": "condition_room_c_clear",
+      "activeWhenFlag": false,
+      "activationDelay": 1.2,
+      "gimmickMotion": "custom",
+      "motionMode": "once",
+      "motionEase": "smooth",
+      "motionAxis": [
+        0,
+        1,
+        0
+      ],
+      "motionRotation": [
+        0,
+        0,
+        0
+      ],
+      "motionAmount": 13.5,
+      "motionSpeed": 1
+    },
+    {
+      "name": "room_d_clear",
+      "type": "static",
+      "kind": "event_condition",
+      "position": [
+        44.5,
+        0,
+        0
+      ],
+      "conditionType": "enemy_group_defeated",
+      "enemyGroup": "room_d"
+    },
+    {
+      "name": "door_d",
+      "type": "static",
+      "kind": "gimmick",
+      "model": "Resources/block/gimmick/gimmick_door.obj",
+      "texture": "Resources/block/gimmick/gimmick_palette.png",
+      "position": [
+        48.5,
+        6,
+        0
+      ],
+      "scale": [
+        1,
+        13,
+        1
+      ],
+      "lighting": true,
+      "solid": true,
+      "activationFlag": "condition_room_d_clear",
+      "activeWhenFlag": false,
+      "activationDelay": 1.2,
+      "gimmickMotion": "custom",
+      "motionMode": "once",
+      "motionEase": "smooth",
+      "motionAxis": [
+        0,
+        1,
+        0
+      ],
+      "motionRotation": [
+        0,
+        0,
+        0
+      ],
+      "motionAmount": 13.5,
+      "motionSpeed": 1
+    },
+    {
+      "name": "boss_defeated",
+      "type": "static",
+      "kind": "event_condition",
+      "position": [
+        57,
+        0,
+        0
+      ],
+      "conditionType": "enemy_group_defeated",
+      "enemyGroup": "boss"
+    },
+    {
+      "name": "barrel_a",
+      "type": "static",
+      "kind": "breakable",
+      "model": "Resources/block/gimmick/gimmick_barrel.obj",
+      "texture": "Resources/block/gimmick/gimmick_palette.png",
+      "position": [
+        7.5,
+        -0.35,
+        0
+      ],
+      "scale": [
+        0.9,
+        0.9,
+        0.9
+      ],
+      "lighting": true,
+      "solid": false,
+      "breakableHp": 2,
+      "breakableRadius": 3,
+      "breakablePlayerDamage": 4,
+      "breakableEnemyDamage": 3
+    },
+    {
+      "name": "core_1",
+      "type": "static",
+      "kind": "pickup",
+      "model": "Resources/block/gimmick/gimmick_core.obj",
+      "texture": "Resources/block/gimmick/gimmick_palette.png",
+      "position": [
+        51,
+        1.2,
+        0
+      ],
+      "scale": [
+        0.35,
+        0.35,
+        0.35
+      ],
+      "lighting": false,
+      "solid": false,
+      "pickupRadius": 1,
+      "pickupGaugeAmount": 0.35
+    },
+    {
+      "name": "core_2",
+      "type": "static",
+      "kind": "pickup",
+      "model": "Resources/block/gimmick/gimmick_core.obj",
+      "texture": "Resources/block/gimmick/gimmick_palette.png",
+      "position": [
+        52.5,
+        1.2,
+        0
+      ],
+      "scale": [
+        0.35,
+        0.35,
+        0.35
+      ],
+      "lighting": false,
+      "solid": false,
+      "pickupRadius": 1,
+      "pickupGaugeAmount": 0.35
+    },
+    {
+      "name": "core_3",
+      "type": "static",
+      "kind": "pickup",
+      "model": "Resources/block/gimmick/gimmick_core.obj",
+      "texture": "Resources/block/gimmick/gimmick_palette.png",
+      "position": [
+        54,
+        1.2,
+        0
+      ],
+      "scale": [
+        0.35,
+        0.35,
+        0.35
+      ],
+      "lighting": false,
+      "solid": false,
+      "pickupRadius": 1,
+      "pickupGaugeAmount": 0.35
+    }
+  ]
+}

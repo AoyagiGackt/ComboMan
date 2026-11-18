@@ -60,6 +60,12 @@ public:
      * @param trial 練習の本体（非所有。シーンが持つ）
      */
     void EnableComboTrial(ComboTrial* trial);
+    /** @brief 武器の合体の ON/OFF の項目を出す（オートコンボの下。本編のポーズだけで使う） */
+    void EnableWeaponFusionOption();
+    /** @brief 操作説明のページの右に、2人目で遊ぶ時の説明を出す（本編のポーズだけで使う） */
+    void EnableTwoPlayerGuide() {
+        twoPlayerGuide_ = true;
+    }
 
     /** @brief ポーズ中かを返す */
     bool IsPaused() const {
@@ -107,6 +113,7 @@ private:
         kBgmVolume,
         kSeVolume,
         kAutoCombo,
+        kWeaponFusion,
         kControls,
         kCommandList,
         kComboTrial,
@@ -137,6 +144,8 @@ private:
     UIMenu trialMenu_; ///< コンボ練習の一覧（練習するコンボ名・練習をやめる・もどる）
     UIMenu confirmMenu_; ///< 退出の確認（いいえ・はい）
     ComboTrial* comboTrial_ = nullptr;
+    bool weaponFusionOption_ = false; ///< 武器の合体の ON/OFF の項目を出すか
+    bool twoPlayerGuide_ = false; ///< 操作説明のページに 2人目で遊ぶ時の説明を出すか
     CommandListView commandList_;
     std::unique_ptr<engine::graphics::Sprite> overlay_;
     FontRenderer* fontRenderer_ = nullptr;

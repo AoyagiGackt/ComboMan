@@ -43,6 +43,7 @@ void Player::ResetFrameFlags() {
     frameEvents_.reset();
     prevOnGround_ = onGround_;
     prevFrameX_ = pos_.x;
+    prevFrameY_ = pos_.y;
     prevInWater_ = inWater_;
 }
 
@@ -61,6 +62,10 @@ void Player::HandleStyleSwitch(Input* input) {
             wm->SelectSlot(slot);
             break;
         }
+    }
+    // ボスの枠は銃の切り替えと十字キー左を共有する
+    if (input->TriggerKey(DIK_4) || (!GameRules::GetInstance()->Get().gunSwitchEnabled && input->TriggerButton(XINPUT_GAMEPAD_DPAD_LEFT))) {
+        wm->SelectSlot(WeaponManager::kBossSlot);
     }
     if (wm->HasEquippedWeapon() && wm->GetSelectedSlot() != oldSlot) {
         meleeCombo_.Reset();
@@ -133,6 +138,8 @@ void Player::HandleMeleeCombat(Input* input, const Vector3& enemyPos) {
             rampage_ = &LaunchRampage();
             juggleSlashCount_ = 0;
             juggleAngleIdx_ = 0;
+            rampageTimer_ = 0.0f;
+            SetFrameEvent(FrameEvent::kRampageStarted);
         } else {
             const bool launcherInput = input->PushAction(Input::Action::kDown)
                 || autoCombo_.WantsLauncher(wm->GetCurrent().type, meleeCombo_, !onGround_);

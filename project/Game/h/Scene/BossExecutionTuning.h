@@ -44,8 +44,9 @@ struct ExecutionBeat {
     float moveSeconds = 0.0f; ///< 動くのにかける秒数（0 で一瞬で移る）
     float walkSpeed = 0.0f; ///< 0 より大きければ、この速さで歩いて動く（秒数は距離から決める）
     std::string face; ///< 向き（boss=ボスの方、away=ボスに背を向ける、空=そのまま）
-    std::string pose; ///< 取る技の姿勢（g0〜=地上の段、glast=地上の最後、a0〜=空中の段、alast=空中の最後、launch=打ち上げ）
-    float poseSeconds = 0.3f; ///< 技の姿勢を最後まで動かす秒数
+    std::string pose; ///< 取る技の姿勢（g0〜=地上の段、glast=地上の最後、a0〜=空中の段、alast=空中の最後、launch=打ち上げ、s0〜=射撃の段、slast=射撃の最後、none=構えを解く）
+    float poseSeconds = 0.3f; ///< 技の姿勢を最後まで動かす秒数（射撃の段は、撃たない拍なら構え切るまで、撃つ拍なら反動から構え直すまで）
+    bool shot = false; ///< 銃を撃つか（ボスの体の真ん中へ弾を飛ばし、射撃の姿勢を発砲の瞬間から動かす。pose が空なら今の射撃の段のまま撃つ）
     bool grab = false; ///< ボスが突き立てた武器を抜き取って手に持つか
     float slashAngle = 0.0f; ///< 斬撃線の角度（度。0 が水平、プレイヤーのいる側へ向けて反転する）
     float slashLength = 0.0f; ///< 斬撃線の半分の長さ（0 なら出さない）
@@ -56,16 +57,17 @@ struct ExecutionBeat {
     float shake = 0.0f; ///< 画面の揺れの強さ
     float shakeSeconds = 0.0f; ///< 画面の揺れの長さ
     std::string sparks; ///< ボスの体の真ん中に出す火花（hit_effects.json の sparks）
-    std::string ring; ///< ボスの体の真ん中に出す輪（rings）
-    std::string flash; ///< 画面の閃光（flashes）
-    std::string impact; ///< 揺れと止めの組（impacts）
+    std::string ring; ///< ボスの体の真ん中に出す輪。rings の項目の名前
+    std::string flash; ///< 画面の閃光。flashes の項目の名前
+    std::string impact; ///< 揺れと止めの組。impacts の項目の名前
     std::string playerSparks; ///< プレイヤーの位置に出す火花（一瞬で移る時は移る前と後の両方）
     std::string sound; ///< sounds.json の名前
-    std::string cue; ///< 決まった効果音（beat / release / glass / swing）
+    std::string cue; ///< 決まった効果音（beat / release / glass / swing / shot）
     float slowSeconds = 0.0f; ///< スローにする秒数
     float slowScale = 1.0f; ///< スローの速さの倍率
     float zoom = 0.0f; ///< カメラの寄り（0 より大きければこの値へ寄せる。1 が通常、小さいほど寄る）
     bool slice = false; ///< ボスを切り分けて崩す
+    bool bomb = false; ///< ボスにめり込んだ爆弾をここで爆発させる（爆弾のとどめの型で使う）
 };
 
 /** @brief とどめの型1つ（拍を順に進め、最後の拍から endHold 秒で終わる） */
@@ -86,10 +88,19 @@ struct BossExecutionTuning {
     std::string defaultStyle; ///< ステージに割り当てが無い時の型
     std::vector<ExecutionBeat> intro; ///< どの型でも最初に行う拍（歩み寄って武器を抜き取る）
     std::unordered_map<std::string, std::string> stages; ///< ステージのファイル名（拡張子なし）→ 型の名前
+    std::string gunDefaultStyle; ///< 銃で倒した時の、ステージに割り当てが無い時の型
+    std::vector<ExecutionBeat> gunIntro; ///< 銃で倒した時に最初に行う拍（歩み寄って見下ろす。武器は抜き取らない）
+    std::unordered_map<std::string, std::string> gunStages; ///< 銃で倒した時の、ステージのファイル名（拡張子なし）→ 型の名前
+    std::string bombStyle; ///< ボスに爆弾がめり込んだまま倒した時の隠しの型（空か見つからなければ使わない）
+    std::vector<ExecutionBeat> bombIntro; ///< 爆弾の型で最初に行う拍（武器は抜き取らずに歩み寄る）
     std::unordered_map<std::string, ExecutionStyle> styles; ///< 型の名前 → 型
 
     /** @brief ステージのレベルのパスに割り当てた型を返す（無ければ既定の型、それも無ければ nullptr） */
     const ExecutionStyle* FindStyle(const std::string& levelPath) const;
+    /** @brief 銃で倒した時の型を返す（ステージの割り当てが無ければ銃の既定の型、それも無ければ nullptr） */
+    const ExecutionStyle* FindGunStyle(const std::string& levelPath) const;
+    /** @brief ボスに爆弾がめり込んだまま倒した時の型を返す（無ければ nullptr） */
+    const ExecutionStyle* FindBombStyle() const;
 };
 
 /** @brief boss_execution.json の読み込み済みの値を持つ置き場 */

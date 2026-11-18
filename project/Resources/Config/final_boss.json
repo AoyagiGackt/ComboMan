@@ -2,7 +2,7 @@
   "_comment": "ラスボス戦（最後のステージをクリアした後に続く）の調整値。stage.level のレベルで戦う。秒・距離はシーンの座標と実時間。",
   "stage": {
     "level": "Resources/Levels/final_arena.json",
-    "bossName": "黒き刃の影",
+    "bossName": "ラスボス",
     "introLine": "",
     "rageLine": "まだだ……！",
     "stealLine": "落とした刀に近づいて J で奪え",

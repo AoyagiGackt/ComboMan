@@ -6,6 +6,7 @@
 #include "AssetPack.h"
 #include "Audio.h"
 #include "BossBattleDirector.h"
+#include "BossMotion.h"
 #include "ClearScene.h"
 #include "CombatTuning.h"
 #include "EnemyTuning.h"
@@ -96,6 +97,8 @@ void SetupConfigEditor() {
     editor->SetReloadCallback("final_boss.json", [] { game::FinalBossTuningStore::Reload(); });
     // ボスの名前と技の並びは、次に戦うボスを結び付けた時から使われる
     editor->SetReloadCallback("boss_battle.json", [] { game::BossBattleTuningStore::Reload(); });
+    // ボスの技ごとの動きは、読み直した次のフレームから使われる
+    editor->SetReloadCallback("boss_motion.json", [] { game::BossMotionLibrary::Reload(); });
     // 飛んでいる爆弾の見た目は最初に読み込んだモデルのまま（速さや当たりの大きさは読み直せる）
     editor->SetReloadCallback("bomb_kick.json", [] { game::BombKickTuningStore::Reload(); });
     // 締めの動作の数値と演出は読み直せる（打ち上げ技の有無はコンボの表を作る起動時だけ見る）
@@ -149,6 +152,9 @@ void MyGame::Initialize() {
     const bool realtime = std::wstring(GetCommandLineW()).find(kRealtimeFlag) != std::wstring::npos;
     if (smokeTest_.StartIfRequested(input_.get()) && !realtime) {
         dxCommon_->SetVSyncEnabled(false);
+        // 1秒60フレームで待つのもやめ、手順の表の speed の回数だけ1回の描画の間にゲームを進める
+        dxCommon_->SetFrameLimitEnabled(false);
+        fastSmokeTest_ = true;
     }
 
 #ifdef USE_IMGUI
@@ -156,8 +162,23 @@ void MyGame::Initialize() {
 #endif
 }
 
-/** @brief ゲーム固有の更新処理 */
+/** @brief ゲーム固有の更新処理（自動テストの速回しの時は、1回描くごとに何回か進める） */
 void MyGame::Update() {
+    const int updates = fastSmokeTest_ ? smokeTest_.GetUpdatesPerDraw() : 1;
+    for (int i = 0; i < updates; ++i) {
+        // 描かなかった回の ImGui のフレームは、次を始める前に閉じておく
+        if (i > 0) {
+            imguiManager_->EndFrameWithoutRender();
+        }
+        UpdateOnce();
+        if (endRequest_) {
+            return;
+        }
+    }
+}
+
+/** @brief ゲームを1回分進める */
+void MyGame::UpdateOnce() {
     // 基盤の更新
     Framework::Update();
 

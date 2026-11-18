@@ -66,7 +66,11 @@
     "rampageReachDistance": 1,
     "rampageLaunchSpeed": 0.25,
     "juggleRadius": 2.5,
-    "juggleMaxSlashes": 8
+    "juggleMaxSlashes": 8,
+    "rampageSearchRange": 8,
+    "rampageSearchHeight": 3,
+    "rampageLaunchMaxSeconds": 0.6,
+    "juggleIdleSeconds": 1
   },
   "skills": {
     "dashDuration": 0.1,

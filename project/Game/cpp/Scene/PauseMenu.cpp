@@ -11,6 +11,7 @@
 #include "Input.h"
 #include "SceneShared.h"
 #include "UILayout.h"
+#include <iterator>
 using namespace engine::graphics;
 
 namespace engine::game {
@@ -22,6 +23,7 @@ constexpr Vector2 kMenuItemSize = { 400.0f, 60.0f };
 constexpr Vector2 kBgmVolumeTextPosition = { 900.0f, 291.0f };
 constexpr Vector2 kSeVolumeTextPosition = { 900.0f, 351.0f };
 constexpr Vector2 kAutoComboTextPosition = { 900.0f, 411.0f };
+constexpr Vector2 kWeaponFusionTextPosition = { 900.0f, 471.0f }; // オートコンボの1行下
 constexpr float kValueTextScale = 1.5f;
 constexpr Vector4 kValueTextColor = { 1.0f, 1.0f, 1.0f, 1.0f };
 constexpr Vector2 kTitlePosition = { 560.0f, 130.0f };
@@ -39,6 +41,24 @@ constexpr const wchar_t* kConfirmExitTitle = L"本当に戻りますか？";
 constexpr const wchar_t* kControlsTitle = L"操作説明";
 constexpr const wchar_t* kControlsBackHint = L"[{Back}] もどる";
 constexpr Vector2 kControlsListPosition = { 470.0f, 230.0f }; // 操作の一覧の左上
+// 2人目で遊ぶ時の説明（操作の一覧の右）
+constexpr Vector2 kTwoPlayerGuidePosition = { 870.0f, 230.0f };
+constexpr float kTwoPlayerGuideScale = 0.85f;
+constexpr float kTwoPlayerGuideLineHeight = 24.0f;
+constexpr const wchar_t* kTwoPlayerGuideLines[] = {
+    L"-- 2人で遊ぶ --",
+    L"ボスの武器どうしを合体すると、",
+    L"V / BACK で味方のボスを呼べる",
+    L"参加: 2台目のパッドの L3+R3 同時押し",
+    L"  （1Pがキーボードなら1台目のパッドでも、",
+    L"   1Pがパッドならキーボードの右Shift+右Ctrl）",
+    L"パッド: スティック移動 A跳ぶ X攻撃 B回避",
+    L"キー: ←→移動 ↑跳ぶ .攻撃 /回避",
+    L"抜ける: もう一度同時押し",
+    L"しばらく操作しないと自動に戻る",
+    L"ラスボス戦では攻撃で援護に飛び込む",
+    L"覚醒・フィニッシャー・遠距離攻撃は無い",
+};
 constexpr float kControlsBackHintY = 640.0f;
 constexpr float kControlsBackHintScale = 1.2f;
 constexpr const char* kStopTrialLabel = "練習をやめる";
@@ -223,10 +243,24 @@ void PauseMenu::EnableComboTrial(ComboTrial* trial) {
     RebuildItems();
 }
 
-/** @brief 今の設定に合わせてメニューの項目を並べ直す（音量の値は行1〜3の横に出すので、その並びは変えない） */
+/** @brief 武器の合体の ON/OFF の項目を出す（オートコンボの下。本編のポーズだけで使う） */
+void PauseMenu::EnableWeaponFusionOption() {
+    weaponFusionOption_ = true;
+    RebuildItems();
+}
+
+/** @brief 今の設定に合わせてメニューの項目を並べ直す（音量の値は行1〜3、合体は行4の横に出すので、その並びは変えない） */
 void PauseMenu::RebuildItems() {
-    rows_ = { Row::kResume, Row::kBgmVolume, Row::kSeVolume, Row::kAutoCombo, Row::kControls, Row::kCommandList };
-    std::vector<UIButton> items = { { "ゲームに戻る" }, { "BGM音量" }, { "SE音量" }, { "オートコンボ" }, { "操作説明" }, { "コマンド表" } };
+    rows_ = { Row::kResume, Row::kBgmVolume, Row::kSeVolume, Row::kAutoCombo };
+    std::vector<UIButton> items = { { "ゲームに戻る" }, { "BGM音量" }, { "SE音量" }, { "オートコンボ" } };
+    if (weaponFusionOption_) {
+        rows_.push_back(Row::kWeaponFusion);
+        items.push_back({ "武器の合体" });
+    }
+    rows_.push_back(Row::kControls);
+    items.push_back({ "操作説明" });
+    rows_.push_back(Row::kCommandList);
+    items.push_back({ "コマンド表" });
     if (comboTrial_ != nullptr && !comboTrial_->Trials().empty()) {
         rows_.push_back(Row::kComboTrial);
         items.push_back({ "コンボ練習" });
@@ -278,6 +312,9 @@ void PauseMenu::UpdateMenu(Input* input) {
     const bool confirmed = menu_.ConsumeConfirm(input);
     if (row == Row::kAutoCombo && (confirmed || input->TriggerMenuLeft() || input->TriggerMenuRight())) {
         sceneShared::ToggleAutoCombo(audio_);
+    }
+    if (row == Row::kWeaponFusion && (confirmed || input->TriggerMenuLeft() || input->TriggerMenuRight())) {
+        sceneShared::ToggleWeaponFusion(audio_);
     }
     if (!confirmed) {
         return;
@@ -391,6 +428,16 @@ void PauseMenu::DrawControls() {
     // 一覧の表記は、最後に使った機器（キーボード/パッド）に合わせて変わる
     // 見出しはページの上に大きく出しているので、一覧の上には出さない
     sceneShared::DrawControlsHud(*fontRenderer_, layout.Pos("pause.controls_pos", kControlsListPosition), L": 調べる・入口に入る", L"");
+    // 2人目で遊ぶ時の説明は一覧の右に並べる
+    if (twoPlayerGuide_) {
+        const Vector2 position = layout.Pos("pause.two_player_pos", kTwoPlayerGuidePosition);
+        const float scale = layout.Float("pause.two_player_scale", kTwoPlayerGuideScale);
+        const float lineHeight = layout.Float("pause.two_player_line_height", kTwoPlayerGuideLineHeight);
+        for (size_t i = 0; i < std::size(kTwoPlayerGuideLines); ++i) {
+            fontRenderer_->DrawStringW(kTwoPlayerGuideLines[i], position.x, position.y + lineHeight * static_cast<float>(i), scale,
+                i == 0 ? titleColor : kValueTextColor);
+        }
+    }
     const Input* input = Input::GetCurrent();
     const std::wstring backHint = input != nullptr ? input->ExpandPrompts(kControlsBackHint) : std::wstring(kControlsBackHint);
     fontRenderer_->DrawStringCenteredW(backHint, layout.Float("pause.controls_back_y", kControlsBackHintY),
@@ -417,6 +464,10 @@ void PauseMenu::DrawMenu() {
         fontRenderer_->DrawStringW(L"< OFF >（練習中）", autoComboPosition.x, autoComboPosition.y, valueScale, valueColor);
     } else {
         fontRenderer_->DrawString(sceneShared::AutoComboLabel(), autoComboPosition.x, autoComboPosition.y, valueScale, valueColor);
+    }
+    if (weaponFusionOption_) {
+        const Vector2 fusionPosition = layout.Pos("pause.weapon_fusion_pos", kWeaponFusionTextPosition);
+        fontRenderer_->DrawString(sceneShared::WeaponFusionLabel(), fusionPosition.x, fusionPosition.y, valueScale, valueColor);
     }
 
     const Vector2 titlePosition = layout.Pos("pause.title_pos", kTitlePosition);

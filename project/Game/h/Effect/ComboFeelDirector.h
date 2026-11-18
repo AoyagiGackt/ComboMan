@@ -136,6 +136,12 @@ public:
         return blur_.IsActive();
     }
 
+    /**
+     * @brief 手に持っている武器の刃の根元と先端をワールド座標で返す
+     * @return 武器を手に持っていない（投げている・素手）なら false
+     */
+    bool GetBladeWorld(const Player& player, Vector3& outBase, Vector3& outTip) const;
+
     /** @brief F6でデバッグパネルを開閉し、開いていれば描く（Updateフェーズから呼ぶこと） */
     void UpdateDebugPanel(engine::Input* input);
 

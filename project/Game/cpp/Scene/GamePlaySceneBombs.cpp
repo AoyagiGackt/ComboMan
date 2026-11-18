@@ -8,6 +8,7 @@
 #include "HitEffectLibrary.h"
 #include "RunData.h"
 #include "StageEditor.h"
+#include <algorithm>
 #include <cmath>
 #include <string>
 
@@ -15,19 +16,25 @@ namespace engine::game {
 namespace {
 /** @brief 爆弾とプレイヤーの横のずれがこれ以下なら、飛ばす向きはプレイヤーの向きで決める */
 constexpr float kKickDirectionDeadZone = 0.05f;
+/** @brief 飛んでくる壁に当たったボスののけぞる秒数（ボスは吹き飛ばさない） */
+constexpr float kWallBossHitstunSeconds = 0.4f;
 } // namespace
+
+/** @brief プレイヤーから見て対象の向こう側の向き（真上や真下で決まらない時は向いている方） */
+float GamePlayScene::AwayFromPlayerDirX(const Vector3& position) const {
+    const float offsetX = position.x - player_->GetPosition().x;
+    return std::abs(offsetX) > kKickDirectionDeadZone ? offsetX : player_->GetLastDirX();
+}
 
 /** @brief 攻撃を当てた爆弾を吹き飛ばす（吹き飛ばせない物・飛ばす枠が無い時は false） */
 bool GamePlayScene::TryKickBomb(const BreakableRef& barrel, const BreakableSettings& settings, const BombPayload& payload) {
     const BombKickTuning& tuning = BombKickTuningStore::Get();
-    // 爆風を持たない物（壁など）と、武器を指定して壊す物は吹き飛ばさない
-    if (!tuning.enabled || settings.radius <= 0.0f || !settings.requiredWeapon.empty()) {
+    // 爆風を持たない物（壁など）は一撃では吹き飛ばさない（壁は壊れた時に LaunchBrokenWall で飛ばす）
+    if (!tuning.enabled || settings.radius <= 0.0f || settings.isWall) {
         return false;
     }
-    // 近接でも銃でも、プレイヤーから見て爆弾の向こう側へ飛ばす（真上や真下で向きが決まらない時は向いている方）
-    const float offsetX = barrel.GetPosition().x - player_->GetPosition().x;
-    const float launchDirX = std::abs(offsetX) > kKickDirectionDeadZone ? offsetX : player_->GetLastDirX();
-    if (!kickedBombs_.Launch(barrel.GetPosition(), launchDirX, settings.scale, payload)) {
+    // 近接でも銃でも、プレイヤーから見て爆弾の向こう側へ飛ばす
+    if (!kickedBombs_.Launch(barrel.GetPosition(), AwayFromPlayerDirX(barrel.GetPosition()), settings.scale, payload)) {
         return false;
     }
     // 置いてあった樽は消し、飛んでいる見た目へ入れ替える
@@ -87,15 +94,69 @@ void GamePlayScene::UpdateKickedBombs() {
     const auto hitsEnemy = [this](const Vector3& position, float radius) {
         return BombTouchesEnemy(position, radius);
     };
+    const auto sweepEnemies = [this](const AABB& box, float dirX, std::vector<const void*>& alreadyHit) {
+        SweepEnemiesWithWall(box, dirX, alreadyHit);
+    };
     const auto emitTrail = [&](const Vector3& position) {
         fx.Sparks(tuning.trailSparks, position);
     };
     const std::vector<BombDetonation> detonations = kickedBombs_.Update(
-        gameConstants::kFrameDeltaTime, GetStageEditor().GetSolidColliders(), hitsEnemy, emitTrail);
-    // ぶつかった所で、置いてあった時と同じ爆風と演出を出す
+        gameConstants::kFrameDeltaTime, GetStageEditor().GetSolidColliders(), hitsEnemy, sweepEnemies, emitTrail);
+    // ぶつかった所で、置いてあった時と同じ爆風と演出を出す（壁は爆風なしで砕けるだけ）
     for (const BombDetonation& detonation : detonations) {
-        ApplyBombBlast(detonation.position, detonation.payload);
+        if (detonation.kind == KickedObjectKind::kBomb) {
+            ApplyBombBlast(detonation.position, detonation.payload);
+        }
         EmitBreakableDestructionEffect(detonation.position, detonation.position, detonation.payload.radius);
+    }
+}
+
+/** @brief 壊した壁をプレイヤーの反対側へ吹き飛ばす（飛ばす枠が無い時は false） */
+bool GamePlayScene::LaunchBrokenWall(const BreakableRef& wall, const BreakableSettings& settings) {
+    const BombKickTuning& tuning = BombKickTuningStore::Get();
+    if (!tuning.enabled) {
+        return false;
+    }
+    const BombPayload noBlast = {};
+    if (!kickedBombs_.Launch(wall.GetPosition(), AwayFromPlayerDirX(wall.GetPosition()), settings.scale, noBlast,
+            KickedObjectKind::kWall)) {
+        return false;
+    }
+    const HitEffectPlayer fx(pm_, &cameraShaker_, &rng_);
+    fx.Impact(tuning.launchImpact);
+    return true;
+}
+
+/** @brief 飛んでいる壁の箱に重なった敵を、まだ巻き込んでいなければ吹き飛ばす（ボスはダメージ、道中の敵は倒す） */
+void GamePlayScene::SweepEnemiesWithWall(const AABB& box, float dirX, std::vector<const void*>& alreadyHit) {
+    const int damage = BombKickTuningStore::Get().wallEnemyDamage;
+    const HitEffectPlayer fx(pm_, &cameraShaker_, &rng_);
+    // 一度巻き込んだ敵は、同じ壁でもう一度は飛ばさない
+    const auto firstContact = [&](const EnemyEntity* enemy, const AABB& enemyBox) {
+        if (std::find(alreadyHit.begin(), alreadyHit.end(), enemy) != alreadyHit.end()) {
+            return false;
+        }
+        if (!Collision::CheckCollision(box, enemyBox)) {
+            return false;
+        }
+        alreadyHit.push_back(enemy);
+        return true;
+    };
+    // ボスは吹き飛ばさず、ダメージとのけぞりだけ与える
+    if (enemy_ && !enemy_->IsDefeated() && enemy_->IsVisible() && firstContact(enemy_, GetEnemyHitBox())) {
+        enemy_->TakeDamage(damage);
+        enemy_->ApplyHitstun(kWallBossHitstunSeconds, true);
+        fx.Star("breakable_damage", enemy_->GetPosition());
+    }
+    // 道中の敵は倒してから壁と同じ向きへ回りながら打ち飛ばす（生きたまま壁の向こうへ落ちると部屋の残りの敵に数えられて扉が開かない）
+    for (auto& entry : weaponEnemies_) {
+        EnemyEntity* enemy = entry.enemy;
+        if (enemy->IsDefeated() || !firstContact(enemy, EnemyHitBoxAt(enemy->GetPosition()))) {
+            continue;
+        }
+        enemy->TakeDamage(enemy->GetHp());
+        enemy->ApplyHomeRun(dirX);
+        fx.Star("breakable_damage", enemy->GetPosition());
     }
 }
 

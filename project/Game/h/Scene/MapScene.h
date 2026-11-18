@@ -6,7 +6,6 @@
 #include "Audio.h"
 #include "BaseScene.h"
 #include "Camera.h"
-#include "DebugButton.h"
 #include "DirectXCommon.h"
 #include "FontRenderer.h"
 #include "ImGuiManager.h"
@@ -65,6 +64,11 @@ public:
     }
     /** @brief エディタ表示中（移動停止中）もカメラ移動に合わせてプレイヤーと入口ポータルの行列だけ更新する */
     void RefreshVisualTransformsForEditor() override;
+    /**
+     * @brief チュートリアルへ入る準備をする（入る前の持ち物を覚え、チュートリアルの印を立てる）
+     * @note 画面の切り替えはしない。マップの入口と、バグ探しの自動テストプレイの両方から呼ぶ
+     */
+    static void BeginTutorial();
 
 private:
     static constexpr const char* kLayoutName = "map"; ///< 配置を保存する UILayout の名前（F2 で動かした値は Resources/Config/UI/map.json）
@@ -99,6 +103,30 @@ private:
     void DrawHintPanel(const std::wstring& text, const Vector2& position, float scale);
     /** @brief 選択中ノードの説明パネル（右側）を描画する */
     void DrawSelectedNodeInfo(int curFloor, RunData::NodeType hoveredNode);
+    /**
+     * @brief 右側の説明パネルに見出しと説明を出す（説明は全角スペースで2行に折り返す）
+     * @param title 見出し
+     * @param desc  説明
+     */
+    void DrawInfoPanel(const std::wstring& title, const std::wstring& desc);
+
+    /** @brief チュートリアルの入口があるか（game_rules.json の tutorialLevelPath が空なら無い） */
+    bool HasTutorialPortal() const {
+        return tutorialPortal_ != nullptr;
+    }
+    /** @brief Initialize()の下請け チュートリアルの入口を作る */
+    void InitializeTutorialPortal();
+    /** @brief Initialize()の下請け チュートリアルから戻ってきた時に、持ち物と体力を入る前に戻し、入口から出る */
+    void ReturnFromTutorialIfNeeded();
+    /** @brief チュートリアルへ入る（入る前の持ち物を覚えておき、戻った時に戻す） */
+    void EnterTutorial();
+    /** @brief チュートリアルの入口の位置・大きさ・色を更新する */
+    void UpdateTutorialPortal();
+    /** @brief チュートリアルの入口の上に名前と決定の案内、選んでいる時は説明を出す */
+    void DrawTutorialPortalLabel();
+    /** @brief 入口の番号から位置を返す（kTutorialPortalIndex ならチュートリアルの入口） */
+    float PortalX(int index) const;
+    static constexpr int kTutorialPortalIndex = -2; ///< 入口の出入りの演出でチュートリアルの入口を指す番号
 
     /** @brief 入口の出入りを始める */
     void StartPortalMotion(int index, bool entering);
@@ -126,10 +154,11 @@ private:
     std::unique_ptr<Player> player_;
     Model* blockModel_ = nullptr; // 入口ポータルの見た目（実体はModelManagerが所有・共有する）
     std::vector<std::unique_ptr<Object3d>> portalObjects_;
+    std::unique_ptr<Object3d> tutorialPortal_; ///< チュートリアルの入口（無ければ nullptr）
+    bool tutorialSelected_ = false; ///< チュートリアルの入口の前にいるか
 
     FontRenderer fontRenderer_;
     StageLiberation liberation_; ///< クリアして戻ってきた時の解放演出
-    DebugButton debugLiberationButton_; ///< 解放演出をすぐ見る確認用ボタン（game_rules.json の debugLiberationButton で出し入れ）
 
     // マップ定義  floors_[floor][col] = NodeType
     std::vector<std::vector<RunData::NodeType>> floors_;

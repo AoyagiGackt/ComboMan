@@ -428,6 +428,12 @@
     <ClCompile Include="Game\cpp\Player\EnemyEntity.cpp">
       <Filter>ソースファイル\Game\cpp\Player\敵</Filter>
     </ClCompile>
+    <ClCompile Include="Game\cpp\Player\AllyBoss.cpp">
+      <Filter>ソースファイル\Game\cpp\Player\敵</Filter>
+    </ClCompile>
+    <ClCompile Include="Game\cpp\Scene\GamePlaySceneAlly.cpp">
+      <Filter>ソースファイル\Game\cpp\Scene\ゲームプレイ</Filter>
+    </ClCompile>
     <ClCompile Include="Game\cpp\Player\KnightEnemy.cpp">
       <Filter>ソースファイル\Game\cpp\Player\敵</Filter>
     </ClCompile>
@@ -464,6 +470,9 @@
     <ClCompile Include="Game\cpp\Scripting\MonsterTraitTuning.cpp">
       <Filter>ソースファイル\Game\cpp\Scripting\調整値</Filter>
     </ClCompile>
+    <ClCompile Include="Game\cpp\Scene\GamePlaySceneBugChecks.cpp">
+      <Filter>ソースファイル\Game\cpp\Scene</Filter>
+    </ClCompile>
     <ClCompile Include="Game\cpp\Scene\GamePlaySceneBombs.cpp">
       <Filter>ソースファイル\Game\cpp\Scene</Filter>
     </ClCompile>
@@ -498,6 +507,15 @@
       <Filter>ソースファイル\Game\cpp\Scene\ゲームプレイ</Filter>
     </ClCompile>
     <ClCompile Include="Game\cpp\Scene\GamePlaySceneUI.cpp">
+      <Filter>ソースファイル\Game\cpp\Scene\ゲームプレイ</Filter>
+    </ClCompile>
+    <ClCompile Include="Game\cpp\Scene\GamePlaySceneGuideUI.cpp">
+      <Filter>ソースファイル\Game\cpp\Scene\ゲームプレイ</Filter>
+    </ClCompile>
+    <ClCompile Include="Game\cpp\Scene\GamePlaySceneFallRescue.cpp">
+      <Filter>ソースファイル\Game\cpp\Scene\ゲームプレイ</Filter>
+    </ClCompile>
+    <ClCompile Include="Game\cpp\Scene\GamePlaySceneElementStatus.cpp">
       <Filter>ソースファイル\Game\cpp\Scene\ゲームプレイ</Filter>
     </ClCompile>
     <ClCompile Include="Game\cpp\Scene\GamePlaySceneClear.cpp">
@@ -557,6 +575,12 @@
     <ClCompile Include="Game\cpp\Player\ReachPoseLayer.cpp">
       <Filter>ソースファイル\Game\cpp\Player\コンボ</Filter>
     </ClCompile>
+    <ClCompile Include="Game\cpp\Player\BossMotion.cpp">
+      <Filter>ソースファイル\Game\cpp\Player\敵</Filter>
+    </ClCompile>
+    <ClCompile Include="Game\cpp\Player\EnemyEntityMotion.cpp">
+      <Filter>ソースファイル\Game\cpp\Player\敵</Filter>
+    </ClCompile>
     <ClCompile Include="Game\cpp\Player\ComboMotionEditor.cpp">
       <Filter>ソースファイル\Game\cpp\Player\コンボ</Filter>
     </ClCompile>
@@ -582,6 +606,9 @@
       <Filter>ソースファイル\Game\cpp\Scripting\グラフ</Filter>
     </ClCompile>
     <ClCompile Include="Game\cpp\Scripting\NodeRegistry.cpp">
+      <Filter>ソースファイル\Game\cpp\Scripting\グラフ</Filter>
+    </ClCompile>
+    <ClCompile Include="Game\cpp\Scripting\NodeRegistryProgressNodes.cpp">
       <Filter>ソースファイル\Game\cpp\Scripting\グラフ</Filter>
     </ClCompile>
     <ClCompile Include="Game\cpp\Scripting\GraphRuntime.cpp">
@@ -701,9 +728,6 @@
     <ClCompile Include="Game\cpp\Scene\SceneShared.cpp">
       <Filter>ソースファイル\Game\cpp\Scene\共通</Filter>
     </ClCompile>
-    <ClCompile Include="Game\cpp\UI\DebugButton.cpp">
-      <Filter>ソースファイル\Game\cpp\UI\部品</Filter>
-    </ClCompile>
     <ClCompile Include="Game\cpp\UI\GuidePanel.cpp">
       <Filter>ソースファイル\Game\cpp\UI\部品</Filter>
     </ClCompile>
@@ -732,6 +756,9 @@
       <Filter>ソースファイル\Game\cpp\Scene\演出</Filter>
     </ClCompile>
     <ClCompile Include="Game\cpp\Scene\ClearFinish.cpp">
+      <Filter>ソースファイル\Game\cpp\Scene\演出</Filter>
+    </ClCompile>
+    <ClCompile Include="Game\cpp\Scene\ClearFinishTuning.cpp">
       <Filter>ソースファイル\Game\cpp\Scene\演出</Filter>
     </ClCompile>
     <ClCompile Include="Game\cpp\Scene\FinalBossArena.cpp">
@@ -1056,6 +1083,9 @@
     <ClInclude Include="Game\h\Scene\ClearFinish.h">
       <Filter>ヘッダーファイル\Game\h\Scene\演出</Filter>
     </ClInclude>
+    <ClInclude Include="Game\h\Scene\ClearFinishTuning.h">
+      <Filter>ヘッダーファイル\Game\h\Scene\演出</Filter>
+    </ClInclude>
     <ClInclude Include="Game\h\Scene\FinalBossArena.h">
       <Filter>ヘッダーファイル\Game\h\Scene\演出</Filter>
     </ClInclude>
@@ -1093,6 +1123,9 @@
       <Filter>ヘッダーファイル\Game\h\Player\武器</Filter>
     </ClInclude>
     <ClInclude Include="Game\h\Player\EnemyEntity.h">
+      <Filter>ヘッダーファイル\Game\h\Player\敵</Filter>
+    </ClInclude>
+    <ClInclude Include="Game\h\Player\AllyBoss.h">
       <Filter>ヘッダーファイル\Game\h\Player\敵</Filter>
     </ClInclude>
     <ClInclude Include="Game\h\Player\IEnemyEntity.h">
@@ -1200,6 +1233,9 @@
     <ClInclude Include="Game\h\Player\ReachPoseLayer.h">
       <Filter>ヘッダーファイル\Game\h\Player\コンボ</Filter>
     </ClInclude>
+    <ClInclude Include="Game\h\Player\BossMotion.h">
+      <Filter>ヘッダーファイル\Game\h\Player\敵</Filter>
+    </ClInclude>
     <ClInclude Include="Game\h\Player\ComboMotionEditor.h">
       <Filter>ヘッダーファイル\Game\h\Player\コンボ</Filter>
     </ClInclude>
@@ -1231,6 +1267,9 @@
       <Filter>ヘッダーファイル\Game\h\Scripting\グラフ</Filter>
     </ClInclude>
     <ClInclude Include="Game\h\Scripting\NodeRegistry.h">
+      <Filter>ヘッダーファイル\Game\h\Scripting\グラフ</Filter>
+    </ClInclude>
+    <ClInclude Include="Game\h\Scripting\NodeParamHelpers.h">
       <Filter>ヘッダーファイル\Game\h\Scripting\グラフ</Filter>
     </ClInclude>
     <ClInclude Include="Game\h\Scripting\GraphRuntime.h">
@@ -1349,9 +1388,6 @@
     </ClInclude>
     <ClInclude Include="Game\h\Scene\SceneShared.h">
       <Filter>ヘッダーファイル\Game\h\Scene\共通</Filter>
-    </ClInclude>
-    <ClInclude Include="Game\h\UI\DebugButton.h">
-      <Filter>ヘッダーファイル\Game\h\UI\部品</Filter>
     </ClInclude>
     <ClInclude Include="Game\h\UI\GuidePanel.h">
       <Filter>ヘッダーファイル\Game\h\UI\部品</Filter>
@@ -1967,6 +2003,9 @@
       <Filter>ヘッダーファイル\Engine\graphics\h\Manager</Filter>
     </ClInclude>
     <ClCompile Include="Game\cpp\Player\EnemyEntityVisuals.cpp">
+      <Filter>ソースファイル\Game\cpp\Player\敵</Filter>
+    </ClCompile>
+    <ClCompile Include="Game\cpp\Player\EnemyEntityReactions.cpp">
       <Filter>ソースファイル\Game\cpp\Player\敵</Filter>
     </ClCompile>
   </ItemGroup>

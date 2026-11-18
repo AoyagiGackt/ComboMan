@@ -375,9 +375,22 @@ Microsoft::WRL::ComPtr<ID3D12RootSignature> CreateConstantTextureSignature(ID3D1
 Microsoft::WRL::ComPtr<ID3D12PipelineState> CreateFullscreenPipeline(DirectXCommon* dxCommon,
     ID3D12RootSignature* signature, const wchar_t* pixelShaderPath, BlendMode blendMode);
 
-/** @brief 現在の画面をコピーし、指定した全画面エフェクトで描き戻す */
+/**
+ * @brief 画面の写し取り先を、バックバッファの中でゲームの絵がある範囲（余白を除いた部分）と同じ大きさにそろえる
+ * @note 大きさが違う時だけ作り直す（全画面への切り替えなどでバックバッファの大きさが変わった後の最初の1回）。SRV の番号は使い回す
+ */
+void MatchCaptureTextureToGameArea(DirectXCommon* dxCommon, SrvManager* srvManager,
+    Microsoft::WRL::ComPtr<ID3D12Resource>& captureTexture, uint32_t textureSrvIndex);
+
+/** @brief バックバッファのうちゲームの絵がある範囲だけを、写し取り先の左上から写す（写し取り先は同じ大きさにそろえておく） */
+void CaptureGameArea(DirectXCommon* dxCommon, ID3D12Resource* destination);
+
+/**
+ * @brief 現在の画面のゲームの絵がある範囲をコピーし、指定した全画面エフェクトで同じ範囲へ描き戻す
+ * @param captureTexture 写し取り先（バックバッファの大きさが変わっていたら作り直すので、持ち主の変数を渡す）
+ */
 void CaptureAndDrawFullscreen(bool active, DirectXCommon* dxCommon, SrvManager* srvManager,
-    ID3D12Resource* captureTexture, ID3D12RootSignature* signature, ID3D12PipelineState* pipeline,
+    Microsoft::WRL::ComPtr<ID3D12Resource>& captureTexture, ID3D12RootSignature* signature, ID3D12PipelineState* pipeline,
     ID3D12Resource* constantsResource, uint32_t textureSrvIndex);
 
 /** @brief キャプチャ画像を深度なしでバックバッファ全体へ合成する */

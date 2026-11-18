@@ -4,6 +4,7 @@
  */
 #include "BossBattleDirector.h"
 #include "EnemyEntity.h"
+#include "EnemyTuning.h"
 #include "JsonFieldTable.h"
 #include "JsonHelper.h"
 #include "Logger.h"
@@ -18,6 +19,9 @@ constexpr const char* kChargeAttack = "charge";
 constexpr const char* kDashAttack = "dash";
 constexpr const char* kWaveAttack = "wave";
 constexpr const char* kLeapAttack = "leap";
+constexpr const char* kStanceMotion = "stance"; // 技を出していない間の動きの名前
+constexpr const char* kRoarMotion = "roar"; // 咆哮の動きの名前
+constexpr const char* kStaggerMotion = "stagger"; // ひるみの動きの名前
 constexpr float kLeapArcScale = 4.0f; // 0〜1 の放物線 t(1-t) の頂点を 1 にする倍率
 
 /** @brief 投げる技1種類ぶんの項目と調整値の対応 */
@@ -53,6 +57,7 @@ constexpr JsonField<BossBattleTuning> kBossFields[] = {
     { "rage", "ring", &BossBattleTuning::rageRing },
     { "attack", "firstDelay", &BossBattleTuning::firstAttackDelay },
     { "attack", "interval", &BossBattleTuning::attackInterval },
+    { "slam", "recoverSeconds", &BossBattleTuning::slamRecoverSeconds },
     { "charge", "telegraphSeconds", &BossBattleTuning::chargeTelegraphSeconds },
     { "charge", "speed", &BossBattleTuning::chargeSpeed },
     { "charge", "distance", &BossBattleTuning::chargeDistance },
@@ -164,6 +169,9 @@ void BossBattleTuningStore::Reload() {
 void BossBattleDirector::Bind(EnemyEntity* boss, const std::string& weaponName) {
     // 前のボスの実体はステージの読み直しで消えているので触らない（台本モードは実体ごと無くなる）
     boss_ = boss;
+    bossKey_ = weaponName;
+    currentAttack_.clear();
+    stageSeconds_ = 0.0f;
     const BossBattleTuning& tuning = BossBattleTuningStore::Get();
     const auto found = tuning.profiles.find(weaponName);
     profile_ = found != tuning.profiles.end() ? found->second : BossProfile {};
@@ -229,6 +237,7 @@ void BossBattleDirector::Update(float dt, const BossFrameInput& input, BossFrame
         UpdateFight(dt, input, output);
         break;
     }
+    output.motion = CurrentMotionCue();
 }
 
 /** @brief 戦う前: プレイヤーが近づいたら戦い始める（壁や閉じた扉の向こうにいる間はその場で待つ） */
@@ -324,33 +333,33 @@ void BossBattleDirector::StartNextAttack(const BossFrameInput& input, BossFrameO
     const std::string& attack = attacks[attackIndex_ % attacks.size()];
     ++attackIndex_;
     strikeLanded_ = false;
+    currentAttack_ = attack;
     if (attack == kSlamAttack) {
+        // 予告の円と着弾はシーンが出し、ボスはその間その場で振りかぶる
         output.slamRequested = true;
+        BeginTimedMove(Move::kSlamTelegraph, EnemyTuning::GetInstance()->BossSlam().warningDuration);
+        SetScripted(true, input.playerPosition);
         return;
     }
     if (attack == kChargeAttack) {
-        move_ = Move::kChargeTelegraph;
-        moveTimer_ = tuning.chargeTelegraphSeconds;
+        BeginTimedMove(Move::kChargeTelegraph, tuning.chargeTelegraphSeconds);
         moveDirX_ = input.playerPosition.x >= boss_->GetPosition().x ? 1.0f : -1.0f;
         SetScripted(true, input.playerPosition);
         return;
     }
     if (attack == kDashAttack) {
-        move_ = Move::kDashTelegraph;
-        moveTimer_ = tuning.dashTelegraphSeconds;
+        BeginTimedMove(Move::kDashTelegraph, tuning.dashTelegraphSeconds);
         dashLeft_ = tuning.dashCount;
         SetScripted(true, input.playerPosition);
         return;
     }
     if (attack == kWaveAttack) {
-        move_ = Move::kWaveTelegraph;
-        moveTimer_ = tuning.waveTelegraphSeconds;
+        BeginTimedMove(Move::kWaveTelegraph, tuning.waveTelegraphSeconds);
         SetScripted(true, input.playerPosition);
         return;
     }
     if (attack == kLeapAttack) {
-        move_ = Move::kLeapTelegraph;
-        moveTimer_ = tuning.leapTelegraphSeconds;
+        BeginTimedMove(Move::kLeapTelegraph, tuning.leapTelegraphSeconds);
         SetScripted(true, input.playerPosition);
         return;
     }
@@ -358,16 +367,70 @@ void BossBattleDirector::StartNextAttack(const BossFrameInput& input, BossFrameO
     const auto volley = tuning.volleys.find(attack);
     if (volley != tuning.volleys.end()) {
         volley_ = volley->second;
-        move_ = Move::kVolleyTelegraph;
-        moveTimer_ = volley_.telegraphSeconds;
+        BeginTimedMove(Move::kVolleyTelegraph, volley_.telegraphSeconds);
         SetScripted(true, input.playerPosition);
     }
 }
 
 /** @brief 技の後の隙に入る */
 void BossBattleDirector::BeginRecover(float seconds) {
-    move_ = Move::kRecover;
+    BeginTimedMove(Move::kRecover, seconds);
+}
+
+/** @brief 時間で区切る段階に入る */
+void BossBattleDirector::BeginTimedMove(Move move, float seconds) {
+    move_ = move;
     moveTimer_ = seconds;
+    stageSeconds_ = seconds;
+}
+
+/** @brief 今ボスが何をしているか（技・区切り・経過割合） */
+BossMotionCue BossBattleDirector::CurrentMotionCue() const {
+    const BossBattleTuning& tuning = BossBattleTuningStore::Get();
+    // 残り秒数から、区切りの中の経過割合を出す
+    const auto elapsedOf = [](float remaining, float total) {
+        return total > 0.0f ? std::clamp(1.0f - remaining / total, 0.0f, 1.0f) : 1.0f;
+    };
+    BossMotionCue cue;
+    if (phase_ == Phase::kRage) {
+        cue.move = kRoarMotion;
+        cue.progress = elapsedOf(phaseTimer_, tuning.rageSeconds);
+        return cue;
+    }
+    if (staggered_) {
+        cue.move = kStaggerMotion;
+        cue.progress = elapsedOf(staggerTimer_, tuning.staggerSeconds);
+        return cue;
+    }
+    cue.move = currentAttack_;
+    switch (move_) {
+    case Move::kChargeTelegraph:
+    case Move::kDashTelegraph:
+    case Move::kVolleyTelegraph:
+    case Move::kWaveTelegraph:
+    case Move::kLeapTelegraph:
+    case Move::kSlamTelegraph:
+        cue.stage = BossMotionStage::kWindup;
+        cue.progress = elapsedOf(moveTimer_, stageSeconds_);
+        return cue;
+    case Move::kCharging:
+        cue.progress = tuning.chargeDistance > 0.0f ? std::clamp(chargeTraveled_ / tuning.chargeDistance, 0.0f, 1.0f) : 1.0f;
+        return cue;
+    case Move::kDashing:
+        cue.progress = tuning.dashSeconds > 0.0f ? std::clamp(moveTimer_ / tuning.dashSeconds, 0.0f, 1.0f) : 1.0f;
+        return cue;
+    case Move::kLeaping:
+        cue.progress = tuning.leapSeconds > 0.0f ? std::clamp(moveTimer_ / tuning.leapSeconds, 0.0f, 1.0f) : 1.0f;
+        return cue;
+    case Move::kRecover:
+        cue.stage = BossMotionStage::kRecover;
+        cue.progress = elapsedOf(moveTimer_, stageSeconds_);
+        return cue;
+    default:
+        // 技を出していない間（戦う前も）は構え
+        cue.move = kStanceMotion;
+        return cue;
+    }
 }
 
 /** @brief 投げ・衝撃波・跳びかかりの身構えと跳んでいる間を進める（扱った時は true） */
@@ -382,6 +445,13 @@ bool BossBattleDirector::UpdateRangedMove(float dt, const BossFrameInput& input,
         if (moveTimer_ <= 0.0f) {
             output.volley = &volley_;
             BeginRecover(volley_.recoverSeconds);
+        }
+        return true;
+    case Move::kSlamTelegraph:
+        // 予告の円はシーンが出すので、ここでは時間だけ数える
+        moveTimer_ -= dt;
+        if (moveTimer_ <= 0.0f) {
+            BeginRecover(tuning.slamRecoverSeconds);
         }
         return true;
     case Move::kWaveTelegraph:
@@ -493,8 +563,7 @@ void BossBattleDirector::UpdateMove(float dt, const BossFrameInput& input, BossF
         if (t >= 1.0f || blocked) {
             --dashLeft_;
             if (dashLeft_ > 0) {
-                move_ = Move::kDashTelegraph;
-                moveTimer_ = tuning.dashTelegraphSeconds;
+                BeginTimedMove(Move::kDashTelegraph, tuning.dashTelegraphSeconds);
             } else {
                 BeginRecover(tuning.dashRecoverSeconds);
             }
