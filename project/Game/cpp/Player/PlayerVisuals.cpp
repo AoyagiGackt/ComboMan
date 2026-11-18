@@ -406,6 +406,11 @@ void Player::PreviewMeleePose(const MeleeAttackDef* attack, float normalizedTime
         EndMeleePreview();
         return;
     }
+    // 射撃の見本から移る時は、射撃の姿勢を外す（残すと射撃の加算モーションが優先される）
+    if (gunPreviewActive_) {
+        gunCombo_.Reset();
+        gunPreviewActive_ = false;
+    }
     meleeCombo_.SetPreviewPose(attack, normalizedTime);
 
     // ベースアニメもゲーム中と同じ対応（段の経過秒 × 再生速度）で同じ時刻に合わせる
@@ -438,23 +443,51 @@ void Player::PreviewMeleePose(const MeleeAttackDef* attack, float normalizedTime
     PreviewMeleePose(attack, normalizedTime);
 }
 
-/** @brief プレビューを終えて攻撃していない状態へ戻す */
+/** @brief 射撃の段を指定時刻の姿勢で見せる（とどめの演出用） */
+void Player::PreviewGunPose(const GunShotDef* shot, float normalizedTime) {
+    if (shot == nullptr) {
+        EndMeleePreview();
+        return;
+    }
+    // 近接の見本から移る時は、持たせた武器と攻撃のアニメを外して待機の構えを土台にする
+    previewWeaponActive_ = false;
+    meleeCombo_.Reset();
+    if (previewAnim_ != nullptr) {
+        LeavePreviewAnimation();
+    }
+    gunCombo_.SetPreviewPose(shot, normalizedTime);
+    gunPreviewActive_ = true;
+    // 土台のアニメ・向き・加算モーション・銃の付け直しは、演出用の更新と同じ
+    UpdateCinematicPose(false, { }, false);
+}
+
+/** @brief 近接と射撃のプレビューを終えて攻撃していない状態へ戻す */
 void Player::EndMeleePreview() {
     previewWeaponActive_ = false;
     previewOffset_ = { };
     meleeCombo_.Reset();
-    if (previewAnim_ != nullptr) {
-        // 攻撃の残り時間と速度を戻し、今の接地・構えの条件から移動系アニメへ入り直させる
-        // （状態を攻撃扱いにしておくと、UpdateAnimationState()が同じ状態とみなして入り直しを省かない）
-        attackAnimTimer_ = 0.0f;
-        rig_->object->SetAnimSpeed(1.0f);
-        animState_ = &AttackAnim();
-        UpdateAnimationState(false, !onGround_);
-        previewAnim_ = nullptr;
+    const bool gunPreview = gunPreviewActive_;
+    if (gunPreview) {
+        gunCombo_.Reset();
+        gunPreviewActive_ = false;
+    }
+    if (previewAnim_ != nullptr || gunPreview) {
+        LeavePreviewAnimation();
     }
     const float yaw = FacingYaw();
     rig_->object->SetRotation({ 0.0f, yaw, 0.0f });
     RefreshVisualTransforms();
+}
+
+/** @brief プレビューで差し替えた攻撃の姿勢から、今の接地・構えに合った移動系のアニメへ入り直す */
+void Player::LeavePreviewAnimation() {
+    // 攻撃の残り時間と速度を戻し、今の接地・構えの条件から移動系アニメへ入り直させる
+    // （状態を攻撃扱いにしておくと、UpdateAnimationState()が同じ状態とみなして入り直しを省かない）
+    attackAnimTimer_ = 0.0f;
+    rig_->object->SetAnimSpeed(1.0f);
+    animState_ = &AttackAnim();
+    UpdateAnimationState(false, !onGround_);
+    previewAnim_ = nullptr;
 }
 
 /** @brief 現在のスタイルに対応する近接武器と銃を、それぞれの手ボーンへ追従させる */
@@ -588,6 +621,8 @@ void Player::DrawBodyAndWeapons() {
     outlineColor.w *= portalAlpha_;
     outline->SetColor(outlineColor);
     outline->SetWidth(SceneVisualTuning::Player().outlineWidth);
+    // 銃のモデルは調整値で出すと決めた時だけ描く（両手持ちの構えでは左手が柄を握り、持たせると向きが狂うため）
+    const bool drawGun = SceneVisualTuning::Player().showGunModel && gunVisible_ && !gunHidden_ && activeGunIndex_ >= 0;
     {
         // スコープを抜けた瞬間に必ず通常描画用のPSOへ復帰する（早期returnや将来のコード追加があっても復帰忘れが起きない）
         PipelineStateGuard restoreGuard([this] {
@@ -604,7 +639,7 @@ void Player::DrawBodyAndWeapons() {
         if (thrownWeaponIndex_ >= 0 && thrownWeaponIndex_ != activeHeldIndex_) {
             heldWeapons_[thrownWeaponIndex_].object->DrawOutline(outline);
         }
-        if (gunVisible_ && !gunHidden_ && activeGunIndex_ >= 0) {
+        if (drawGun) {
             guns_[activeGunIndex_].object->DrawOutline(outline);
         }
         rig_->object->DrawOutline(outline);
@@ -617,7 +652,7 @@ void Player::DrawBodyAndWeapons() {
     if (thrownWeaponIndex_ >= 0 && thrownWeaponIndex_ != activeHeldIndex_) {
         heldWeapons_[thrownWeaponIndex_].object->Draw();
     }
-    if (gunVisible_ && !gunHidden_ && activeGunIndex_ >= 0) {
+    if (drawGun) {
         guns_[activeGunIndex_].object->Draw();
     }
     rig_->object->Draw();

@@ -7,6 +7,7 @@
 #include "CameraShaker.h"
 #include "GameConstants.h"
 #include "GameSounds.h"
+#include "GunCombo.h"
 #include "HitEffectLibrary.h"
 #include "MeleeCombo.h"
 #include "Player.h"
@@ -22,13 +23,21 @@ constexpr float kHalf = 0.5f;
 constexpr float kSmoothStepA = 3.0f; ///< なめらかな寄せ方（3t^2 - 2t^3）の係数
 constexpr float kSmoothStepB = 2.0f;
 constexpr float kMinMoveSeconds = 0.0001f; ///< これ以下の秒数は一瞬で移るとみなす
+constexpr float kMinShotSeconds = 0.0001f; ///< 射撃の段の長さの下限（0 で割らないように）
+constexpr float kAimHoldMargin = 0.001f; ///< 構え切った所を、発砲の瞬間のわずか手前で止める幅（発砲の瞬間まで進めると反動の姿勢になる）
 constexpr char kGroundPrefix = 'g';
 constexpr char kAirPrefix = 'a';
+constexpr char kShotPrefix = 's';
+constexpr const char* kShotLast = "slast";
 constexpr const char* kFaceBoss = "boss";
 constexpr const char* kFaceAway = "away";
 constexpr const char* kGroundLast = "glast";
 constexpr const char* kAirLast = "alast";
 constexpr const char* kLauncher = "launch";
+constexpr float kPlayerBodyHalfWidth = 0.5f; ///< プレイヤーの当たり判定の幅の半分（Player の 1x1x1 と同じ）
+constexpr float kPlayerBodyHalfHeight = 0.5f; ///< プレイヤーの当たり判定の高さの半分
+constexpr float kWallRoomMargin = 0.05f; ///< 回り込んだプレイヤーと壁の間に空けるすき間
+constexpr float kFloorClearance = 0.1f; ///< 回り込む広さを調べる時に体の下端を上げる幅（立っている床を壁と数えない）
 
 /** @brief 決まった効果音の名前と場面の対応 */
 struct CueEntry {
@@ -40,6 +49,7 @@ constexpr CueEntry kCues[] = {
     { "release", SoundCue::kFinisherRelease },
     { "glass", SoundCue::kGlassShatter },
     { "swing", SoundCue::kSwing },
+    { "shot", SoundCue::kShot },
 };
 
 /** @brief 0〜1 をなめらかに寄せる */
@@ -73,9 +83,13 @@ void BossExecution::ReloadTuning() {
 /** @brief 演出を最初から始める */
 void BossExecution::Start(const Setup& setup, const Services& services) {
     services_ = services;
-    // 共通の歩み寄りの後に型の拍をつないで写しておく
+    // 共通の歩み寄り（銃で倒した時は銃の歩み寄り）の後に型の拍をつないで写しておく
     const auto& tuning = BossExecutionTuningStore::Get();
-    beats_ = tuning.intro;
+    byGun_ = setup.byGun;
+    byBomb_ = setup.byBomb;
+    gun_ = setup.gun;
+    gunColor_ = setup.gunColor;
+    beats_ = byBomb_ ? tuning.bombIntro : (byGun_ ? tuning.gunIntro : tuning.intro);
     endHold_ = 0.0f;
     if (setup.style != nullptr) {
         beats_.insert(beats_.end(), setup.style->beats.begin(), setup.style->beats.end());
@@ -85,9 +99,16 @@ void BossExecution::Start(const Setup& setup, const Services& services) {
     bossPos_ = setup.bossPosition;
     const Vector3 playerPos = services_.player->GetPosition();
     side_ = playerPos.x >= bossPos_.x ? 1.0f : -1.0f;
-    groundY_ = services_.player->IsOnGround() ? playerPos.y : bossPos_.y;
+    // 宙で始めても床に立った高さを基準にする（ボスの位置は足元の高さなので、そのまま使うと体半分だけ床へ沈む）
+    groundY_ = setup.standingY;
     playerZ_ = playerPos.z;
     playerPos_ = { playerPos.x, groundY_, playerZ_ };
+    // 壁際で倒した時は、回り込む動きや歩み寄る動きが壁にめり込まないよう、ボスとプレイヤーをそろって壁から離す
+    if (setup.terrain != nullptr) {
+        const float shift = side_ * RoomAroundBossShift(*setup.terrain);
+        bossPos_.x += shift;
+        playerPos_.x += shift;
+    }
 
     active_ = true;
     finished_ = false;
@@ -100,9 +121,14 @@ void BossExecution::Start(const Setup& setup, const Services& services) {
     grabbed_ = false;
     grabPending_ = false;
     slicePending_ = false;
+    bombPending_ = false;
     poseAttack_ = nullptr;
+    poseShot_ = nullptr;
+    gunPosed_ = false;
     poseTimer_ = 0.0f;
     poseSeconds_ = 0.0f;
+    poseFrom_ = 0.0f;
+    poseTo_ = 1.0f;
     zoom_ = 1.0f;
     targetZoom_ = 1.0f;
     cameraFocus_ = { (playerPos_.x + bossPos_.x) * kHalf, groundY_ + tuning.cameraHeight, bossPos_.z };
@@ -167,6 +193,13 @@ bool BossExecution::ConsumeSlice() {
     return pending;
 }
 
+/** @brief めり込んだ爆弾を爆発させる拍の最初の1回だけ true */
+bool BossExecution::ConsumeBomb() {
+    const bool pending = bombPending_;
+    bombPending_ = false;
+    return pending;
+}
+
 /** @brief 次に行う拍 */
 const ExecutionBeat* BossExecution::NextBeat() const {
     return beatIndex_ < beats_.size() ? &beats_[beatIndex_] : nullptr;
@@ -183,22 +216,67 @@ void BossExecution::Fire(const ExecutionBeat& beat) {
         grabbed_ = true;
         grabPending_ = true;
     }
-    if (!beat.pose.empty()) {
-        poseAttack_ = ResolvePose(beat.pose);
-        poseTimer_ = 0.0f;
-        poseSeconds_ = beat.poseSeconds;
-    }
+    StartPose(beat);
     if (beat.move) {
         BeginMove(beat);
     }
     if (beat.zoom > 0.0f) {
         targetZoom_ = beat.zoom;
     }
+    // 動いた先から撃つように、移動を始めた後で弾を出す
+    if (beat.shot) {
+        FireShot();
+    }
     FireSlash(beat);
     FireEffects(beat);
     if (beat.slice) {
         slicePending_ = true;
     }
+    if (beat.bomb) {
+        bombPending_ = true;
+    }
+}
+
+/** @brief 拍に書いてある姿勢を取り始める */
+void BossExecution::StartPose(const ExecutionBeat& beat) {
+    if (!beat.pose.empty()) {
+        // 射撃の名前なら射撃の段、そうでなければ抜き取った武器の技の段
+        poseShot_ = ResolveShot(beat.pose);
+        poseAttack_ = poseShot_ == nullptr ? ResolvePose(beat.pose) : nullptr;
+    } else if (beat.shot && poseShot_ == nullptr) {
+        // 姿勢を決めずに撃つ拍は、射撃の最初の段で撃つ
+        const GunComboSet& set = GetGunComboSet(gun_);
+        poseShot_ = set.count > 0 ? &set[0] : nullptr;
+    } else if (!beat.shot) {
+        return;
+    }
+    poseTimer_ = 0.0f;
+    poseSeconds_ = beat.poseSeconds;
+    poseFrom_ = 0.0f;
+    poseTo_ = 1.0f;
+    if (poseShot_ == nullptr) {
+        return;
+    }
+    // 射撃の段は発砲の瞬間で分け、撃つ拍は反動から構え直すまで、撃たない拍は構え切る所までを動かす
+    const float shotAt = std::clamp(poseShot_->shotTime / (std::max)(poseShot_->duration, kMinShotSeconds), 0.0f, 1.0f);
+    if (beat.shot) {
+        poseFrom_ = shotAt;
+    } else {
+        poseTo_ = (std::max)(shotAt - kAimHoldMargin, 0.0f);
+    }
+}
+
+/** @brief プレイヤーからボスの体の真ん中へ弾を飛ばす */
+void BossExecution::FireShot() {
+    const HitEffectPlayer fx(services_.particles, services_.shaker, services_.rng);
+    sceneShared::EmitGunShotParticles(fx, playerPos_, BossCenter(), poseShot_, gunColor_);
+}
+
+/** @brief 今の姿勢の経過割合 */
+float BossExecution::PoseProgress() const {
+    // 秒数が 0 の姿勢は動かさず、動かし始めの形のまま見せる
+    const float ratio = poseSeconds_ > 0.0f ? std::clamp(poseTimer_ / poseSeconds_, 0.0f, 1.0f) : 0.0f;
+    return poseFrom_ + (poseTo_ - poseFrom_) * ratio;
 }
 
 /** @brief 拍の効果を出す */
@@ -312,6 +390,17 @@ void BossExecution::ApplyPlayerPose() {
     const float toBoss = bossPos_.x >= playerPos_.x ? 1.0f : -1.0f;
     const float facing = faceAway_ ? -toBoss : toBoss;
     player->FaceTarget({ playerPos_.x + facing, playerPos_.y, playerPos_.z });
+    // 射撃の段を取っている間は銃を構えた姿勢
+    if (poseShot_ != nullptr) {
+        player->PreviewGunPose(poseShot_, PoseProgress());
+        gunPosed_ = true;
+        return;
+    }
+    // 射撃の姿勢から離れる時は、構えを解いてから次の姿を取らせる
+    if (gunPosed_) {
+        player->EndMeleePreview();
+        gunPosed_ = false;
+    }
     // 武器を抜き取るまでは素の姿（歩く・立つ）、抜き取った後はその武器の技の姿勢
     if (!grabbed_) {
         player->UpdateCinematicPose(false, {}, walking_);
@@ -322,8 +411,7 @@ void BossExecution::ApplyPlayerPose() {
         player->UpdateCinematicPose(false, {}, walking_);
         return;
     }
-    const float t = (poseAttack_ != nullptr && poseSeconds_ > 0.0f) ? std::clamp(poseTimer_ / poseSeconds_, 0.0f, 1.0f) : 0.0f;
-    player->PreviewMeleePose(attack, t, weapon_);
+    player->PreviewMeleePose(attack, poseAttack_ != nullptr ? PoseProgress() : 0.0f, weapon_);
 }
 
 /** @brief カメラの見る位置と引きを目標へ寄せる */
@@ -358,9 +446,68 @@ const MeleeAttackDef* BossExecution::ResolvePose(const std::string& name) const 
     return nullptr;
 }
 
+/** @brief 姿勢の名前から射撃の段を引く */
+const GunShotDef* BossExecution::ResolveShot(const std::string& name) const {
+    const GunComboSet& set = GetGunComboSet(gun_);
+    if (set.count <= 0) {
+        return nullptr;
+    }
+    if (name == kShotLast) {
+        return &set[set.count - 1];
+    }
+    if (name.size() >= 2 && name[0] == kShotPrefix) {
+        // 段の数より大きい番号は最後の段にする（銃ごとに段の数が違っても同じ書き方で使えるように）
+        const int index = std::atoi(name.c_str() + 1);
+        return &set[std::clamp(index, 0, set.count - 1)];
+    }
+    return nullptr;
+}
+
 /** @brief ボスの足元からの位置を世界の位置へ直す */
 Vector3 BossExecution::ToWorld(const Vector3& local) const {
     return { bossPos_.x + side_ * local.x, groundY_ + local.y, playerZ_ };
+}
+
+/**
+ * @brief 拍の動く先が壁に掛かるなら、ボスとプレイヤーをそろって動かす量を返す（正でプレイヤーが最初にいた側へ）
+ * @note ボスの向こう側（X が負）へ回り込む先が壁なら手前へ、手前側（X が正）へ動く先が壁なら向こう側へずらす
+ */
+float BossExecution::RoomAroundBossShift(const std::vector<engine::AABB>& terrain) const {
+    // 拍の動く先のうち、一番ボスの向こう側へ行く所と、一番手前側へ行く所
+    float behind = 0.0f;
+    float front = 0.0f;
+    for (const ExecutionBeat& beat : beats_) {
+        if (beat.move) {
+            behind = (std::max)(behind, -beat.moveTo.x);
+            front = (std::max)(front, beat.moveTo.x);
+        }
+    }
+    // 足元の床は壁として数えないよう、体の下端を少し上げて調べる
+    const float bodyBottom = groundY_ - kPlayerBodyHalfHeight + kFloorClearance;
+    const float bodyTop = groundY_ + kPlayerBodyHalfHeight;
+    // ボスから direction の向き（+1 で手前側、-1 で向こう側）へ reach まで動いたプレイヤーの体が、壁にどれだけ食い込むか
+    const auto penetration = [&](float direction, float reach) {
+        if (reach <= 0.0f) {
+            return 0.0f;
+        }
+        const float sign = side_ * direction;
+        const float farX = bossPos_.x + sign * (reach + kPlayerBodyHalfWidth + kWallRoomMargin);
+        const float minX = (std::min)(bossPos_.x, farX);
+        const float maxX = (std::max)(bossPos_.x, farX);
+        float depth = 0.0f;
+        for (const engine::AABB& block : terrain) {
+            const bool atBodyHeight = block.max.y > bodyBottom && block.min.y < bodyTop && playerZ_ >= block.min.z && playerZ_ <= block.max.z;
+            if (!atBodyHeight || block.max.x <= minX || block.min.x >= maxX) {
+                continue;
+            }
+            // 動く向きが右なら壁の左端から、左なら壁の右端からの食い込み
+            depth = (std::max)(depth, sign > 0.0f ? farX - block.min.x : block.max.x - farX);
+        }
+        return depth;
+    };
+    constexpr float kFrontSide = 1.0f;
+    constexpr float kBehindSide = -1.0f;
+    return penetration(kBehindSide, behind) - penetration(kFrontSide, front);
 }
 
 /** @brief ボスの体の真ん中 */

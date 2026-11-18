@@ -68,8 +68,6 @@ void StageEditor::RenderEventTemplateButtons() {
     constexpr float kTemplateStatusSeconds = 3.0f;
     constexpr int kPickupRowCount = 3;
     constexpr float kPickupRowSpacing = 1.5f;
-    constexpr const char* kWallWeapons[] = { "何でも", "Sword", "Spear", "Hammer", "Dagger", "Ball", "Greatsword", "Scythe", "Axe" };
-    constexpr int kWallWeaponCount = static_cast<int>(sizeof(kWallWeapons) / sizeof(kWallWeapons[0]));
 
     // スライド扉: 入力した条件フラグが立つと開く
     ImGui::SetNextItemWidth(-1.0f);
@@ -81,14 +79,11 @@ void StageEditor::RenderEventTemplateButtons() {
         statusTimer_ = kTemplateStatusSeconds;
     }
 
-    // 壊せる壁: 先頭の何でも以外を選ぶと、その武器でしか壊せない
-    ImGui::SetNextItemWidth(-1.0f);
-    ImGui::Combo("##wallWeapon", &templateWallWeapon_, kWallWeapons, kWallWeaponCount);
+    // 壊せる壁: どの武器でも壊せて、壊すと敵を巻き込みながら吹き飛ぶ
     if (ImGui::Button("壊せる壁", ImVec2(-1.0f, 0.0f))) {
         RecordUndoSnapshotNow();
-        const std::string weapon = templateWallWeapon_ == 0 ? "" : kWallWeapons[templateWallWeapon_];
-        AppendGeneratedContent(StageEditorContentFactory::CreateBreakableWall(ViewCenterOnGround(), weapon, nextSerial_));
-        statusMessage_ = "壊せる壁を生成しました";
+        AppendGeneratedContent(StageEditorContentFactory::CreateBreakableWall(ViewCenterOnGround(), nextSerial_));
+        statusMessage_ = "壊せる壁を生成しました（どの武器でも壊せます）";
         statusTimer_ = kTemplateStatusSeconds;
     }
 

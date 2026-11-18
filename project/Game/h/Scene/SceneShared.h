@@ -30,8 +30,21 @@ class FontRenderer;
 class Player;
 class UILayout;
 class BulletPool;
+class HitEffectPlayer;
+struct GunShotDef;
 
 namespace sceneShared {
+    /**
+     * @brief 銃口から的へ飛ぶ見た目の弾を出す（弾数と拡散は段の定義に従い、粒の寿命のうちに的へ届く速さにする）
+     * @param fx     粒を出す窓口
+     * @param muzzle 弾の出る位置
+     * @param target 弾の届く位置
+     * @param shot   撃った段（nullptr なら既定の弾数と拡散）
+     * @param color  弾の色
+     */
+    void EmitGunShotParticles(const HitEffectPlayer& fx, const Vector3& muzzle, const Vector3& target, const GunShotDef* shot,
+        const Vector4& color);
+
     /** @brief プレイヤーを生成してスクリプト連携先を登録し、弾丸プールを初期化する */
     void InitializePlayerAndBullets(std::unique_ptr<Player>& player, BulletPool& bullets,
         engine::graphics::ModelCommon* modelCommon, engine::graphics::Model* bulletModel, engine::Audio* audio);
@@ -194,6 +207,10 @@ namespace sceneShared {
 
     /** @brief オプション欄に出すオートコンボの状態表示（< ON > / < OFF >） */
     const char* AutoComboLabel();
+    /** @brief 武器の合体の ON/OFF を切り替えて保存する（選択音も鳴らす） */
+    void ToggleWeaponFusion(engine::Audio* audio);
+    /** @brief オプション欄に出す武器の合体の状態表示（< ON > / < OFF >） */
+    const char* WeaponFusionLabel();
 
     /**
      * @brief 武器一覧HUDと同じ体裁でシーン名の見出しだけを描画し、次に描画すべきY座標を返す

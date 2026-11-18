@@ -89,6 +89,8 @@ private:
     NodeRegistry& operator=(const NodeRegistry&) = delete;
 
     void RegisterBuiltins();
+    /** @brief 進行の流れ・演出の追加・プレイヤーの状態を扱うノードを登録する（定義は NodeRegistryProgressNodes.cpp にある） */
+    void RegisterProgressNodes();
 
     std::map<std::string, NodeExecuteFn> executors_;
     std::map<std::string, NodeTypeSpec> specs_;

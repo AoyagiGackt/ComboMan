@@ -93,6 +93,14 @@ public:
     bool IsReplayingClearedStage() const {
         return playFloor_ < floor_;
     }
+    /** @brief チュートリアルのステージを遊んでいるかを設定する（進行度・スコア・セーブには数えない） */
+    void SetTutorialActive(bool active) {
+        tutorialActive_ = active;
+    }
+    /** @brief チュートリアルのステージを遊んでいるか */
+    bool IsTutorialActive() const {
+        return tutorialActive_;
+    }
 
     /** @brief 現在選択されているノード種別 */
     NodeType GetCurrentNode() const {
@@ -243,6 +251,7 @@ public:
         portalReturnPending_ = false;
         liberationPending_ = false;
         finalBossPending_ = false;
+        tutorialActive_ = false;
         skills_.clear();
         bossTechniques_.clear();
         stageRecords_.clear();
@@ -358,6 +367,7 @@ private:
     bool portalReturnPending_ = false; ///< 入口から戻る演出の印
     bool liberationPending_ = false; ///< クリアしたステージの解放演出をマップでまだ見せていないか
     bool finalBossPending_ = false; ///< ラスボス戦を残しているか
+    bool tutorialActive_ = false; ///< チュートリアルのステージを遊んでいるか（セーブしない）
     NodeType currentNode_ = NodeType::kCombat; ///< 現在選択されているノード種別
 
     /** @brief 習得済みスキルのリスト */

@@ -109,6 +109,8 @@ void ObjectKind::EnsureKnightInstance(StageEditor& editor, int index) {
     entry.enemyInstanceId = editor.AllocateEnemyInstanceId();
     entry.knight = std::make_unique<KnightEnemy>();
     entry.knight->Initialize(editor.modelCommon_, editor.WorldPositionOf(entry.desc));
+    // 出現したフレームは更新を通らずに描かれるので、先に見た目の行列を作っておく
+    entry.knight->RefreshVisualTransforms();
 }
 
 namespace {
@@ -157,6 +159,8 @@ void ObjectKind::EnsureBasicEnemyInstance(StageEditor& editor, int index) {
     if (!desc.enemyModel.empty()) {
         entry.enemy->SetMonsterVisual(editor.modelCommon_, desc.enemyModel);
     }
+    // 出現したフレームは更新を通らずに描かれるので、先に見た目の行列を作っておく（作らないと画面の右上に白い四角が一瞬映る）
+    entry.enemy->RefreshVisualTransforms();
     EnemyRegistry::GetInstance()->Register(desc.name, entry.enemy.get());
 }
 

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="起動役"><UniqueIdentifier>{08d1ac80-7cb8-4ae5-ae1c-64f12532a3d7}</UniqueIdentifier></Filter>
+    <Filter Include="手順の表"><UniqueIdentifier>{358fcb30-17d8-4d32-b2a6-3d5d35e8b8f3}</UniqueIdentifier></Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="main.cpp"><Filter>起動役</Filter></ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\MathTests\TestReport.h"><Filter>起動役</Filter></ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="bug_hunt.json"><Filter>手順の表</Filter></None>
+  </ItemGroup>
+</Project>

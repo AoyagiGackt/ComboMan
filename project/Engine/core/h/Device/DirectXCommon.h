@@ -101,6 +101,13 @@ public: // メンバ関数
     void ToggleVSync() {
         vsyncEnabled_ = !vsyncEnabled_;
     }
+    /**
+     * @brief 1秒に目標のフレーム数より速く進まないよう待つかを設定する
+     * @note 自動テストを速く回す時だけ false にする（VSync を切っても、これが有効なら目標の速さで待つ）
+     */
+    void SetFrameLimitEnabled(bool enabled) {
+        frameLimitEnabled_ = enabled;
+    }
 
     /**
      * @brief GPU診断ログへ添える現在の処理名を設定する
@@ -354,6 +361,7 @@ private:
     // VSync（ティアリング許可）
     bool vsyncEnabled_ = true;
     bool tearingSupported_ = false;
+    bool frameLimitEnabled_ = true; ///< 目標のフレーム数より速く進まないよう待つか
 
     /** @brief GPUエラー発生時に直前の処理を特定するための識別名 */
     std::string diagnosticContext_ = "Engine initialization";

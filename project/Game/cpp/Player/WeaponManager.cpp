@@ -51,8 +51,11 @@ void ReadColor(const nlohmann::json& value, float (&out)[kColorChannels]) {
     if (!value.is_array()) {
         return;
     }
+    // 数字でない成分は読まない（そのまま取り出すと例外で止まる）
     for (size_t i = 0; i < kColorChannels && i < value.size(); ++i) {
-        out[i] = value[i].get<float>();
+        if (value[i].is_number()) {
+            out[i] = value[i].get<float>();
+        }
     }
 }
 
@@ -173,15 +176,18 @@ WeaponManager::WeaponManager() {
 
 /** @brief 指定したスロットを選択する */
 void WeaponManager::SelectSlot(int slot) {
-    if (slot < 0 || slot >= static_cast<int>(slots_.size()) || slots_[slot] < 0) {
+    if (!IsSlotFilled(slot)) {
         return;
     }
     selectedSlot_ = slot;
-    index_ = slots_[slot];
+    index_ = GetSlotWeaponIndex(slot);
 }
 
-/** @brief スロットに登録された武器インデックスを返す */
+/** @brief スロットに登録された武器インデックスを返す（ボスの枠はボスの武器） */
 int WeaponManager::GetSlotWeaponIndex(int slot) const {
+    if (slot == kBossSlot) {
+        return bossWeaponIndex_;
+    }
     if (slot < 0 || slot >= static_cast<int>(slots_.size())) {
         return -1;
     }
@@ -197,10 +203,11 @@ bool WeaponManager::Owns(WeaponType type) const {
 
 /** @brief 次の解放済みスタイルへ切り替える（循環、未解放はスキップ） */
 void WeaponManager::SelectNext() {
-    const int count = static_cast<int>(slots_.size());
+    // ボスの枠もふつうの枠の後ろとして順に回す
+    const int count = kBossSlot + 1;
     for (int step = 1; step <= count; ++step) {
         const int slot = (selectedSlot_ + step) % count;
-        if (slots_[slot] >= 0) {
+        if (IsSlotFilled(slot)) {
             SelectSlot(slot);
             return;
         }
@@ -209,10 +216,11 @@ void WeaponManager::SelectNext() {
 
 /** @brief 前の解放済みスタイルへ切り替える（循環、未解放はスキップ） */
 void WeaponManager::SelectPrev() {
-    const int count = static_cast<int>(slots_.size());
+    // ボスの枠もふつうの枠の後ろとして順に回す
+    const int count = kBossSlot + 1;
     for (int step = 1; step <= count; ++step) {
         const int slot = ((selectedSlot_ - step) % count + count) % count;
-        if (slots_[slot] >= 0) {
+        if (IsSlotFilled(slot)) {
             SelectSlot(slot);
             return;
         }
@@ -256,6 +264,7 @@ void WeaponManager::SelectUnlockedInCurrentSlot(int direction) {
         }
         index_ = candidate;
         slots_[selectedSlot_] = candidate;
+        fusions_[selectedSlot_] = Fusion {};
         return;
     }
 }
@@ -298,6 +307,7 @@ void WeaponManager::ReplacePendingWeapon(int slot) {
     if (removed >= 0) {
         unlocked_[removed] = false;
     }
+    fusions_[slot] = Fusion {};
     slots_[slot] = pendingWeaponIndex_;
     unlocked_[pendingWeaponIndex_] = true;
     selectedSlot_ = slot;
@@ -308,6 +318,170 @@ void WeaponManager::ReplacePendingWeapon(int slot) {
 /** @brief 交換待ちの武器を破棄する */
 void WeaponManager::DiscardPendingWeapon() {
     pendingWeaponIndex_ = -1;
+}
+
+/** @brief 道中で奪った武器を合体させるふつうの枠を選ぶ（選んでいる枠がふつうの枠ならそこ、ボスの枠なら合体していないふつうの枠） */
+int WeaponManager::FindFusionSlot() const {
+    const auto matches = [this](int slot) {
+        return slot >= 0 && slot < kSlotCount && slots_[slot] >= 0;
+    };
+    if (matches(selectedSlot_)) {
+        return selectedSlot_;
+    }
+    // 選んでいる枠が合わなければ、合体していない枠を先に選ぶ（合体中の耐久をむだに戻さない）
+    int fallback = -1;
+    for (int slot = 0; slot < kSlotCount; ++slot) {
+        if (!matches(slot)) {
+            continue;
+        }
+        if (!IsFusionValid(slot)) {
+            return slot;
+        }
+        if (fallback < 0) {
+            fallback = slot;
+        }
+    }
+    return fallback;
+}
+
+/** @brief 指定した枠の武器に相棒を合体させる（耐久を満タンにする） */
+void WeaponManager::SetFusion(int slot, int partnerIndex, int durability) {
+    // 相棒の武器は枠には入れない（持っている武器の数は増えない）。すでに合体していれば相棒を入れ替えて耐久も戻す
+    Fusion& fusion = fusions_[slot];
+    fusion.baseIndex = slots_[slot];
+    fusion.partnerIndex = partnerIndex;
+    fusion.maxDurability = (std::max)(durability, 1);
+    fusion.durability = fusion.maxDurability;
+}
+
+/** @brief 交換待ちの武器を、指定した枠の武器に合体させる */
+bool WeaponManager::FusePendingInto(int slot, int durability) {
+    if (!HasPendingWeapon() || slot < 0 || slot >= kSlotCount || slots_[slot] < 0) {
+        return false;
+    }
+    SetFusion(slot, pendingWeaponIndex_, durability);
+    pendingWeaponIndex_ = -1;
+    return true;
+}
+
+/** @brief 指定した種類の武器を、指定した枠の武器に合体させる（もう持っている種類を奪った時に使う） */
+bool WeaponManager::FuseInto(int slot, WeaponType type, int durability) {
+    if (slot < 0 || slot >= kSlotCount || slots_[slot] < 0) {
+        return false;
+    }
+    const auto found = std::find_if(weapons_.begin(), weapons_.end(), [type](const WeaponData& data) {
+        return data.type == type;
+    });
+    if (found == weapons_.end()) {
+        return false;
+    }
+    // 同じ種類どうしでも合体できる（剣＋剣）
+    SetFusion(slot, static_cast<int>(std::distance(weapons_.begin(), found)), durability);
+    return true;
+}
+
+/** @brief ボスから奪った武器をボスの枠へ入れる（ボスの枠の武器は入れ替わらず、合体しても砕けない） */
+WeaponManager::BossAcquireResult WeaponManager::AcquireBossWeapon(WeaponType type) {
+    const auto found = std::find_if(weapons_.begin(), weapons_.end(), [type](const WeaponData& data) {
+        return data.type == type;
+    });
+    if (found == weapons_.end()) {
+        return BossAcquireResult::kSame;
+    }
+    const int index = static_cast<int>(std::distance(weapons_.begin(), found));
+    // 空いていれば入れて、そのまま持ち替える
+    if (bossWeaponIndex_ < 0) {
+        bossWeaponIndex_ = index;
+        bossPartnerIndex_ = -1;
+        SelectSlot(kBossSlot);
+        return BossAcquireResult::kAdded;
+    }
+    // 主軸か相棒と同じ種類なら、今のまま
+    if (index == bossWeaponIndex_ || index == bossPartnerIndex_) {
+        return BossAcquireResult::kSame;
+    }
+    pendingBossIndex_ = index;
+    return BossAcquireResult::kNeedsMainChoice;
+}
+
+/** @brief 合体の主軸を決める（選ばなかった方が相棒になり、前の相棒は外れる） */
+void WeaponManager::ChooseBossMain(bool keepCurrentMain) {
+    if (!HasPendingBossChoice() || bossWeaponIndex_ < 0) {
+        pendingBossIndex_ = -1;
+        return;
+    }
+    if (keepCurrentMain) {
+        bossPartnerIndex_ = pendingBossIndex_;
+    } else {
+        bossPartnerIndex_ = bossWeaponIndex_;
+        bossWeaponIndex_ = pendingBossIndex_;
+    }
+    pendingBossIndex_ = -1;
+    // 主軸が替わったかもしれないので、ボスの枠を選んで持ち替える
+    SelectSlot(kBossSlot);
+}
+
+/** @brief すべての枠に武器が入っているか */
+bool WeaponManager::AreSlotsFull() const {
+    return std::all_of(slots_.begin(), slots_.end(), [](int index) {
+        return index >= 0;
+    });
+}
+
+/** @brief 指定した枠の合体の状態が今も有効か（枠の武器が合体した時のままか） */
+bool WeaponManager::IsFusionValid(int slot) const {
+    if (slot < 0 || slot >= kSlotCount) {
+        return false;
+    }
+    const Fusion& fusion = fusions_[slot];
+    return fusion.partnerIndex >= 0 && fusion.partnerIndex < static_cast<int>(weapons_.size())
+        && fusion.baseIndex >= 0 && slots_[slot] == fusion.baseIndex && fusion.durability > 0;
+}
+
+/** @brief 指定した枠の武器に合体している相棒の武器の番号を返す（合体していなければ -1） */
+int WeaponManager::GetFusedWeaponIndex(int slot) const {
+    if (slot == kBossSlot) {
+        return bossWeaponIndex_ >= 0 ? bossPartnerIndex_ : -1;
+    }
+    return IsFusionValid(slot) ? fusions_[slot].partnerIndex : -1;
+}
+
+/** @brief 指定した枠の合体の残り耐久の割合を返す（0〜1、合体していなければ 0） */
+float WeaponManager::GetFusionDurabilityRatio(int slot) const {
+    if (!IsFusionValid(slot)) {
+        return 0.0f;
+    }
+    const Fusion& fusion = fusions_[slot];
+    return static_cast<float>(fusion.durability) / static_cast<float>(fusion.maxDurability);
+}
+
+/** @brief 選んでいる枠の武器に合体している相棒の武器（合体していなければ nullptr） */
+const WeaponData* WeaponManager::GetCurrentFusionPartner() const {
+    const int partner = GetFusedWeaponIndex(selectedSlot_);
+    return partner >= 0 ? &weapons_[partner] : nullptr;
+}
+
+/** @brief 選んでいる枠の合体の耐久を減らす。尽きたら枠の武器ごと砕き、ほかの枠の武器へ持ち替える */
+bool WeaponManager::ConsumeFusionDurability(int amount) {
+    if (!IsFusionValid(selectedSlot_)) {
+        return false;
+    }
+    Fusion& fusion = fusions_[selectedSlot_];
+    fusion.durability -= (std::max)(amount, 0);
+    if (fusion.durability > 0) {
+        return false;
+    }
+    // 土台の武器も砕けて枠が空く（合体した時は枠が満杯なので、ほかの枠の武器は必ず残る）
+    unlocked_[slots_[selectedSlot_]] = false;
+    slots_[selectedSlot_] = -1;
+    fusion = Fusion {};
+    SelectNext();
+    return true;
+}
+
+/** @brief すべての枠の合体を解く */
+void WeaponManager::ClearFusions() {
+    fusions_.fill(Fusion {});
 }
 
 /** @brief 全武器を解放し、先頭からスロット数ぶんを登録する */
@@ -370,6 +544,7 @@ void WeaponManager::EquipForTraining(WeaponType type) {
             unlocked_[removedWeapon] = false;
         }
         slots_[targetSlot] = weaponIndex;
+        fusions_[targetSlot] = Fusion {};
         unlocked_[weaponIndex] = true;
         selectedSlot_ = targetSlot;
         index_ = weaponIndex;
@@ -390,6 +565,10 @@ void WeaponManager::EquipForDemo(WeaponType type) {
 void WeaponManager::Reset() {
     std::fill(unlocked_.begin(), unlocked_.end(), false);
     slots_.fill(-1);
+    ClearFusions();
+    bossWeaponIndex_ = -1;
+    bossPartnerIndex_ = -1;
+    pendingBossIndex_ = -1;
     selectedSlot_ = -1;
     pendingWeaponIndex_ = -1;
     index_ = 0;
@@ -407,13 +586,22 @@ void WeaponManager::ResetForNewRun() {
 
 /** @brief 現在の解放状況・装備状態を退避する */
 WeaponManager::Snapshot WeaponManager::SaveSnapshot() const {
-    return { unlocked_, slots_, index_, selectedSlot_, pendingWeaponIndex_, rangedIndex_ };
+    return { unlocked_, slots_, index_, selectedSlot_, pendingWeaponIndex_, rangedIndex_, fusions_, bossWeaponIndex_, bossPartnerIndex_ };
 }
 
 /** @brief SaveSnapshot()で退避した状態へ戻す */
 void WeaponManager::RestoreSnapshot(const Snapshot& snapshot) {
     unlocked_ = snapshot.unlocked;
     slots_ = snapshot.slots;
+    // 合体も退避した時のものへ戻す（枠の武器が違っていれば IsFusionValid が無効として扱う）
+    fusions_ = snapshot.fusions;
+    // ボスの枠は番号が武器の一覧の外なら空にする（相棒は主軸がある時だけ残す）
+    const auto validIndex = [this](int index) {
+        return index >= 0 && index < static_cast<int>(weapons_.size()) ? index : -1;
+    };
+    bossWeaponIndex_ = validIndex(snapshot.bossWeapon);
+    bossPartnerIndex_ = bossWeaponIndex_ >= 0 ? validIndex(snapshot.bossPartner) : -1;
+    pendingBossIndex_ = -1;
     index_ = snapshot.index;
     selectedSlot_ = snapshot.selectedSlot;
     pendingWeaponIndex_ = snapshot.pendingWeaponIndex;
@@ -428,10 +616,10 @@ void WeaponManager::RestoreSnapshot(const Snapshot& snapshot) {
     if (index_ < 0 || index_ >= static_cast<int>(weapons_.size())) {
         index_ = 0;
     }
-    if (selectedSlot_ < 0 || selectedSlot_ >= kSlotCount || slots_[selectedSlot_] < 0) {
+    if (!IsSlotFilled(selectedSlot_)) {
         selectedSlot_ = -1;
     } else {
-        index_ = slots_[selectedSlot_];
+        index_ = GetSlotWeaponIndex(selectedSlot_);
     }
     if (pendingWeaponIndex_ < 0 || pendingWeaponIndex_ >= static_cast<int>(weapons_.size())) {
         pendingWeaponIndex_ = -1;

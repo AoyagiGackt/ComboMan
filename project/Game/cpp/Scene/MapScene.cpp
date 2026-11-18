@@ -92,7 +92,7 @@ static constexpr Vector4 kBackgroundColor = { 0.05f, 0.05f, 0.08f, 1.0f };
 // 3Dの舞台
 static constexpr float kCameraY = 4.8f;
 static constexpr float kInitialCameraX = 18.0f;
-static constexpr float kCameraMinX = 12.0f;
+static constexpr float kCameraMinX = 10.5f; // 左端のチュートリアルの入口まで映る位置
 static constexpr float kCameraMaxX = 54.0f;
 static constexpr float kPlayerMinX = 2.5f;
 static constexpr float kPlayerMaxX = 63.5f;
@@ -102,10 +102,14 @@ static constexpr Vector3 kPortalScale = { 2.5f, 4.0f, 1.0f };
 static constexpr float kPortalY = 1.4f;
 static constexpr float kPortalZ = 1.0f;
 static constexpr float kPortalSelectDistance = 2.5f; // この距離以内のポータルを選択中にする
+static constexpr Vector4 kTutorialPortalColor = { 0.3f, 0.85f, 0.6f, 1.0f }; // チュートリアルの入口の色（ステージの入口と見分ける）
+static constexpr float kTutorialPortalSelectedBrighten = 0.2f; // 選んでいる時に明るくする量
+static constexpr float kTutorialPortalScale = 0.8f; // ステージの入口に対する大きさ
 
-// 解放演出の確認用ボタン（評価・確認用。game_rules.json の debugLiberationButton で出し入れする）
-static constexpr float kDebugLiberationButtonTop = 48.0f;
-static constexpr Vector4 kDebugLiberationHoverColor = { 0.75f, 0.6f, 0.1f, 0.85f };
+// チュートリアルに入る前の持ち物（戻ってきたら戻し、練習で手に入れた武器を本編へ持ち込ませない）
+static WeaponManager::Snapshot sTutorialWeaponSnapshot;
+static bool sTutorialSnapshotSaved = false; // 上の写しを取ったか（取っていなければ戻す時に持ち物を触らない）
+
 
 // 以下は既定の配置（F2のエディタで動かした値は Resources/Config/UI/map.json に保存される）
 
@@ -146,7 +150,9 @@ void MapScene::Initialize(DirectXCommon* dxCommon, Input* input, Audio* audio) {
     InitializeRenderFoundationAndPlayer();
     InitializeFloorsAndStartPosition(); // ポータルの本数がステージ数に依存するため先に決める
     InitializeStageObjects();
+    InitializeTutorialPortal();
     StartLiberationIfPending();
+    ReturnFromTutorialIfNeeded();
     audio_->PlaySceneBGM(bgmKey::kStageSelect);
 }
 
@@ -163,8 +169,6 @@ void MapScene::InitializeUiSprites() {
 
     fontRenderer_.Initialize(spriteCommon_.get());
     liberation_.Initialize(spriteCommon_.get());
-    debugLiberationButton_.Initialize(spriteCommon_.get(), { L"[F5] 解放演出を見る", DIK_F5, "debug_liberation",
-        kDebugLiberationButtonTop, kDebugLiberationHoverColor, &GameRulesData::debugLiberationButton });
 }
 
 /** @brief Initialize()の下請け 描画基盤(Common類・シャドウ・カメラ)とプレイヤーを初期化する */
@@ -298,17 +302,20 @@ void MapScene::Update() {
         }
     }
 
-    if (selectedCol_ >= 0 && selectedCol_ != previousSelectedCol) {
+    // ステージの入口よりチュートリアルの入口の方が近ければ、そちらを選ぶ
+    const bool previousTutorialSelected = tutorialSelected_;
+    tutorialSelected_ = HasTutorialPortal()
+        && std::abs(playerPos.x - GameRules::GetInstance()->Get().tutorialPortalX) < nearestDistance;
+    if (tutorialSelected_) {
+        selectedCol_ = -1;
+    }
+    if ((selectedCol_ >= 0 && selectedCol_ != previousSelectedCol) || (tutorialSelected_ && !previousTutorialSelected)) {
         audio_->PlayMenuChoice();
     }
     UpdatePortals(curFloor);
+    UpdateTutorialPortal();
     // 解放演出と出入りの間は操作を受け付けない
     if (liberating || movingThroughPortal) {
-        return;
-    }
-    // 確認用: 今のステージの1つ前（最初のステージなら最初の入口）をクリアした体で解放演出を見せる（進行は変えない）
-    if (debugLiberationButton_.Update(input_, dxCommon_)) {
-        StartLiberation((std::max)(curFloor - 1, 0));
         return;
     }
 
@@ -316,6 +323,13 @@ void MapScene::Update() {
     if (input_->TriggerKey(DIK_T) || input_->TriggerButton(XINPUT_GAMEPAD_Y)) {
         audio_->PlayMenuSelect();
         SceneFlow::GetInstance()->Transition("MAP", "training", "TRAINING");
+        return;
+    }
+
+    // チュートリアルの入口の前で決定したら、練習用のステージへ（ステージ1にはいつでも入れる）
+    if (tutorialSelected_ && (input_->TriggerKey(DIK_RETURN) || input_->TriggerButton(XINPUT_GAMEPAD_A))) {
+        audio_->PlayMenuSelect();
+        EnterTutorial();
         return;
     }
 
@@ -344,7 +358,7 @@ void MapScene::StartPortalMotion(int index, bool entering) {
     portalMotionStart_ = player_->GetPosition();
     playerVisible_ = true;
     if (!entering) {
-        player_->SetPosition({ stageWorldX_[index], kPlayerGroundY, sPortalTune.depth });
+        player_->SetPosition({ PortalX(index), kPlayerGroundY, sPortalTune.depth });
         player_->SetPortalAppearance(sPortalTune.smallScale, sPortalTune.faintAlpha);
     }
 }
@@ -362,7 +376,7 @@ Vector3 MapScene::UpdatePortalMotion() {
     const float t = PortalProgress(portalMotionTimer_ - (entering ? alignSeconds : 0.0f),
         entering ? sPortalTune.enterSeconds : sPortalTune.exitSeconds);
     const float visibility = entering ? 1.0f - t : t;
-    Vector3 pos = { stageWorldX_[motionPortalIndex_], kPlayerGroundY, sPortalTune.depth * (1.0f - visibility) };
+    Vector3 pos = { PortalX(motionPortalIndex_), kPlayerGroundY, sPortalTune.depth * (1.0f - visibility) };
     if (aligning) {
         const float align = PortalProgress(portalMotionTimer_, alignSeconds);
         pos.x = portalMotionStart_.x + (pos.x - portalMotionStart_.x) * align;
@@ -436,6 +450,91 @@ void MapScene::UpdatePortals(int curFloor) {
     }
 }
 
+/** @brief 入口の番号から位置を返す（kTutorialPortalIndex ならチュートリアルの入口） */
+float MapScene::PortalX(int index) const {
+    if (index == kTutorialPortalIndex) {
+        return GameRules::GetInstance()->Get().tutorialPortalX;
+    }
+    return stageWorldX_[static_cast<size_t>(std::clamp(index, 0, static_cast<int>(stageWorldX_.size()) - 1))];
+}
+
+/** @brief Initialize()の下請け チュートリアルの入口を作る */
+void MapScene::InitializeTutorialPortal() {
+    if (GameRules::GetInstance()->Get().tutorialLevelPath.empty()) {
+        return;
+    }
+    tutorialPortal_ = std::make_unique<Object3d>();
+    tutorialPortal_->Initialize(modelCommon_.get());
+    tutorialPortal_->SetModel(blockModel_);
+    tutorialPortal_->SetEnableLighting(false);
+    UpdateTutorialPortal();
+}
+
+/** @brief Initialize()の下請け チュートリアルから戻ってきた時に、持ち物と体力を入る前に戻し、入口から出る */
+void MapScene::ReturnFromTutorialIfNeeded() {
+    auto* rd = RunData::GetInstance();
+    if (!rd->IsTutorialActive()) {
+        return;
+    }
+    // 練習で奪った武器や合体は持ち込ませず、減った体力も戻す
+    rd->SetTutorialActive(false);
+    if (sTutorialSnapshotSaved) {
+        WeaponManager::GetInstance()->RestoreSnapshot(sTutorialWeaponSnapshot);
+        sTutorialSnapshotSaved = false;
+    }
+    rd->Heal(rd->GetMaxHp());
+    CrashBreadcrumbs::Add("game", "チュートリアルから戻った");
+    if (HasTutorialPortal() && !liberation_.IsPlaying()) {
+        StartPortalMotion(kTutorialPortalIndex, false);
+    }
+}
+
+/** @brief チュートリアルへ入る準備をする（入る前の持ち物を覚え、チュートリアルの印を立てる） */
+void MapScene::BeginTutorial() {
+    auto* rd = RunData::GetInstance();
+    sTutorialWeaponSnapshot = WeaponManager::GetInstance()->SaveSnapshot();
+    sTutorialSnapshotSaved = true;
+    rd->SetTutorialActive(true);
+    // ボスの強さは最初のステージと同じにする
+    rd->SetCurrentNode(kFirstFloorType);
+    rd->SetPlayFloor(0);
+}
+
+/** @brief チュートリアルへ入る（入る前の持ち物を覚えておき、戻った時に戻す） */
+void MapScene::EnterTutorial() {
+    BeginTutorial();
+    StartPortalMotion(kTutorialPortalIndex, true);
+}
+
+/** @brief チュートリアルの入口の位置・大きさ・色を更新する */
+void MapScene::UpdateTutorialPortal() {
+    if (!HasTutorialPortal()) {
+        return;
+    }
+    Vector4 color = kTutorialPortalColor;
+    if (tutorialSelected_) {
+        color = { (std::min)(color.x + kTutorialPortalSelectedBrighten, 1.0f), (std::min)(color.y + kTutorialPortalSelectedBrighten, 1.0f),
+            (std::min)(color.z + kTutorialPortalSelectedBrighten, 1.0f), color.w };
+    }
+    // 出入りの間はステージの入口と同じように光らせる
+    if (portalMotion_ != PortalMotion::kNone && motionPortalIndex_ == kTutorialPortalIndex) {
+        const bool entering = portalMotion_ != PortalMotion::kExiting;
+        const float elapsed = portalMotionTimer_ - (entering ? sPortalTune.alignSeconds : 0.0f);
+        const float t = PortalProgress(elapsed, entering ? sPortalTune.enterSeconds : sPortalTune.exitSeconds);
+        const float glow = std::sin(t * gameConstants::kPi) * std::clamp(sPortalTune.glowStrength, 0.0f, 1.0f);
+        color.x += (sPortalTune.glowColor.x - color.x) * glow;
+        color.y += (sPortalTune.glowColor.y - color.y) * glow;
+        color.z += (sPortalTune.glowColor.z - color.z) * glow;
+    }
+    // 下端をステージの入口とそろえて、少し小さく置く
+    const Vector3 scale = { kPortalScale.x * kTutorialPortalScale, kPortalScale.y * kTutorialPortalScale, kPortalScale.z };
+    const float bottom = kPortalY - kPortalScale.y * 0.5f;
+    tutorialPortal_->SetPosition({ GameRules::GetInstance()->Get().tutorialPortalX, bottom + scale.y * 0.5f, kPortalZ });
+    tutorialPortal_->SetScale(scale);
+    tutorialPortal_->SetColor(color);
+    tutorialPortal_->Update();
+}
+
 /** @brief マップノードと現在選択状態を描画する */
 void MapScene::Draw() {
     // 今いる階を引くための進行データ
@@ -450,20 +549,14 @@ void MapScene::Draw() {
     spriteCommon_->CommonDrawSettings();
     const float cameraX = camera_->GetTranslate().x;
     liberation_.Draw(cameraX);
-    debugLiberationButton_.RefreshLayout();
-    if (!liberation_.IsPlaying()) {
-        debugLiberationButton_.Draw();
-    }
     fontRenderer_.Reset();
     liberation_.QueueText(fontRenderer_, cameraX);
-    if (!liberation_.IsPlaying()) {
-        debugLiberationButton_.QueueText(fontRenderer_);
-    }
 
     // 入口の上のステージ名と、選択中の入口の説明
     const int floor = rd->GetFloor();
     if (floor < static_cast<int>(floors_.size())) {
         DrawStagePortalLabels(floor);
+        DrawTutorialPortalLabel();
     }
 
     // 操作説明と戻り方の案内（パッドとキーボードで文言を変える）
@@ -492,6 +585,9 @@ void MapScene::RefreshVisualTransformsForEditor() {
     player_->RefreshVisualTransforms();
     for (auto& portal : portalObjects_) {
         portal->Update();
+    }
+    if (HasTutorialPortal()) {
+        tutorialPortal_->Update();
     }
 }
 
@@ -528,6 +624,9 @@ void MapScene::DrawWorld() {
         for (int i = 0; i < count; ++i) {
             portalObjects_[i]->Draw();
         }
+    }
+    if (HasTutorialPortal()) {
+        tutorialPortal_->Draw();
     }
     if (playerVisible_) {
         player_->Draw();

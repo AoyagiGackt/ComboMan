@@ -29,7 +29,7 @@
       "position": [2.0, -0.98, 0.0], "scale": [1.0, 1.0, 1.0], "lighting": false, "solid": true
     },
     {
-      "name": "ceiling", "type": "row", "kind": "prop", "axis": "x", "count": 62, "step": 1.0,
+      "name": "ceiling", "type": "row", "kind": "prop", "axis": "x", "count": 63, "step": 1.0,
       "model": "Resources/block/block.obj", "texture": "Resources/block/block.png",
       "position": [2.0, 13.0, 0.0], "scale": [1.0, 1.0, 1.0], "lighting": false, "solid": true
     },
@@ -211,7 +211,7 @@
       "name": "guide_d", "type": "static", "kind": "ui_text",
       "position": [24.0, 200.0, 0.0], "textSpace": "screen", "textScale": 1.35,
       "textColor": [0.85, 0.95, 1.0, 0.95], "activationFlag": "zone_d",
-      "text": "回復役(緑)を先に倒せ  全滅すると第二波が来る    攻撃は {Dodge} の回避で紙一重に避けると評価が上がる"
+      "text": "回復役(緑)を先に倒せ  全滅すると第二波が来る    攻撃は {Dodge} で避けると評価が上がる"
     },
     {
       "name": "enemy_boss", "type": "static", "kind": "enemy_basic",
@@ -254,7 +254,7 @@
       "name": "guide_e_done", "type": "static", "kind": "ui_text",
       "position": [24.0, 200.0, 0.0], "textSpace": "screen", "textScale": 1.35,
       "textColor": [0.45, 1.0, 0.65, 1.0], "activationFlag": "condition_boss_defeated",
-      "text": "撃破完了  {Steal} で武器を奪って区画クリア"
+      "text": "撃破完了  {Steal} で武器を奪ってステージクリア"
     }
   ]
 }

@@ -83,8 +83,20 @@ constexpr float kWeaponNamePadding = 3.0f; // 板の文字のまわりの余白
 constexpr float kCenterFactor = 0.5f; // 枠の中央にそろえる
 constexpr float kGunLabelScale = 0.85f;
 
+// 合体している枠（相棒の色で枠が脈打って光り、枠の下の内側に耐久のバーを出す）
+constexpr float kFusionGlowBase = 0.35f; // 枠へ混ぜる相棒の色の基本の強さ
+constexpr float kFusionGlowPulse = 0.25f; // 脈打つ幅
+constexpr float kFusionGlowSpeed = 4.0f; // 脈打つ速さ
+constexpr float kDurabilityBarHeight = 6.0f; // 耐久のバーの太さ
+constexpr float kDurabilityBarInset = 3.0f; // 枠の端からバーまでの余白
+constexpr Vector4 kDurabilityBackColor = { 0.0f, 0.0f, 0.0f, 0.8f }; // バーの下地
+constexpr float kDurabilityLowRatio = 0.3f; // これより少なくなったら赤く点滅させる
+constexpr Vector4 kDurabilityLowColor = { 1.0f, 0.2f, 0.15f, 1.0f }; // 残りが少ない時の色
+constexpr float kDurabilityBlinkSpeed = 14.0f; // 残りが少ない時の点滅の速さ
+constexpr float kDurabilityBlinkMinAlpha = 0.35f; // 点滅で一番薄くなった時の不透明度
+
 /** @brief 枠ごとの切り替えの入力の名前（Input の {Slot1}〜{Slot3}） */
-constexpr const wchar_t* kSlotPrompts[] = { L"{Slot1}", L"{Slot2}", L"{Slot3}" };
+constexpr const wchar_t* kSlotPrompts[] = { L"{Slot1}", L"{Slot2}", L"{Slot3}", L"{Slot4}" };
 }
 
 /** @brief 武器スロットのスプライトとアイコンを用意する */
@@ -123,12 +135,15 @@ void WeaponSlotHud::InitializeFrames() {
         return sprite;
     };
     const float iconSize = kSlotSize - kIconInset * 2.0f;
-    for (int i = 0; i < kSlotCount; ++i) {
-        auto& slot = slots_[i];
+    for (auto& slot : slots_) {
         slot.frame = create({}, { kSlotSize, kSlotSize });
         slot.frame->SetColor(kSlotFrameColor);
         slot.icon = create({}, { iconSize, iconSize });
         slot.icon->SetColor(kEmptyIconColor);
+        // 合体の耐久のバーは最初に作っておき、合体している間だけ描く（ゲーム中に作ったり消したりしない）
+        slot.durabilityBack = create({}, { iconSize, kDurabilityBarHeight });
+        slot.durabilityBack->SetColor(kDurabilityBackColor);
+        slot.durabilityFill = create({}, { iconSize, kDurabilityBarHeight });
     }
     gunFrame_ = create({}, { kSlotSize, kSlotSize });
     gunFrame_->SetColor(kGunFrameColor);
@@ -149,10 +164,11 @@ void WeaponSlotHud::ApplyLayout() {
     const Vector2 origin = layout.Pos("weapon_slots.pos", kSlotsPosition);
     const float pitch = layout.Float("weapon_slots.pitch", kSlotPitch);
     const float gunGap = layout.Float("weapon_slots.gun_gap", kGunFrameGap);
+    const float bossGap = layout.Float("weapon_slots.boss_gap", gunGap);
     // 近接スロットを横に並べ、枠の内側にアイコンを置く
-    for (int i = 0; i < kSlotCount; ++i) {
+    for (int i = 0; i <= kSlotCount; ++i) {
         auto& slot = slots_[i];
-        slot.position = { origin.x + i * pitch, origin.y };
+        slot.position = { origin.x + i * pitch + (i == kSlotCount ? bossGap : 0.0f), origin.y };
         slot.frame->SetPosition(slot.position);
         slot.frame->SetSize({ size, size });
         slot.frame->Update();
@@ -162,7 +178,7 @@ void WeaponSlotHud::ApplyLayout() {
         slot.icon->Update();
     }
     // 近接スロットの右に銃の枠を置き、アイコンは枠の中心に置く
-    gunPosition_ = { origin.x + kSlotCount * pitch + gunGap, origin.y };
+    gunPosition_ = { origin.x + kSlotCount * pitch + gunGap + (weapons_->HasBossWeapon() ? pitch + bossGap : 0.0f), origin.y };
     gunFrame_->SetPosition(gunPosition_);
     gunFrame_->SetSize({ size, size });
     gunFrame_->SetColor(gunFrameColor);
@@ -204,24 +220,39 @@ void WeaponSlotHud::Update(const HudFrame& frame) {
     const auto& list = weapons_->GetList();
     const auto& cam = frame.camera.GetTranslate();
     // 選択中のスロットの枠は脈打たせて青みを足す
-    for (int i = 0; i < kSlotCount; ++i) {
+    for (int i = 0; i <= kSlotCount; ++i) {
+        if (i == WeaponManager::kBossSlot && !weapons_->HasBossWeapon()) {
+            continue;
+        }
         auto& slot = slots_[i];
         const bool active = i == weapons_->GetSelectedSlot();
         // 明るさは基準値に脈打ち（選択中だけ）と切り替え直後の光を足し、青だけ少し強める
         const float brightness = frameBrightness + (active ? pulse * frameActivePulseGain : 0.0f) + flash * frameFlashGain;
         slot.frame->SetColor({ brightness, brightness, brightness + (active ? frameActiveBlueBoost : frameIdleBlueBoost), frameAlpha });
+        UpdateFusionDisplay(slot, i);
         slot.frame->Update();
         // アイコンの見せ方を決めるための、このスロットの状態をまとめる
         const int index = weapons_->GetSlotWeaponIndex(i);
         const SlotIconState state = {
             .weaponIndex = index,
             .active = active,
-            .unlocked = index >= 0 && index < static_cast<int>(list.size()) && weapons_->IsUnlocked(index),
+            .unlocked = index >= 0 && index < static_cast<int>(list.size()) && (i == WeaponManager::kBossSlot || weapons_->IsUnlocked(index)),
             .pulse = pulse,
             .flash = flash,
             .cameraPosition = cam,
         };
+        // ボスの枠は色のアイコンを使う
+        if (i == WeaponManager::kBossSlot) {
+            if (state.unlocked) {
+                ShowColorIcon(slot, state);
+            } else {
+                ShowLockedIcon(slot, state);
+            }
+            slot.icon->Update();
+            continue;
+        }
         // 上の行から順に見て、最初に当てはまった見せ方で出す（最後の行は必ず当てはまる）
+        /** @brief アイコンの表示方法と適用条件 */
         struct IconStyle {
             bool (*applies)(const WeaponSlotHud&, const SlotIconState&);
             void (WeaponSlotHud::*show)(Slot&, const SlotIconState&);
@@ -258,6 +289,45 @@ void WeaponSlotHud::Update(const HudFrame& frame) {
     gunIcon_->SetRotation(pulseTime_ * kGunIconSpinSpeed);
     gunIcon_->Update();
 }
+/** @brief 合体している枠の枠を相棒の色で光らせ、耐久のバーを残りに合わせて伸ばす */
+void WeaponSlotHud::UpdateFusionDisplay(Slot& slot, int slotIndex) {
+    const int partner = weapons_->GetFusedWeaponIndex(slotIndex);
+    slot.fused = partner >= 0;
+    if (!slot.fused) {
+        return;
+    }
+    UILayout& layout = UILayout::Get(kLayoutName);
+    const float size = layout.Float("weapon_slots.size", kSlotSize);
+    const float barHeight = layout.Float("weapon_slots.durability_bar_height", kDurabilityBarHeight);
+    // 枠の色に相棒の色を脈打たせながら混ぜる
+    const float* partnerColor = weapons_->GetList()[partner].effectColor;
+    const float glow = kFusionGlowBase + kFusionGlowPulse * std::sin(pulseTime_ * kFusionGlowSpeed);
+    const Vector4 frameColor = slot.frame->GetColor();
+    slot.frame->SetColor({ frameColor.x + (partnerColor[0] - frameColor.x) * glow, frameColor.y + (partnerColor[1] - frameColor.y) * glow,
+        frameColor.z + (partnerColor[2] - frameColor.z) * glow, frameColor.w });
+    // ボスの枠には耐久のバーを表示しない
+    if (slotIndex == WeaponManager::kBossSlot) {
+        return;
+    }
+    // 耐久のバーは枠の下の内側に置き、残りの割合だけ伸ばす（少なくなったら赤く点滅）
+    const float ratio = weapons_->GetFusionDurabilityRatio(slotIndex);
+    const float width = size - kDurabilityBarInset * 2.0f;
+    const Vector2 barPosition = { slot.position.x + kDurabilityBarInset, slot.position.y + size - kDurabilityBarInset - barHeight };
+    slot.durabilityBack->SetPosition(barPosition);
+    slot.durabilityBack->SetSize({ width, barHeight });
+    slot.durabilityBack->Update();
+    Vector4 fillColor = { partnerColor[0], partnerColor[1], partnerColor[2], 1.0f };
+    if (ratio < kDurabilityLowRatio) {
+        fillColor = kDurabilityLowColor;
+        const float wave = (1.0f + std::sin(pulseTime_ * kDurabilityBlinkSpeed)) * kCenterFactor;
+        fillColor.w = kDurabilityBlinkMinAlpha + (1.0f - kDurabilityBlinkMinAlpha) * wave;
+    }
+    slot.durabilityFill->SetPosition(barPosition);
+    slot.durabilityFill->SetSize({ width * ratio, barHeight });
+    slot.durabilityFill->SetColor(fillColor);
+    slot.durabilityFill->Update();
+}
+
 /** @brief 武器の3Dモデルを枠の位置に浮かべる */
 void WeaponSlotHud::ShowModelIcon(Slot& slot, const SlotIconState& state) {
     UILayout& layout = UILayout::Get(kLayoutName);
@@ -337,16 +407,25 @@ void WeaponSlotHud::QueueText(FontRenderer& font) const {
             textSize.y + kWeaponNamePadding * 2.0f, namePanelColor);
         font.DrawStringW(text, x, y, nameScale, color);
     };
-    for (int i = 0; i < kSlotCount; ++i) {
+    for (int i = 0; i <= kSlotCount; ++i) {
+        if (i == WeaponManager::kBossSlot && !weapons_->HasBossWeapon()) {
+            continue;
+        }
         const int index = weapons_->GetSlotWeaponIndex(i);
-        const bool unlocked = index >= 0 && index < static_cast<int>(list.size()) && weapons_->IsUnlocked(index);
+        const bool unlocked = index >= 0 && index < static_cast<int>(list.size()) && (i == WeaponManager::kBossSlot || weapons_->IsUnlocked(index));
         if (!unlocked) {
             font.DrawStringW(L"?", slots_[i].position.x + lockedMarkOffset.x, slots_[i].position.y + lockedMarkOffset.y,
                 lockedMarkScale, lockedMarkColor);
         } else {
             // 何の武器かが分かるように、枠の下に種類の名前を出す（持っている枠は明るく）
             const bool active = i == weapons_->GetSelectedSlot();
-            drawBelow(WeaponTypeLabel(list[index].type), slots_[i].position, active ? activeNameColor : nameColor);
+            // 合体している枠は 剣＋槌 のように相棒の名前も並べる
+            const int partner = weapons_->GetFusedWeaponIndex(i);
+            std::wstring label = std::wstring(i == WeaponManager::kBossSlot ? L"★" : L"") + WeaponTypeLabel(list[index].type);
+            if (partner >= 0) {
+                label += std::wstring(L"＋") + WeaponTypeLabel(list[partner].type);
+            }
+            drawBelow(label, slots_[i].position, active ? activeNameColor : nameColor);
         }
         // 切り替えの入力は、最後に使った機器の表記で枠の左上に出す
         if (input != nullptr) {
@@ -358,8 +437,10 @@ void WeaponSlotHud::QueueText(FontRenderer& font) const {
 }
 /** @brief 武器スロットを描画する */
 void WeaponSlotHud::Draw() {
-    for (auto& slot : slots_) {
-        slot.frame->Draw();
+    for (int i = 0; i <= kSlotCount; ++i) {
+        if (i != WeaponManager::kBossSlot || weapons_->HasBossWeapon()) {
+            slots_[i].frame->Draw();
+        }
     }
     gunFrame_->Draw();
     models_->CommonDrawSettings();
@@ -371,8 +452,16 @@ void WeaponSlotHud::Draw() {
         }
     }
     sprites_->CommonDrawSettings();
-    for (auto& slot : slots_) {
+    for (int i = 0; i <= kSlotCount; ++i) {
+        if (i == WeaponManager::kBossSlot && !weapons_->HasBossWeapon()) {
+            continue;
+        }
+        auto& slot = slots_[i];
         slot.icon->Draw();
+        if (slot.fused && i != WeaponManager::kBossSlot) {
+            slot.durabilityBack->Draw();
+            slot.durabilityFill->Draw();
+        }
     }
     gunIcon_->Draw();
 }

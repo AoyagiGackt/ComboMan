@@ -16,7 +16,7 @@ namespace engine::game {
 struct FinalBossTuning {
     // ── 舞台 ──
     std::string level = "Resources/Levels/final_arena.json"; ///< ラスボス戦で読み込むレベル
-    std::string bossName = "黒き刃の影"; ///< 名乗りと体力バーに出す名前
+    std::string bossName = "ラスボス"; ///< 名乗りと体力バーに出す名前
     std::string introLine = "……その刀、返してもらう"; ///< 名乗りの後の台詞
     std::string rageLine = "まだだ……！"; ///< 後半戦に入る時の台詞
     // 戦闘の前に出す操作説明（{操作名} は今の機器の表記になる。guide は改行で行を分ける）

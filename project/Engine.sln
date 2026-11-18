@@ -23,6 +23,11 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "json", "..\externals\json\j
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "MathTests", "MathTests\MathTests.vcxproj", "{1E13AE8B-DA77-4A82-9BCD-1948F897ACD5}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "BugHunt", "BugHunt\BugHunt.vcxproj", "{48622EAD-ECC1-45E4-8D8F-4A131CDA9331}"
+	ProjectSection(ProjectDependencies) = postProject
+		{6D06300C-8293-46EC-AA68-DE6C7590CDE1} = {6D06300C-8293-46EC-AA68-DE6C7590CDE1}
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -60,6 +65,12 @@ Global
 		{1E13AE8B-DA77-4A82-9BCD-1948F897ACD5}.Development|x64.Build.0 = Development|x64
 		{1E13AE8B-DA77-4A82-9BCD-1948F897ACD5}.Release|x64.ActiveCfg = Release|x64
 		{1E13AE8B-DA77-4A82-9BCD-1948F897ACD5}.Release|x64.Build.0 = Release|x64
+		{48622EAD-ECC1-45E4-8D8F-4A131CDA9331}.Debug|x64.ActiveCfg = Debug|x64
+		{48622EAD-ECC1-45E4-8D8F-4A131CDA9331}.Debug|x64.Build.0 = Debug|x64
+		{48622EAD-ECC1-45E4-8D8F-4A131CDA9331}.Development|x64.ActiveCfg = Development|x64
+		{48622EAD-ECC1-45E4-8D8F-4A131CDA9331}.Development|x64.Build.0 = Development|x64
+		{48622EAD-ECC1-45E4-8D8F-4A131CDA9331}.Release|x64.ActiveCfg = Release|x64
+		{48622EAD-ECC1-45E4-8D8F-4A131CDA9331}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

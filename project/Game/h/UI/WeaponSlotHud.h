@@ -26,8 +26,17 @@ private:
     struct Slot {
         std::unique_ptr<engine::graphics::Sprite> frame;
         std::unique_ptr<engine::graphics::Sprite> icon;
+        std::unique_ptr<engine::graphics::Sprite> durabilityBack; ///< 合体の耐久のバーの下地
+        std::unique_ptr<engine::graphics::Sprite> durabilityFill; ///< 合体の耐久のバーの残り
+        bool fused = false; ///< このフレームに合体しているか（バーを描くか）
         Vector2 position = {};
     };
+    /**
+     * @brief 合体している枠の枠を相棒の色で光らせ、耐久のバーを残りに合わせて伸ばす
+     * @param slot   表示する枠
+     * @param slotIndex 枠の番号
+     */
+    void UpdateFusionDisplay(Slot& slot, int slotIndex);
     /** @brief HUDに武器モデルを表示するための描画資源と姿勢補正 */
     struct ModelIcon {
         std::unique_ptr<engine::graphics::Object3d> object;
@@ -58,7 +67,7 @@ private:
     engine::graphics::ModelCommon* models_ = nullptr;
     engine::DirectXCommon* graphics_ = nullptr;
     WeaponManager* weapons_ = nullptr;
-    std::array<Slot, kSlotCount> slots_;
+    std::array<Slot, kSlotCount + 1> slots_;
     std::vector<ModelIcon> modelIcons_;
     std::unique_ptr<engine::graphics::Sprite> gunFrame_;
     std::unique_ptr<engine::graphics::Sprite> gunIcon_;

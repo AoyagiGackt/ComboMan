@@ -249,13 +249,14 @@ void StageEditor::UpdateEnemyEntry(ObjectEntry& entry, ParticleManager* pm, cons
         if (holdEnemy) {
             entry.enemy->SetPosition(worldPos);
             entry.enemy->FaceTowardX(playerPos.x);
+            entry.enemy->PlayHeldAnimation(false);
             entry.enemy->RefreshVisualTransforms();
         } else {
             entry.enemy->SetTargetHeight(playerPos.y);
             entry.enemy->Update(playerPos.x);
             // 宙で倒れた敵は、真下の床まで落とす（床探しは倒れた時に一度だけ）
             if (entry.enemy->NeedsCorpseFloor()) {
-                entry.enemy->DropCorpseTo(FindCorpseFloorY(entry.enemy->GetPosition()));
+                entry.enemy->DropCorpseTo(FindCorpseFloorY(entry.enemy->GetPosition(), CollectSolidColliders(false)), !entry.desc.isStageBoss);
             }
             entry.desc.position = entry.enemy->GetPosition();
             if (entry.enemy->IsHealer() && !entry.enemy->IsDefeated()) {
@@ -264,14 +265,14 @@ void StageEditor::UpdateEnemyEntry(ObjectEntry& entry, ParticleManager* pm, cons
                     // 詠唱中にHPが減った＝回復を中断された。サイクルを最初からやり直させる
                     // （プレイヤーの直接攻撃に限らず、爆発バレルの爆風などダメージ源は問わない仕様）
                     entry.healChanneling = false;
-                    entry.runtimeTimer = 0.0f;
+                    entry.healTimer = 0.0f;
                     if (pm) {
                         pm->EmitHitStar("hit_spark", entry.enemy->GetPosition() + SceneVisualTuning::Level().healerEffectOffset,
                             SceneVisualTuning::Level().healInterruptedColor);
                     }
                 } else {
-                    entry.runtimeTimer += gameConstants::kFrameDeltaTime;
-                    if (!entry.healChanneling && entry.runtimeTimer >= kHealerPulseSeconds - kHealerCastSeconds) {
+                    entry.healTimer += gameConstants::kFrameDeltaTime;
+                    if (!entry.healChanneling && entry.healTimer >= kHealerPulseSeconds - kHealerCastSeconds) {
                         // 詠唱開始。ここから完了までの間に被弾すると上のブロックで中断される
                         entry.healChanneling = true;
                         entry.healChannelHpAtStart = hpNow;
@@ -280,8 +281,8 @@ void StageEditor::UpdateEnemyEntry(ObjectEntry& entry, ParticleManager* pm, cons
                                 kHealerRange * SceneVisualTuning::Level().castRingRangeRatio, SceneVisualTuning::Level().castRingColor, SceneVisualTuning::Level().castRingCount, kHealerCastSeconds, SceneVisualTuning::Level().castRingSize);
                         }
                     }
-                    if (entry.runtimeTimer >= kHealerPulseSeconds) {
-                        entry.runtimeTimer = 0.0f;
+                    if (entry.healTimer >= kHealerPulseSeconds) {
+                        entry.healTimer = 0.0f;
                         entry.healChanneling = false;
                         const Vector3 healerPos = entry.enemy->GetPosition();
                         // 回復対象のHP状態にかかわらず、回復行動そのものを緑の波で知らせる。
@@ -308,6 +309,7 @@ void StageEditor::UpdateEnemyEntry(ObjectEntry& entry, ParticleManager* pm, cons
                                             SceneVisualTuning::Level().allyRingColor, SceneVisualTuning::Level().allyRingCount, SceneVisualTuning::Level().allyRingLifetime, SceneVisualTuning::Level().allyRingSize);
                                         pm->EmitBurst("heal_pulse", effectPos,
                                             SceneVisualTuning::Level().allyBurstColor, SceneVisualTuning::Level().allyBurstCount, SceneVisualTuning::Level().allyBurstLifetime, SceneVisualTuning::Level().allyBurstSize, true);
+                                        EmitHealLink(*pm, healerPos + SceneVisualTuning::Level().healerEffectOffset, effectPos);
                                     }
                                 }
                             }
@@ -320,6 +322,28 @@ void StageEditor::UpdateEnemyEntry(ObjectEntry& entry, ParticleManager* pm, cons
                 }
             }
         }
+    }
+}
+
+/** @brief 回復役から回復された敵へ走る光の筋と、回復された敵から立ちのぼる粒を出す（誰が誰を回復したかを見せる） */
+void StageEditor::EmitHealLink(ParticleManager& pm, const Vector3& from, const Vector3& to) const {
+    const LevelVisualSettings& visuals = SceneVisualTuning::Level();
+    // 光の筋: 回復役から相手までを等間隔の粒でつなぐ
+    const int beamCount = (std::max)(visuals.healBeamCount, 1);
+    for (int i = 0; i < beamCount; ++i) {
+        const float t = static_cast<float>(i + 1) / static_cast<float>(beamCount);
+        const Vector3 point = { from.x + (to.x - from.x) * t, from.y + (to.y - from.y) * t, from.z + (to.z - from.z) * t };
+        pm.EmitWithColor("heal_pulse", point, {}, visuals.healBeamColor, visuals.healBeamLifetime, visuals.healBeamSize, true);
+    }
+    // 立ちのぼる粒: 相手の体の幅に横へ並べ、外側ほど少し遅く上げる
+    const int riseCount = (std::max)(visuals.healRiseCount, 1);
+    constexpr float kCenter = 0.5f; // 並びの真ん中（0〜1 の割合）
+    for (int i = 0; i < riseCount; ++i) {
+        const float ratio = riseCount > 1 ? static_cast<float>(i) / static_cast<float>(riseCount - 1) : kCenter;
+        const float side = ratio - kCenter;
+        const Vector3 position = { to.x + side * visuals.healRiseWidth, to.y, to.z };
+        const Vector3 velocity = { 0.0f, visuals.healRiseSpeed * (1.0f - std::abs(side)), 0.0f };
+        pm.EmitWithColor("heal_pulse", position, velocity, visuals.healRiseColor, visuals.healRiseLifetime, visuals.healRiseSize, true);
     }
 }
 
@@ -364,6 +388,10 @@ bool StageEditor::UpdatePatrol(ObjectEntry& entry) {
     // 敵本体と配置情報の両方へ位置を書き戻し、見た目の行列を更新する
     enemy->SetPosition(position);
     entry.desc.position = position;
+    // 歩いて回っているので走るアニメにする（汎用の敵だけ。ナイトは自分の状態でアニメを決める）
+    if (entry.enemy) {
+        entry.enemy->PlayHeldAnimation(true);
+    }
     enemy->RefreshVisualTransforms();
     return true;
 }

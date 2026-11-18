@@ -140,7 +140,7 @@
       "type": "row",
       "kind": "prop",
       "axis": "x",
-      "count": 62,
+      "count": 63,
       "step": 1,
       "model": "Resources/block/block.obj",
       "texture": "Resources/block/block.png",
@@ -344,7 +344,7 @@
         0.95
       ],
       "activationFlag": "s6_zone_b",
-      "text": "城壁  槍の壁の奥に宝  正面の部隊は回復役から崩せ"
+      "text": "城壁  光る壁の奥に宝  正面の部隊は回復役から崩せ"
     },
     {
       "name": "s6_wall_ledge",
@@ -390,7 +390,6 @@
       "breakableRadius": 0,
       "breakablePlayerDamage": 0,
       "breakableEnemyDamage": 0,
-      "breakableWeapon": "Spear",
       "breakableColor": [
         0.55,
         0.75,
@@ -562,7 +561,7 @@
         0.95
       ],
       "activationFlag": "s6_zone_c",
-      "text": "上段は崩れる床の先に鎚の壁  下段は樽を蹴って敵ごと吹き飛ばせ"
+      "text": "上段は崩れる床の先に光る壁  下段は樽を蹴って敵ごと吹き飛ばせ"
     },
     {
       "name": "stair_s6_1",
@@ -674,7 +673,6 @@
       "breakableRadius": 0,
       "breakablePlayerDamage": 0,
       "breakableEnemyDamage": 0,
-      "breakableWeapon": "Hammer",
       "breakableColor": [
         0.7,
         0.7,

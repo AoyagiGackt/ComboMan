@@ -9,6 +9,7 @@ struct GameSettings {
     float bgmVolume = 0.7f;
     float seVolume = 1.0f;
     bool autoCombo = true; ///< 攻撃ボタンの連打/長押しだけで打ち上げ→追撃ジャンプまで出し分けるアシスト
+    bool weaponFusion = true; ///< 枠が満杯の時に奪った武器を今の武器に合体させるか（false なら今の武器と入れ替える）
 };
 
 // 設定の読み込み・保存を管理するシングルトン

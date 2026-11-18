@@ -28,6 +28,7 @@ void GamePlayScene::StartClearFinish() {
     CrashBreadcrumbs::Add("game", std::string("クリアの決め演出を開始（") + (bossFinishedByGun_ ? "銃" : "斬撃") + "）");
     // とどめの途中で確認用ボタンからクリアした時も、演出を閉じて技の姿勢から戻す
     bossExecution_.End();
+    SetWeaponEnemyWeaponsHidden(false);
     // ラン中は結果画面を決めた秒数だけ見せ、サンドボックスは割れ落ちたらすぐクリア画面へ
     ClearFinish::Setup setup;
     setup.style = bossFinishedByGun_ ? ClearFinish::Style::kGun : ClearFinish::Style::kBlade;
@@ -69,7 +70,7 @@ bool GamePlayScene::UpdateClearState() {
     if (!runResult) {
         rd->SetFinalBossPending(false);
         SceneFlow::GetInstance()->Transition(kSceneName, "sandbox_clear", "CLEAR");
-    } else if (glassShatterDebugTest_) {
+    } else if (glassShatterDebugTest_ || rd->IsTutorialActive()) {
         SceneFlow::GetInstance()->Transition(kSceneName, "next", "MAP");
     } else if (IsFinalBossMode()) {
         // ラスボスを倒したらエンディングへ
@@ -104,6 +105,10 @@ void GamePlayScene::RecordRunClear(bool apply) {
         return;
     }
     auto* rd = RunData::GetInstance();
+    // チュートリアルは練習なので、スコア・戦績・進行度・セーブのどれにも数えない
+    if (rd->IsTutorialActive()) {
+        return;
+    }
     rd->AddScore(lastScore_);
     // ラスボス戦はステージの戦績に数えず、進行度も進めない（スコアだけ足す）
     if (IsFinalBossMode()) {

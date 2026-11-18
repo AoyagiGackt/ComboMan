@@ -141,6 +141,8 @@ struct SceneParticleDef {
     float surfaceLerp = 0.3f; ///< 敵中心から命中演出を手前へ寄せる割合
     int extraRingCountDivisor = 2; ///< 武器の追加粒子数からリング追加数を求める除数
     float chestHeight = 0.5f; ///< プレイヤー足元から胸までの高さ
+    int idleAuraMinRank = 4; ///< 覚醒していなくても武器に属性をまとわせるスタイルランク（0=D 〜 6=SSS、4=S）
+    float idleAuraRankChance = 0.35f; ///< そのランクの時、1フレームにまとわせる確率
     float comboSlashGrowthPerStep = 0.5625f; ///< コンボ段ごとに足す斬線倍率
     int comboFinisherStep = 3; ///< 締め演出を出すコンボ段
     int burstColumns = 5; ///< 武器粒子の奥行き方向の列数
@@ -157,6 +159,11 @@ struct SceneParticleDef {
     float fanSpeedBase = 7.0f; ///< 扇状に出す弾煙の基準速度
     float fanSpeedStep = 1.0f; ///< 粒子ごとに足す扇状速度
     float halfRange = 0.5f; ///< 扇状分布の中心補正
+    int tracerCount = 6; ///< 弾1発の後ろに引く光の尾の粒の数
+    float tracerSpeedStep = 0.07f; ///< 尾の粒ごとに遅らせる速さの割合（遅い粒ほど後ろに残って尾が伸びる）
+    float tracerSizeStep = 0.12f; ///< 尾の粒ごとに縮める大きさの割合
+    float tracerAlphaStep = 0.14f; ///< 尾の粒ごとに薄める不透明度の割合
+    float muzzleForward = 0.6f; ///< 体の中心から撃つ向きへずらす銃口の位置
     float sequenceSlashAngleStep = 1.1f; ///< 連撃の段ごとの斬線角度
     int bladeCount = 12; ///< 固有技命中時に出す刃の数
     float bladeRadius = 2.6f; ///< 刃の発生半径

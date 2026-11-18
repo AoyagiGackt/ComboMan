@@ -339,9 +339,9 @@ void StageEditor::RenderViewportContextMenu() {
             RecordUndoSnapshotNow();
             AppendGeneratedContent(StageEditorContentFactory::CreateSlidingDoor(at, templateDoorCondition_, nextSerial_));
         }
-        if (ImGui::MenuItem("壊せる壁（ハンマー）")) {
+        if (ImGui::MenuItem("壊せる壁")) {
             RecordUndoSnapshotNow();
-            AppendGeneratedContent(StageEditorContentFactory::CreateBreakableWall(at, "Hammer", nextSerial_));
+            AppendGeneratedContent(StageEditorContentFactory::CreateBreakableWall(at, nextSerial_));
         }
         if (ImGui::MenuItem("区画トリガー＋案内文")) {
             RecordUndoSnapshotNow();

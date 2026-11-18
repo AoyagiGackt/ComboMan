@@ -1,5 +1,5 @@
 {
-  "_comment": "敵AIの調整値。basic=汎用敵(EnemyEntity) knight=ナイト(KnightEnemy) bullet=敵弾 bossSlam=ボスの叩きつけ（予告の長さ・範囲・ダメージ。出す時機は boss_battle.json の技の並び） separation=敵どうし・敵とプレイヤーの押し離し visuals=モンスターの見た目（depthOffset=見た目だけ奥へずらす量。大きい体に近づいたプレイヤーが隠れないように）（playerMinDistanceX は player_params.json の minEnemyDistanceX より小さくする。大きいとプレイヤーが歩いて敵を押せてしまう）",
+  "_comment": "敵AIの調整値。basic=汎用敵(EnemyEntity) knight=ナイト(KnightEnemy) bullet=敵弾 blownAwayKillRise/blownAwaySettleSeconds=吹き飛んだ敵が元の高さよりこれ以上高い所で止まったら倒す高さと、止まってから調べるまでの秒数（壁を突き抜けた敵も倒す） healFlashSeconds/healFlashColor=回復された敵の体が緑に光る秒数と色 bossSlam=ボスの叩きつけ（予告の長さ・範囲・ダメージ。出す時機は boss_battle.json の技の並び） separation=敵どうし・敵とプレイヤーの押し離し visuals=モンスターの見た目（depthOffset=見た目だけ奥へずらす量。大きい体に近づいたプレイヤーが隠れないように）（playerMinDistanceX は player_params.json の minEnemyDistanceX より小さくする。大きいとプレイヤーが歩いて敵を押せてしまう）",
   "basic": {
     "attackInterval": 1.5,
     "attackTelegraph": 0.38,
@@ -31,12 +31,16 @@
     "healerCastSeconds": 0.5,
     "healerRange": 7,
     "healerAmount": 4,
+    "healFlashSeconds": 0.6,
+    "healFlashColor": [0.3, 1, 0.45, 1],
     "corpseFootOffset": 0.1,
     "climbSpeed": 0.06,
     "climbMaxHeight": 4,
     "climbChaseHeight": 1.2,
     "climbChaseStopDistance": 0.3,
-    "stepUpHeight": 0.35
+    "stepUpHeight": 0.35,
+    "blownAwayKillRise": 3,
+    "blownAwaySettleSeconds": 0.3
   },
   "knight": {
     "maxHp": 3,

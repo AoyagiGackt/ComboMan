@@ -17,12 +17,11 @@ inline constexpr int kDefaultPlayerMaxHp = 30;
 struct GameRulesData {
     // マップの入口座標。JSONが無い場合は既定の6ステージ配置を使う
     std::vector<float> stagePortalXs = { 8.0f, 18.0f, 28.0f, 38.0f, 48.0f, 58.0f };
+    std::string tutorialLevelPath = "Resources/Levels/tutorial.json"; ///< チュートリアルのステージ（空ならマップに入口を出さない）
+    float tutorialPortalX = 3.5f; ///< マップのチュートリアルの入口の位置（ステージ1の入口の左）
     bool requireBossWeaponSteal = true; ///< trueならボス撃破+武器奪取でクリア条件が成立する
     std::string clearFlag = "stage_clear"; ///< このGameFlagsが立ってもクリア条件が成立する（グラフからの操作用）
     bool gameOverOnHpZero = true; ///< trueならラン中にHPが0になるとゲームオーバー結果へ遷移する
-    bool debugGameOverButton = false; ///< trueならゲーム中にやられ演出をすぐ見るボタン（F9かクリック）を出す（評価・確認用）
-    bool debugClearButton = false; ///< trueならゲーム中にクリアの決め演出をすぐ見るボタン（F5かクリック。押すたびに剣と銃を交互に見せる）を出す（評価・確認用）
-    bool debugLiberationButton = false; ///< trueならマップにステージの解放演出をすぐ見るボタン（F5かクリック。進行は変えない）を出す（評価・確認用）
     float resultDisplaySeconds = 2.5f; ///< クリア結果表示の秒数
     int finalFloor = 6; ///< このフロア以上でクリア扱い（それ未満は次のフロアへ）
     int bossHpCombat = 20;

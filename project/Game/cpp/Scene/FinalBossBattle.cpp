@@ -412,6 +412,18 @@ void FinalBossBattle::EquipKatanaOnly() {
     weaponsSwapped_ = true;
 }
 
+/** @brief 刀だけに差し替える前のボスの枠の主軸と相棒の番号を返す（差し替えていなければ今の持ち物） */
+void FinalBossBattle::GetSavedBossWeapons(int& main, int& partner) const {
+    if (weaponsSwapped_) {
+        main = weaponBackup_.bossWeapon;
+        partner = weaponBackup_.bossPartner;
+        return;
+    }
+    const WeaponManager* weapons = WeaponManager::GetInstance();
+    main = weapons->GetSlotWeaponIndex(WeaponManager::kBossSlot);
+    partner = weapons->GetFusedWeaponIndex(WeaponManager::kBossSlot);
+}
+
 /** @brief 退避した武器へ戻す */
 void FinalBossBattle::RestoreWeapons() {
     if (!weaponsSwapped_) {

@@ -14,6 +14,7 @@
 #include "GamePlaySceneInitializer.h"
 #include "GameRules.h"
 #include "SceneEffectBridge.h"
+#include "SmokeTestRunner.h"
 #include "SceneFlow.h"
 #include "GrayscaleEffect.h"
 #include "HsvFilter.h"
@@ -23,6 +24,7 @@
 #include "ParticleManager.h"
 #include "PipelineStateGuard.h"
 #include "PlayerBridge.h"
+#include "PlayerTuning.h"
 #include "PlaytestLog.h"
 #include "PostEffectRenderTarget.h"
 #include "RunData.h"
@@ -41,11 +43,6 @@ using namespace engine::graphics;
 
 namespace engine::game {
 namespace {
-// 確認用ボタン（評価・確認用。game_rules.json の debugGameOverButton / debugClearButton で出し入れする）
-constexpr float kDebugGameOverButtonTop = 48.0f; ///< やられ演出のボタンを置く、画面の上端からの高さ
-constexpr float kDebugClearButtonTop = 92.0f; ///< クリア演出のボタンは、やられ演出のボタンのすぐ下に置く
-constexpr Vector4 kDebugGameOverHoverColor = { 0.65f, 0.12f, 0.12f, 0.85f };
-constexpr Vector4 kDebugClearHoverColor = { 0.75f, 0.6f, 0.1f, 0.85f };
 constexpr const char* kDefaultLevelPath = "Resources/Levels/level01.json";
 
 
@@ -56,6 +53,10 @@ std::string GamePlayScene::GetEditorLevelPath() const {
     // 最後のステージをクリアした後は、ラスボス戦の闘技場を開く
     if (IsFinalBossMode()) {
         return FinalBossTuningStore::Get().level;
+    }
+    // マップのチュートリアルの入口から入った時は、練習用のステージを開く
+    if (RunData::GetInstance()->IsTutorialActive() && !GameRules::GetInstance()->Get().tutorialLevelPath.empty()) {
+        return GameRules::GetInstance()->Get().tutorialLevelPath;
     }
     return GameRules::GetInstance()->LevelPathForFloor(RunData::GetInstance()->GetPlayFloor(), kDefaultLevelPath);
 }
@@ -127,10 +128,6 @@ void GamePlayScene::InitializeParticlesAndHud() {
     fontRenderer_.Initialize(spriteCommon_.get());
     stageIntro_.Initialize(spriteCommon_.get());
     playerDefeat_.Initialize(spriteCommon_.get(), &fontRenderer_, audio_);
-    debugGameOverButton_.Initialize(spriteCommon_.get(), { L"[F9] ゲームオーバーを見る", DIK_F9, "debug_gameover",
-        kDebugGameOverButtonTop, kDebugGameOverHoverColor, &GameRulesData::debugGameOverButton });
-    debugClearButton_.Initialize(spriteCommon_.get(), { L"[F5] すぐクリアする（演出は2種類）", DIK_F5, "debug_clear",
-        kDebugClearButtonTop, kDebugClearHoverColor, &GameRulesData::debugClearButton });
     clearFinish_.Initialize(spriteCommon_.get());
     SlashMark::GetInstance()->Initialize(spriteCommon_.get());
 
@@ -139,6 +136,7 @@ void GamePlayScene::InitializeParticlesAndHud() {
     // ボス頭上のHPバー（道中の武器敵ぶんはOnEditorLevelLoaded()でレベル読込のたびに生成する）
     const Vector4& hpBarBackground = SceneVisualTuning::Gameplay().hpBarBackgroundColor;
     sceneShared::CreateHpBarSprites(spriteCommon_.get(), bossHpBarBg_, bossHpBarFg_, hpBarBackground);
+    InitializeAlly();
     // プレイヤーHPゲージ（左下、既存の数値表示のすぐ上に置く）
     sceneShared::CreateHpBarSprites(spriteCommon_.get(), playerHpBarBg_, playerHpBarFg_, hpBarBackground);
 
@@ -233,6 +231,65 @@ std::vector<Vector3> GamePlayScene::CollectStandingEnemyPositions() const {
     return positions;
 }
 
+/** @brief 今の戦闘の相手（ボスか道中の敵）の実体か（作り直しで消えた敵を指したままにしないための確認） */
+bool GamePlayScene::IsCombatEnemy(const EnemyEntity* enemy) const {
+    if (enemy == nullptr) {
+        return false;
+    }
+    return enemy == enemy_ || std::any_of(weaponEnemies_.begin(), weaponEnemies_.end(), [enemy](const WeaponEnemyEntry& entry) {
+        return entry.enemy == enemy;
+    });
+}
+
+/** @brief 乱舞の相手に向いた敵を選ぶ（ロック中の敵、いなければ近くで一番近い敵。届く所に誰もいなければ nullptr） */
+EnemyEntity* GamePlayScene::PickRampageEnemy() const {
+    const Vector3& playerPos = player_->GetPosition();
+    const PlayerTuning& tuning = PlayerTuning::Get();
+    EnemyEntity* nearest = nullptr;
+    float nearestDistance = tuning.rampageSearchRange;
+    bool lockedChosen = false;
+    auto consider = [&](EnemyEntity* enemy) {
+        if (lockedChosen || enemy == nullptr || enemy->IsDefeated() || !enemy->IsVisible()) {
+            return;
+        }
+        // 閉じた扉や壁の向こうの敵は選ばない（連撃で敵の周りへ移る時に扉を抜けてしまう）
+        if (IsWallBetweenEnemyAndPlayer(enemy->GetPosition())) {
+            return;
+        }
+        // ロック中の敵は距離に関係なく選び、ほかの敵では置き換えない
+        if (enemy == lockedEnemy_) {
+            nearest = enemy;
+            lockedChosen = true;
+            return;
+        }
+        const Vector3& position = enemy->GetPosition();
+        const float distance = std::abs(position.x - playerPos.x);
+        if (distance <= nearestDistance && std::abs(position.y - playerPos.y) <= tuning.rampageSearchHeight) {
+            nearest = enemy;
+            nearestDistance = distance;
+        }
+    };
+    consider(enemy_);
+    for (const auto& entry : weaponEnemies_) {
+        consider(entry.enemy);
+    }
+    return nearest;
+}
+
+/** @brief 乱舞の相手を決め直し、向かう位置を返す（乱舞の途中は同じ相手を追い、乱舞していない時は近くの敵を選び直す） */
+Vector3 GamePlayScene::UpdateRampageEnemy() {
+    if (!player_->IsRampaging() || !IsCombatEnemy(rampageEnemy_)) {
+        rampageEnemy_ = PickRampageEnemy();
+    }
+    // 届く所に誰もいなければ、その場で打ち上げる
+    return rampageEnemy_ != nullptr ? rampageEnemy_->GetPosition() : player_->GetPosition();
+}
+
+/** @brief 乱舞の打ち上げ・連撃・締めを向ける敵（相手を選べずその場で打ち上げた時は nullptr） */
+EnemyEntity* GamePlayScene::RampageTargetEnemy() const {
+    return IsCombatEnemy(rampageEnemy_) ? rampageEnemy_ : nullptr;
+}
+
 /** @brief シーンエディタへ渡す編集対象をまとめる */
 SceneEditor::EditContext GamePlayScene::BuildEditContext() {
     SceneEditor::EditContext ctx;
@@ -304,7 +361,8 @@ void GamePlayScene::Update() {
     // 一時停止中はHUDを出さないが、文字コマンドの破棄だけは毎フレーム行う
     // （破棄はふだんDrawStyleUI()が行うため、飛ばすとポーズ画面の文字が溜まり続けて上限を超えた分から消える）
     pauseMenu_.SetPreviewActor(player_.get()); // コマンド表の技の見本はこのプレイヤーが演じる
-    const bool paused = pauseMenu_.Update(input_, !WeaponManager::GetInstance()->HasPendingWeapon());
+    const bool choosingWeapon = WeaponManager::GetInstance()->HasPendingWeapon() || WeaponManager::GetInstance()->HasPendingBossChoice();
+    const bool paused = pauseMenu_.Update(input_, !choosingWeapon);
     // ポーズ中と開始演出の間は、配置物・敵の進行も止める（BaseScene が Update の後に配置物を更新するため）
     GetStageEditor().SetGameplayHeld(paused || stageIntro_.IsPlaying());
     if (paused) {
@@ -334,12 +392,14 @@ void GamePlayScene::Update() {
     // GO! を出した瞬間から操作できるので、残っている文字の表示時間だけここで進める
     stageIntro_.Update(input_);
 
-    // 確認用ボタンが押されたら、HPが尽きた時と同じやられ演出／クリアの決め演出を始める
-    if (debugGameOverButton_.Update(input_, dxCommon_)) {
+    // 自動テストプレイの間だけ、遊んでいる様子からおかしな所を探して記録する（ふだんは何もしない）
+    RunBugChecks();
+    // 自動テストプレイの間だけ、F9 でやられ演出、F5 ですぐクリアできる（手順の表がステージを先へ進めるのに使う。ふだんは効かない）
+    if (SmokeTestRunner::IsActive() && input_->TriggerKey(DIK_F9)) {
         StartPlayerDefeat();
         return;
     }
-    if (debugClearButton_.Update(input_, dxCommon_)) {
+    if (SmokeTestRunner::IsActive() && input_->TriggerKey(DIK_F5)) {
         TriggerDebugClear();
         return;
     }
@@ -354,7 +414,8 @@ void GamePlayScene::Update() {
     }
 
     UpdateWeaponExchange();
-    if (WeaponManager::GetInstance()->HasPendingWeapon()) {
+    UpdateBossMainChoice();
+    if (WeaponManager::GetInstance()->HasPendingWeapon() || WeaponManager::GetInstance()->HasPendingBossChoice()) {
         // 武器の入れ替えを選んでいる間もゲームは止まっているので、敵と仕掛けも待たせる
         GetStageEditor().SetGameplayHeld(true);
         UpdateCamera();
@@ -469,6 +530,7 @@ void GamePlayScene::UpdateStageIntro() {
 void GamePlayScene::StartPlayerDefeat() {
     // ロック中の対象へカメラを寄せないよう外し、敵と仕掛けも止める（とどめの途中なら閉じて技の姿勢から戻す）
     bossExecution_.End();
+    SetWeaponEnemyWeaponsHidden(false);
     lockedEnemy_ = nullptr;
     const StageBounds bounds = GetStageBounds();
     PlayerDefeat::Setup setup;
@@ -517,19 +579,27 @@ void GamePlayScene::UpdatePlayerDefeat() {
 // 戦闘とカメラの更新
 // ══════════════════════════════════════════════════════
 void GamePlayScene::UpdateCombatEvents() {
-    // ボスに対する専用演出は、実体がある時だけ進める
-    if (!enemy_) {
-        return;
-    }
     auto* tm = TimeManager::GetInstance();
+    // 乱舞の打ち上げ・連撃・締めは乱舞の相手に向ける（道中の敵にも、ボスにも）。相手がいなければ演出だけその場に出す
+    EnemyEntity* const rampageTarget = RampageTargetEnemy();
+    const Vector3 rampagePos = rampageTarget != nullptr ? rampageTarget->GetPosition() : player_->GetPosition();
+    const HitEffectPlayer rampageFx(pm_, &cameraShaker_, &rng_);
+    // 乱舞の始め: 足元から覚醒色の輪を広げ、画面を光らせて揺らす（ここから突進することを見せる）
+    if (player_->JustStartedRampage()) {
+        rampageFx.Ring("rampage_start", player_->GetPosition());
+        rampageFx.Flash("rampage_start");
+        rampageFx.Impact("rampage_start");
+    }
     // 乱舞 打ち上げヒット
     // 打ち上げ: 敵を浮かせ、止めと揺れと輪と火花を出す
     if (player_->JustLaunched()) {
-        // ボスはひるんでいる間だけ浮く
-        if (BossReactsToHits()) {
-            enemy_->Launch(CombatTune().launchSpeed);
+        // 道中の敵は必ず浮き、ボスはひるんでいる間だけ浮く
+        if (rampageTarget != nullptr && (rampageTarget != enemy_ || BossReactsToHits())) {
+            rampageTarget->Launch(CombatTune().launchSpeed);
         }
-        const Vector3& epos = enemy_->GetPosition();
+        const Vector3& epos = rampagePos;
+        rampageFx.Ring("rampage_launch", epos);
+        rampageFx.Sparks("rampage_launch", epos);
         tm->RequestHitStop(HitEffectLibrary::GetInstance()->SceneParticles().hitStopLaunch);
         cameraShaker_.Request(HitEffectLibrary::GetInstance()->SceneParticles().shakeLaunchAmt, HitEffectLibrary::GetInstance()->SceneParticles().shakeLaunchDur);
         pm_->EmitRing("hit_ring", epos, SceneVisualTuning::Gameplay().launchRingSpeed, SceneVisualTuning::Gameplay().launchRingColor, SceneVisualTuning::Gameplay().launchRingCount, SceneVisualTuning::Gameplay().launchRingLifetime, SceneVisualTuning::Gameplay().launchRingSize);
@@ -548,18 +618,27 @@ void GamePlayScene::UpdateCombatEvents() {
         float dir = player_->GetLastDirX();
         float slashAng = (dir > 0.0f) ? 0.0f : gameConstants::kPi;
         float rad = SceneVisualTuning::Gameplay().juggleSlashRadiusBase + cnt * SceneVisualTuning::Gameplay().juggleSlashRadiusStep;
-        const Vector3& epos = enemy_->GetPosition();
+        const Vector3& epos = rampagePos;
         pm_->EmitSlash("sword_slash", epos, slashAng,
             { 1.0f, 1.0f - cnt * SceneVisualTuning::Gameplay().juggleSlashGreenFade, 1.0f - cnt * SceneVisualTuning::Gameplay().juggleSlashBlueFade, 1.0f }, rad);
         pm_->EmitRing("hit_ring", epos, SceneVisualTuning::Gameplay().juggleRingSpeedBase + cnt * SceneVisualTuning::Gameplay().juggleRingSpeedStep,
             SceneVisualTuning::Gameplay().juggleRingColor, SceneVisualTuning::Gameplay().juggleRingCount, SceneVisualTuning::Gameplay().juggleRingLifetime, SceneVisualTuning::Gameplay().juggleRingSize);
         tm->RequestHitStop(HitEffectLibrary::GetInstance()->SceneParticles().hitStopJuggle);
         cameraShaker_.Request(SceneVisualTuning::Gameplay().juggleShakeBase + cnt * SceneVisualTuning::Gameplay().juggleShakeStep, SceneVisualTuning::Gameplay().juggleShakeSeconds);
+        rampageFx.Star("rampage_slash", epos);
+        // 近接の当たりと同じ画面の斬撃線を引く（覚醒中は扇状に重なる）。最後の一撃はブラー・ズーム・スローの締め演出も出す
+        const auto* wm = WeaponManager::GetInstance();
+        const Vector4 slashColor = wm->HasEquippedWeapon()
+            ? ColorFromArray(wm->GetCurrent().effectColor)
+            : HitEffectLibrary::GetInstance()->Color("unarmed_trail");
+        comboFeel_.OnMeleeHit(nullptr, player_->JustRampageFinish(), epos, slashColor, dir, camera_.get());
     }
     // 乱舞 フィニッシュ
     if (player_->JustRampageFinish()) {
         // 乱舞の締め: 大きな止めと揺れ、内外2重の輪と火花
-        const Vector3& epos = enemy_->GetPosition();
+        const Vector3& epos = rampagePos;
+        rampageFx.Flash("rampage_finish");
+        rampageFx.Impact("rampage_finish");
         tm->RequestHitStop(HitEffectLibrary::GetInstance()->SceneParticles().hitStopFinish);
         cameraShaker_.Request(HitEffectLibrary::GetInstance()->SceneParticles().shakeFinishAmt, HitEffectLibrary::GetInstance()->SceneParticles().shakeFinishDur);
         pm_->EmitRing("hit_ring", epos, SceneVisualTuning::Gameplay().finishOuterRingSpeed, SceneVisualTuning::Gameplay().finishOuterRingColor,
@@ -574,6 +653,10 @@ void GamePlayScene::UpdateCombatEvents() {
                 { 1.0f, SceneVisualTuning::Gameplay().finishSparkGreenBase + i * SceneVisualTuning::Gameplay().finishSparkGreenStep, SceneVisualTuning::Gameplay().finishSparkBlue, 1.0f },
                 SceneVisualTuning::Gameplay().finishSparkLifetime, SceneVisualTuning::Gameplay().finishSparkSize);
         }
+    }
+    // ここから下はボスに対する演出なので、ボスがいる時だけ進める
+    if (!enemy_) {
+        return;
     }
     // フィニッシャースラッシュ 発動の合図（斬撃線の表示は UpdateFinisherSlash に委譲）
     if (player_->JustFinisherSlash()) {
@@ -610,13 +693,31 @@ void GamePlayScene::UpdateCombat() {
         if (finalBoss_.IsActive()) {
             finalBoss_.PrepareInput();
         }
+        player_->SetRampageTarget(UpdateRampageEnemy());
+        const Vector3 positionBeforeUpdate = player_->GetPosition();
         player_->Update(input_, enemy_ ? enemy_->GetPosition() : player_->GetPosition(), enemy_ && !enemy_->IsDefeated() && enemy_->IsVisible(), !activeColliders.empty());
         gameSounds::PlayPlayerActions(*player_);
         // ボスだけでなく道中の敵の手前でも止め、プレイヤーが歩いて敵を押しのけないようにする
         player_->ResolveEnemyOverlaps(CollectStandingEnemyPositions());
+        // 乱舞の連撃や踏み込みなど一気に動く技と、敵と重なった時に敵の向こうへずらす分で、壁や閉じた扉の真ん中を横切ったら横の位置を戻す
+        // （壁際の敵に重なると壁の向こうへ置かれてしまう。ふつうに歩いてぶつかるだけなら真ん中までは入らないので、この後の地形との当たり判定に任せる）
+        if (DidPlayerCrossWall(positionBeforeUpdate, player_->GetPosition())) {
+            Vector3 kept = player_->GetPosition();
+            kept.x = positionBeforeUpdate.x;
+            player_->SetPosition(kept);
+        }
         // 移動後に足場との接触を解決し、補正が入ったフレームは見た目も同期する
         // エディタの現在状態から毎フレーム判定を作り、移動・追加・削除を即時反映する
         player_->ResolveBlockCollision(activeColliders);
+        // 地形との当たり判定で壁の真ん中より向こうへ押し出された時も、このフレームの初めの横の位置へ戻す
+        if (DidPlayerCrossWall(positionBeforeUpdate, player_->GetPosition())) {
+            Vector3 kept = player_->GetPosition();
+            kept.x = positionBeforeUpdate.x;
+            player_->SetPosition(kept);
+            player_->RefreshVisualTransforms();
+        }
+        UpdateFallRescue();
+        UpdateAlly();
         player_->RefreshVisualTransforms();
         // 敵が自分から食い込んできた分は、敵が動いた後（StageEditor::UpdateObjects）に押し戻させる。乱舞はわざと密着させるので外す
         GetStageEditor().SetEnemiesAvoidPlayer(!player_->IsRampaging());
@@ -644,8 +745,9 @@ void GamePlayScene::UpdateCombat() {
         // enemy_の物理/アニメーション更新自体はStageEditor所有のためGetStageEditor().UpdateObjects()
         // （BaseScene::Tick()がUpdate()の直後に呼ぶ）が担う。ここでは前フレーム分の着地判定だけ読む
         // （1フレーム遅延するが60fps下では実用上無視できる差）
-        if (enemy_ && enemy_->JustLanded()) {
-            player_->EndRampage(); // 敵が着地したらジャグル強制終了
+        // 乱舞の相手が着地したらジャグル強制終了
+        if (const EnemyEntity* rampageTarget = RampageTargetEnemy(); rampageTarget != nullptr && rampageTarget->JustLanded()) {
+            player_->EndRampage();
         }
         skydome_->Update(camera_.get());
     } else {
@@ -656,6 +758,8 @@ void GamePlayScene::UpdateCombat() {
 /** @brief シーン固有の演出資源と登録済みコールバックを破棄する */
 void GamePlayScene::Finalize() {
     motionEditor_.Close(*player_);
+    // 2P に渡していた機器を 1P の操作へ戻す（次のシーンで 1P の機器が外れたままにならないように）
+    LeaveTwoPlayer(nullptr);
     // ラスボス戦で刀だけにした武器と、闘技場の入力の差し替えを元へ戻す
     finalBoss_.Finalize();
     // enemy_/weaponEnemies_はStageEditor所有（非所有ポインタ）のため、EnemyRegistryへの

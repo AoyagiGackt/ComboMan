@@ -21,6 +21,8 @@ constexpr JsonField<BossExecutionTuning> kRootFields[] = {
     { nullptr, "slashMarkThickness", &BossExecutionTuning::slashMarkThickness },
     { nullptr, "slashMarkSeconds", &BossExecutionTuning::slashMarkSeconds },
     { nullptr, "defaultStyle", &BossExecutionTuning::defaultStyle },
+    { nullptr, "gunDefaultStyle", &BossExecutionTuning::gunDefaultStyle },
+    { nullptr, "bombStyle", &BossExecutionTuning::bombStyle },
 };
 
 /** @brief kneel の中の値 */
@@ -54,6 +56,7 @@ constexpr JsonField<ExecutionBeat> kBeatFields[] = {
     { nullptr, "face", &ExecutionBeat::face },
     { nullptr, "pose", &ExecutionBeat::pose },
     { nullptr, "poseSeconds", &ExecutionBeat::poseSeconds },
+    { nullptr, "shot", &ExecutionBeat::shot },
     { nullptr, "grab", &ExecutionBeat::grab },
     { nullptr, "slashAngle", &ExecutionBeat::slashAngle },
     { nullptr, "slashLength", &ExecutionBeat::slashLength },
@@ -74,6 +77,7 @@ constexpr JsonField<ExecutionBeat> kBeatFields[] = {
     { nullptr, "slowScale", &ExecutionBeat::slowScale },
     { nullptr, "zoom", &ExecutionBeat::zoom },
     { nullptr, "slice", &ExecutionBeat::slice },
+    { nullptr, "bomb", &ExecutionBeat::bomb },
 };
 
 /** @brief 拍の配列を読む（配列でなければ空のまま） */
@@ -86,6 +90,21 @@ std::vector<ExecutionBeat> ReadBeats(const nlohmann::json& array) {
         beats.push_back(ReadJsonFields(item, kBeatFields));
     }
     return beats;
+}
+
+/** @brief ステージのファイル名から型の名前への割り当て表を読む（オブジェクトでなければ空のまま） */
+std::unordered_map<std::string, std::string> ReadStageTable(const nlohmann::json& root, const char* key) {
+    std::unordered_map<std::string, std::string> table;
+    const auto stages = root.find(key);
+    if (stages == root.end() || !stages->is_object()) {
+        return table;
+    }
+    for (auto it = stages->begin(); it != stages->end(); ++it) {
+        if (it.value().is_string()) {
+            table[it.key()] = it.value().get<std::string>();
+        }
+    }
+    return table;
 }
 
 /** @brief boss_execution.json から調整値を読み込む */
@@ -113,15 +132,19 @@ BossExecutionTuning LoadTuning() {
     if (intro != root.end()) {
         tuning.intro = ReadBeats(*intro);
     }
-    // ステージごとの割り当て
-    const auto stages = root.find("stages");
-    if (stages != root.end() && stages->is_object()) {
-        for (auto it = stages->begin(); it != stages->end(); ++it) {
-            if (it.value().is_string()) {
-                tuning.stages[it.key()] = it.value().get<std::string>();
-            }
-        }
+    // 銃で倒した時に最初に行う拍
+    const auto gunIntro = root.find("gunIntro");
+    if (gunIntro != root.end()) {
+        tuning.gunIntro = ReadBeats(*gunIntro);
     }
+    // 爆弾がめり込んだまま倒した時に最初に行う拍
+    const auto bombIntro = root.find("bombIntro");
+    if (bombIntro != root.end()) {
+        tuning.bombIntro = ReadBeats(*bombIntro);
+    }
+    // ステージごとの割り当て（斬る型と、銃で倒した時の型）
+    tuning.stages = ReadStageTable(root, "stages");
+    tuning.gunStages = ReadStageTable(root, "gunStages");
     // 型の一覧
     const auto styles = root.find("styles");
     if (styles != root.end() && styles->is_object()) {
@@ -154,13 +177,33 @@ std::string LevelStem(const std::string& levelPath) {
     }
     return stem;
 }
+
+/** @brief 割り当て表からステージの型を引く（割り当てが無ければ fallback の名前の型、それも無ければ nullptr） */
+const ExecutionStyle* LookupStyle(const std::unordered_map<std::string, ExecutionStyle>& styles,
+    const std::unordered_map<std::string, std::string>& table, const std::string& fallback, const std::string& levelPath) {
+    const auto stage = table.find(LevelStem(levelPath));
+    const std::string& name = stage != table.end() ? stage->second : fallback;
+    const auto style = styles.find(name);
+    return style != styles.end() ? &style->second : nullptr;
+}
 } // namespace
 
 /** @brief ステージのレベルのパスに割り当てた型を返す（無ければ既定の型、それも無ければ nullptr） */
 const ExecutionStyle* BossExecutionTuning::FindStyle(const std::string& levelPath) const {
-    const auto stage = stages.find(LevelStem(levelPath));
-    const std::string& name = stage != stages.end() ? stage->second : defaultStyle;
-    const auto style = styles.find(name);
+    return LookupStyle(styles, stages, defaultStyle, levelPath);
+}
+
+/** @brief 銃で倒した時の型を返す（ステージの割り当てが無ければ銃の既定の型、それも無ければ nullptr） */
+const ExecutionStyle* BossExecutionTuning::FindGunStyle(const std::string& levelPath) const {
+    return LookupStyle(styles, gunStages, gunDefaultStyle, levelPath);
+}
+
+/** @brief ボスに爆弾がめり込んだまま倒した時の型を返す（無ければ nullptr） */
+const ExecutionStyle* BossExecutionTuning::FindBombStyle() const {
+    if (bombStyle.empty()) {
+        return nullptr;
+    }
+    const auto style = styles.find(bombStyle);
     return style != styles.end() ? &style->second : nullptr;
 }
 

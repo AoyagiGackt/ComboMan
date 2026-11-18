@@ -1,5 +1,5 @@
 {
-  "_comment": "攻撃で吹き飛ばした爆弾（爆風のある壊せる物）。enabled=falseなら今までどおりその場で爆発する。visual=飛んでいる間の見た目と回る速さ flight=横の速さ・吹き飛んだ瞬間の上向きの速さ・落ちる加速度・何にも当たらず爆発するまでの秒数 hit=敵や壁にぶつかったとみなす半径・吹き飛んだ直後に足元の床を数えない秒数 effects=吹き飛ばした瞬間の手応え・飛んでいる間の火の粉と出す間隔。爆発の威力と演出は元の壊せる物の設定と hit_effects.json の explosion_* を使う",
+  "_comment": "攻撃で吹き飛ばした爆弾（爆風のある壊せる物）と、壊した壁。enabled=falseなら今までどおりその場で爆発する。visual=飛んでいる間の見た目と回る速さ flight=横の速さ・吹き飛んだ瞬間の上向きの速さ・落ちる加速度・何にも当たらず爆発するまでの秒数 hit=敵や壁にぶつかったとみなす半径・吹き飛んだ直後に足元の床を数えない秒数 effects=吹き飛ばした瞬間の手応え・飛んでいる間の火の粉と出す間隔。爆発の威力と演出は元の壊せる物の設定と hit_effects.json の explosion_* を使う。wall=壊した壁が敵を巻き込みながら飛ぶ時の見た目・速さ・回る速さ・砕けるまでの秒数・巻き込んだ敵へのダメージ・地形にぶつかったとみなす半径・飛んだ直後に地形を数えない秒数",
   "enabled": true,
   "visual": {
     "model": "Resources/block/gimmick/gimmick_barrel.obj",
@@ -20,5 +20,15 @@
     "launchImpact": "bomb_kick",
     "trailSparks": "bomb_kick_trail",
     "trailInterval": 0.05
+  },
+  "wall": {
+    "model": "Resources/block/gimmick/gimmick_wall.obj",
+    "speedX": 16,
+    "launchSpeedY": 5,
+    "spinSpeed": 7,
+    "maxSeconds": 1.6,
+    "enemyDamage": 4,
+    "hitRadius": 0.9,
+    "graceSeconds": 0.15
   }
 }

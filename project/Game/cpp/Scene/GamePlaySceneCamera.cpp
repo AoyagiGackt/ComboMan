@@ -161,9 +161,10 @@ void GamePlayScene::UpdateCamera() {
 
 /** @brief 地形コライダー全体からステージの表示範囲を求める */
 GamePlayScene::StageBounds GamePlayScene::GetStageBounds() {
-    // 当たり判定ブロック全体を囲む範囲（ブロックが無ければ既定の広さ）
+    // 地形の当たり判定ブロック全体を囲む範囲（ブロックが無ければ既定の広さ）
+    // せり上がって開く扉と、打ち上げられる敵の体は含めない（動いている間だけ範囲が伸び、空中にいるとカメラが付いていくため）
     StageBounds bounds { kDefaultStageLeft, kDefaultStageRight, 0.0f, 0.0f, false };
-    const std::vector<AABB> stageSolids = GetStageEditor().GetSolidColliders();
+    const std::vector<AABB> stageSolids = GetStageEditor().GetCameraBoundColliders();
     if (stageSolids.empty()) {
         return bounds;
     }

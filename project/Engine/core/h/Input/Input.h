@@ -94,18 +94,35 @@ public: // メンバ関数
 
     /** @brief ボタンが押されているか */
     bool PushButton(WORD button) const {
-        return (state_.Gamepad.wButtons & button);
+        return primaryGamepadEnabled_ && (state_.Gamepad.wButtons & button);
     }
 
     /** @brief ボタンが押された瞬間か */
     bool TriggerButton(WORD button) const {
-        return (state_.Gamepad.wButtons & button) && !(previousState_.Gamepad.wButtons & button);
+        return primaryGamepadEnabled_ && (state_.Gamepad.wButtons & button) && !(previousState_.Gamepad.wButtons & button);
     }
 
     /** @brief 左スティックの値を 0.0 ~ 1.0 の範囲で取得 */
     struct Stick {
         float x, y;
     };
+
+    /** @brief 指定したパッドのボタンが押されているかを返す */
+    bool PadPushed(int pad, WORD button) const;
+    /** @brief 指定したパッドのボタンが押された瞬間かを返す */
+    bool PadTriggered(int pad, WORD button) const;
+    /** @brief 指定したパッドの左スティックを返す */
+    Stick PadLeftStick(int pad) const;
+    /** @brief 指定したパッドの接続状態を返す */
+    bool IsPadConnected(int pad) const;
+    /** @brief 主操作でパッドを使うかを設定する */
+    void SetPrimaryGamepadEnabled(bool enabled) {
+        primaryGamepadEnabled_ = enabled;
+    }
+    /** @brief 主操作でキーボードを使うかを設定する（false の間は操作の読み取りでキーボードを見ない。メニュー操作と直接のキー読み取りは外さない） */
+    void SetPrimaryKeyboardEnabled(bool enabled) {
+        primaryKeyboardEnabled_ = enabled;
+    }
 
     Stick GetLeftStick() const;
 
@@ -239,6 +256,11 @@ private:
 
     XINPUT_STATE state_ { }; /// 現在のコントローラー状態
     XINPUT_STATE previousState_ { }; /// 前回のコントローラー状態
+    XINPUT_STATE secondPadState_ { }; ///< ２台目の現在の状態
+    XINPUT_STATE secondPadPreviousState_ { }; ///< ２台目の前回の状態
+    bool secondPadConnected_ = false; ///< ２台目の接続状態
+    bool primaryGamepadEnabled_ = true; ///< 主操作でパッドを使うか
+    bool primaryKeyboardEnabled_ = true; ///< 主操作でキーボードを使うか
     const float deadzone_ = 0.2f; /// デッドゾーン
     bool gamepadConnected_ = false; ///< 現在の接続状態
     bool gamepadConnectedPrevious_ = false; ///< 前フレームの接続状態

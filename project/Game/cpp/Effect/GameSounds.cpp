@@ -33,6 +33,10 @@ constexpr const char* kCueKeys[] = {
     "glassShatter",
     "explosion",
     "rubble",
+    "rampageStart",
+    "rampageLaunch",
+    "rampageSlash",
+    "rampageFinish",
 };
 static_assert(std::size(kCueKeys) == static_cast<size_t>(SoundCue::kCount), "SoundCue と項目名の数をそろえる");
 
@@ -107,6 +111,18 @@ void PlayPlayerActions(const Player& player) {
     }
     if (player.JustFired()) {
         Play(SoundCue::kShot);
+    }
+    // 覚醒乱舞: 始め・打ち上げ・連撃・締めで鳴らし分ける（最後の一撃は連撃の音の代わりに締めの音）
+    if (player.JustStartedRampage()) {
+        Play(SoundCue::kRampageStart);
+    }
+    if (player.JustLaunched()) {
+        Play(SoundCue::kRampageLaunch);
+    }
+    if (player.JustRampageFinish()) {
+        Play(SoundCue::kRampageFinish);
+    } else if (player.JustRampageHit()) {
+        Play(SoundCue::kRampageSlash);
     }
 }
 

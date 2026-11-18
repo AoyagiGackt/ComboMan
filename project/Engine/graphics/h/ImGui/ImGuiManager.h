@@ -41,6 +41,12 @@ public:
     void End();
 
     /**
+     * @brief 描かずにImGuiのフレームを閉じる
+     * @note 1回の描画の間に更新を何回か進める時（自動テストの速回しなど）、次の Begin の前に呼ぶ
+     */
+    void EndFrameWithoutRender();
+
+    /**
      * @brief ImGuiの実際の描画コマンドを積む
      * @param dxCommon DirectX基盤のポインタ（コマンドリスト取得用）
      * @note 実際の描画フェーズ（PreDrawとPostDrawの間）で呼び出すこと

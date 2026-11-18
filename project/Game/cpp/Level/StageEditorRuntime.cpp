@@ -262,19 +262,46 @@ void StageEditor::SeparateOverlappingEnemies(const std::vector<engine::AABB>& wa
 /** @brief 歩く敵の高さを地形に合わせる（壁を登る・段差に乗る・足場から落ちる。ボスと巡回する敵は配置どおり） */
 void StageEditor::UpdateEnemiesOnTerrain(const std::vector<engine::AABB>& solids) {
     for (auto& entry : objects_) {
-        if (entry.runtimeActive && entry.enemy && !entry.desc.isStageBoss && entry.desc.patrolRoute.empty()) {
+        if (!entry.runtimeActive || !entry.enemy) {
+            continue;
+        }
+        // 倒れて止まっている体は、乗っている足場が消えたり動いたりしたら、今の真下の床へ合わせ直す（ボスや巡回する敵の体も同じ）
+        if (entry.enemy->IsCorpseResting()) {
+            entry.enemy->DropCorpseTo(FindCorpseFloorY(entry.enemy->GetPosition(), solids), !entry.desc.isStageBoss);
+            entry.desc.position = entry.enemy->GetPosition();
+            continue;
+        }
+        const bool followsTerrain = !entry.desc.isStageBoss && entry.desc.patrolRoute.empty();
+        if (followsTerrain) {
+            // 吹き飛んで壁を突き抜けた・届かない所で止まった敵は、地形に合わせる前に倒す
+            entry.enemy->ResolveBlownAway(solids);
+        }
+        // 吹き飛び以外の大きな動き（ノックバック・爆風など）でも壁を抜けないよう、入った壁の手前で止める（ボスも同じ）
+        const bool stopped = entry.enemy->StopAtWallsEnteredThisFrame(solids);
+        if (followsTerrain) {
             entry.enemy->UpdateTerrain(solids);
+        }
+        if (followsTerrain || stopped) {
             entry.desc.position = entry.enemy->GetPosition();
         }
     }
 }
 
-/** @brief 敵の位置の真下にある床の上で、倒れた体を置く高さを返す（床が無ければ今の高さ） */
-float StageEditor::FindCorpseFloorY(const Vector3& position) const {
+/** @brief 敵の位置の真下にある床の上で、倒れた体を置く高さを返す（床が無ければ空） */
+std::optional<float> StageEditor::FindCorpseFloorY(const Vector3& position, const std::vector<engine::AABB>& solids) const {
     const float halfWidth = EnemyTuning::GetInstance()->Separation().bodyHalfWidth;
     const float footOffset = EnemyTuning::GetInstance()->Basic().corpseFootOffset;
-    const auto floor = FindSupportingFloor(position, halfWidth, 0.0f, footOffset, CollectSolidColliders(false));
-    return floor ? *floor + footOffset : position.y;
+    if (const auto floor = FindSupportingFloor(position, halfWidth, 0.0f, footOffset, solids)) {
+        return *floor + footOffset;
+    }
+    // 吹き飛んで壁や高い段の中へ入り込んだ体は、床が無いのではなく埋まっているだけなので、今の高さを床として留める
+    const float bodyBottom = position.y - footOffset;
+    const float bodyTop = position.y + EnemyTuning::GetInstance()->Separation().wallBandTop;
+    const bool embedded = std::any_of(solids.begin(), solids.end(), [&](const engine::AABB& block) {
+        return position.x >= block.min.x && position.x <= block.max.x && position.z >= block.min.z && position.z <= block.max.z
+            && block.max.y > bodyBottom && block.min.y < bodyTop;
+    });
+    return embedded ? std::optional<float>(position.y) : std::nullopt;
 }
 
 /** @brief 名前から配置物を探す（無ければnullptr） */
@@ -308,6 +335,20 @@ bool StageEditor::SetObjectVisibleByName(const std::string& name, bool visible) 
         entry->enemy->SetVisible(visible);
     }
     return true;
+}
+
+/** @brief 配置した敵を世界の位置へ置き直す（進行を止めている間も、その位置に留まるよう配置情報も書き換える） */
+bool StageEditor::PlaceEnemyAt(const EnemyEntity* enemy, const Vector3& worldPosition) {
+    for (auto& entry : objects_) {
+        if (enemy == nullptr || entry.enemy.get() != enemy) {
+            continue;
+        }
+        entry.desc.position = LocalPositionOf(entry.desc, worldPosition);
+        entry.enemy->SetPosition(worldPosition);
+        entry.enemy->RefreshVisualTransforms();
+        return true;
+    }
+    return false;
 }
 
 /** @brief 配置物のローカル位置を即座に書き換える */

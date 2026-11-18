@@ -25,6 +25,10 @@ enum class ParticleMotion : uint32_t {
     kFlicker = 2, ///< 明滅する
     kGravity = 3, ///< 重力で落ちる
     kShrinkFade = 4, ///< 縮みながら消える（残像）
+    kFlame = 5, ///< 浮力で昇りながら揺れ、白く熱い芯から指定色を経て暗く燃え尽きる
+    kEmber = 6, ///< 小さく揺れながら昇り、瞬きながら縮む
+    kMist = 7, ///< 速さが抜けながら膨らみ、ふわっと現れて消える
+    kCrackle = 8, ///< その場で小刻みに跳ねて明滅する（放電）
 };
 
 /**
@@ -50,6 +54,8 @@ struct ParticleForGPU {
     Matrix4x4 wvp;
     Matrix4x4 world;
     Vector4 color;
+    Vector4 uvRect; ///< xy=UV のずらし zw=UV の倍率（炎のコマ送り・左右反転）
+    Vector4 params; ///< x=焼け具合 y=熱さ z=1なら丸く切り抜かない
 };
 
 /**
@@ -188,6 +194,15 @@ public:
     void EmitWithColor(const std::string& name, const Vector3& position,
         const Vector3& velocity, const Vector4& color,
         float lifeTime = 1.0f, float scale = 1.0f, bool flicker = false);
+
+    /**
+     * @brief 動き方と向きを指定して1粒放出する（炎・火の粉・もや・放電など）
+     * @param motion  粒の動き方
+     * @param rotateZ 粒の向き（ラジアン）
+     */
+    void EmitMotion(const std::string& name, const Vector3& position,
+        const Vector3& velocity, const Vector4& color,
+        float lifeTime, float scale, ParticleMotion motion, float rotateZ = 0.0f);
 
     /**
      * @brief 横長の楕円形スケールで1粒放出する（斬撃の残光等に使用）

@@ -198,8 +198,10 @@ void DirectXCommon::PostDraw() {
         ENGINE_ASSERT(SUCCEEDED(hr));
     }
 
-    // FPS固定（GPU が動いている間に CPU 側で余った時間を使って待機）
-    UpdateFixFPS();
+    // FPS固定（GPU が動いている間に CPU 側で余った時間を使って待機）。速回しの時は待たない
+    if (frameLimitEnabled_) {
+        UpdateFixFPS();
+    }
 }
 
 // ══════════════════════════════════════════════════════

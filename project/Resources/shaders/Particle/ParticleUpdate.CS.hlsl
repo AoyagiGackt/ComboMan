@@ -19,6 +19,8 @@ struct ParticleForGPU
     float4x4 WVP;
     float4x4 World;
     float4 color;
+    float4 uvRect; // xy=UV のずらし zw=UV の倍率（コマ送り・左右反転）
+    float4 params; // x=焼け具合 y=熱さ z=1なら丸く切り抜かない
 };
 
 cbuffer UpdateConstants : register(b0)
@@ -29,6 +31,52 @@ cbuffer UpdateConstants : register(b0)
     uint gMaxParticles; //  4
     float2 gPad; //  8 -> 144
 };
+
+static const float kPi = 3.14159265f;
+static const float kTwoPi = 6.28318531f;
+
+// 炎（curveFlag == 5）
+static const float kFlameBuoyancy = 4.5f; // 上向きに足す加速度
+static const float kFlameDrag = 2.5f; // 横の勢いが抜ける速さ
+static const float kFlameWobbleHz = 11.0f; // 揺らめきの速さ
+static const float kFlameWobble = 3.0f; // 揺らめきの強さ
+static const float kFlameSway = 0.18f; // 左右に傾く大きさ（ラジアン）
+static const float kFlameSwayHz = 5.0f; // 左右に傾く速さ
+static const float kFlameStretch = 0.6f; // 昇る速さに応じて縦へ伸ばす割合
+static const float kFlameStretchSpeed = 4.0f; // 伸びきる速さ
+static const uint kFlameSheetColumns = 4u; // 炎の画像のコマの並び（横・縦とも）
+static const float kFlameErodeStart = 0.04f; // 出た瞬間の焼け具合
+static const float kFlameErodeEnd = 0.6f; // 燃え尽きる時の焼け具合
+static const float kFlameHeat = 1.6f; // 出た瞬間の熱さ
+static const float kFlameHeatKeep = 0.25f; // 燃え尽きる時に残る熱さの割合
+static const float kFlameGrowRate = 5.0f; // ふくらみきるまでの速さ（寿命に対する倍率）
+static const float kFlameStartScale = 0.5f; // 出た瞬間の大きさの割合
+static const float kFlameEndShrink = 0.75f; // 燃え尽きる時に細る割合
+static const float kFlameBurnOutStart = 0.45f; // 暗くなり始める時（寿命の割合）
+static const float kFlameBurnOutDark = 0.25f; // 燃え尽きた時の明るさ
+static const float kFlameStartAlpha = 0.6f; // 出た瞬間の濃さの割合
+
+// 火の粉（curveFlag == 6）
+static const float kEmberBuoyancy = 1.5f;
+static const float kEmberDrag = 0.8f;
+static const float kEmberWobbleHz = 7.0f;
+static const float kEmberWobble = 4.0f;
+static const float kEmberShrink = 0.7f;
+static const float kEmberColorRate = 4.0f; // 白から指定色になる速さ
+static const float kEmberTwinkle = 0.4f; // 瞬きで明るさが落ちる割合
+static const float kEmberTwinkleHz = 25.0f;
+
+// もや（curveFlag == 7）
+static const float kMistDrag = 3.0f;
+static const float kMistSpin = 0.8f;
+static const float kMistGrow = 1.6f; // 消える時に何倍ぶん大きくなるか
+static const float kMistErode = 0.55f; // 消える時の焼け具合（薄い所からほどける）
+
+// 放電（curveFlag == 8）
+static const float kCrackleHz = 30.0f; // 位置を跳ばす回数（1秒あたり）
+static const float kCrackleJump = 0.35f; // 跳ぶ幅（粒の大きさに対する割合）
+static const float kCrackleOnRate = 0.65f; // 点いている確率
+static const float kCrackleWhite = 0.7f; // 点いた時に白へ寄せる最大の割合
 
 RWStructuredBuffer<GPUParticleState> gParticles : register(u0);
 RWStructuredBuffer<ParticleForGPU> gInstancing : register(u1);
@@ -166,27 +214,107 @@ void main(uint3 DTid : SV_DispatchThreadID, uint3 GTid : SV_GroupThreadID)
         p.rotateZ += 8.0f * gDeltaTime;
     }
 
+    // 粒ごとに揺れの位相をずらす（同じ瞬間に出た炎が同じ揺れ方にならないように）
+    float phase = float(idx % 13u) * 0.4833f;
+    float spinSign = (idx % 2u == 0u) ? 1.0f : -1.0f;
+
+    // curveFlag == 5: 炎 — 浮力で加速しながら昇り、横の勢いは抜け、左右に揺らめく
+    if (p.curveFlag == 5)
+    {
+        p.velocity.y += kFlameBuoyancy * gDeltaTime;
+        p.velocity.xz *= saturate(1.0f - kFlameDrag * gDeltaTime);
+        p.velocity.x += sin(p.currentTime * kFlameWobbleHz + phase) * kFlameWobble * gDeltaTime;
+    }
+
+    // curveFlag == 6: 火の粉 — ゆっくり昇りながら左右へ大きく揺れる
+    if (p.curveFlag == 6)
+    {
+        p.velocity.y += kEmberBuoyancy * gDeltaTime;
+        p.velocity.xz *= saturate(1.0f - kEmberDrag * gDeltaTime);
+        p.velocity.x += sin(p.currentTime * kEmberWobbleHz + phase) * kEmberWobble * gDeltaTime;
+    }
+
+    // curveFlag == 7: もや — 速さが抜けて留まり、ゆっくり回る
+    if (p.curveFlag == 7)
+    {
+        p.velocity *= saturate(1.0f - kMistDrag * gDeltaTime);
+        p.rotateZ += kMistSpin * spinSign * gDeltaTime;
+    }
+
     p.position += p.velocity * gDeltaTime;
     p.currentTime += gDeltaTime;
     gParticles[idx] = p;
 
-    // curveFlag == 4: 残像縮小 — 時間とともにスケールを縮める
+    float t = saturate(p.currentTime / p.lifeTime);
     float3 renderScale = p.scale;
+    float3 renderPos = p.position;
+    float renderRot = p.rotateZ;
+
+    // curveFlag == 4: 残像縮小 — 時間とともにスケールを縮める
     if (p.curveFlag == 4)
     {
-        float shrink = 1.0f - saturate(p.currentTime / p.lifeTime);
-        renderScale *= shrink;
+        renderScale *= 1.0f - t;
+    }
+
+    // 炎: 出た直後にふくらみ、燃え尽きるにつれて細る
+    float flameGrow = saturate(t * kFlameGrowRate);
+    if (p.curveFlag == 5)
+    {
+        renderScale *= (kFlameStartScale + (1.0f - kFlameStartScale) * flameGrow) * (1.0f - kFlameEndShrink * t * t);
+        renderScale.y *= 1.0f + kFlameStretch * saturate(abs(p.velocity.y) / kFlameStretchSpeed);
+        renderRot = p.rotateZ + sin(p.currentTime * kFlameSwayHz + phase) * kFlameSway;
+    }
+
+    // 火の粉・もやの大きさ
+    if (p.curveFlag == 6)
+    {
+        renderScale *= 1.0f - kEmberShrink * t;
+    }
+    if (p.curveFlag == 7)
+    {
+        renderScale *= 1.0f + kMistGrow * t;
+    }
+
+    // 放電: 一定間隔ごとに位置と向きを跳ばす（積み上げずに描く時だけずらす）
+    uint crackleSlot = (uint) (p.currentTime * kCrackleHz);
+    uint4 crackleRng = xoshiroSeed(crackleSlot, idx * 2654435761u, idx);
+    if (p.curveFlag == 8)
+    {
+        float jump = kCrackleJump * max(p.scale.x, p.scale.y);
+        renderPos.x += (rand01(crackleRng) * 2.0f - 1.0f) * jump;
+        renderPos.y += (rand01(crackleRng) * 2.0f - 1.0f) * jump;
+        renderRot = rand01(crackleRng) * kTwoPi;
     }
 
     // ワールド行列: scale * rotateZ * billboard、row3 に平行移動を直接書く
-    float4x4 world = mul(mul(MakeScale(renderScale), MakeRotateZ(p.rotateZ)), gBillboard);
-    world._m30 = p.position.x;
-    world._m31 = p.position.y;
-    world._m32 = p.position.z;
+    float4x4 world = mul(mul(MakeScale(renderScale), MakeRotateZ(renderRot)), gBillboard);
+    world._m30 = renderPos.x;
+    world._m31 = renderPos.y;
+    world._m32 = renderPos.z;
     world._m33 = 1.0f;
 
     gInstancing[idx].WVP = mul(world, gViewProj);
     gInstancing[idx].World = world;
+    gInstancing[idx].uvRect = float4(0.0f, 0.0f, 1.0f, 1.0f);
+    gInstancing[idx].params = float4(0.0f, 0.0f, 0.0f, 0.0f);
+
+    // 炎: 寿命に合わせて画像のコマを進め、粒ごとに左右を反転して同じ形が並ばないようにする
+    if (p.curveFlag == 5)
+    {
+        uint frameCount = kFlameSheetColumns * kFlameSheetColumns;
+        uint frame = min((uint) (t * float(frameCount)), frameCount - 1u);
+        float cell = 1.0f / float(kFlameSheetColumns);
+        float2 origin = float2(float(frame % kFlameSheetColumns), float(frame / kFlameSheetColumns)) * cell;
+        bool mirror = (idx % 2u) == 1u;
+        gInstancing[idx].uvRect = float4(mirror ? origin.x + cell : origin.x, origin.y, mirror ? -cell : cell, cell);
+        gInstancing[idx].params = float4(lerp(kFlameErodeStart, kFlameErodeEnd, t),
+            kFlameHeat * (1.0f - (1.0f - kFlameHeatKeep) * t), 1.0f, 0.0f);
+    }
+    // もや: 薄い所からほどけて消える
+    if (p.curveFlag == 7)
+    {
+        gInstancing[idx].params = float4(kMistErode * t, 0.0f, 0.0f, 0.0f);
+    }
 
     // curveFlag == 2: xoroshiro128+ でパーティクルごとに独立した周期でランダム点滅
     if (p.curveFlag == 2)
@@ -196,6 +324,32 @@ void main(uint3 DTid : SV_DispatchThreadID, uint3 GTid : SV_GroupThreadID)
         uint4 rng = xoshiroSeed(timeSlot, idx * 3141592653u, idx);
         float r = rand01(rng);
         gInstancing[idx].color = float4(p.color.rgb, p.color.a * (r < 0.75f ? 1.0f : 0.0f));
+    }
+    else if (p.curveFlag == 5)
+    {
+        // 指定色から暗く燃え尽きる（白く熱い芯はピクセルシェーダーが濃さから付ける）。消え方は焼け具合に任せる
+        float3 rgb = lerp(p.color.rgb, p.color.rgb * kFlameBurnOutDark, saturate((t - kFlameBurnOutStart) / (1.0f - kFlameBurnOutStart)));
+        float alpha = p.color.a * (1.0f - t * t * t) * (kFlameStartAlpha + (1.0f - kFlameStartAlpha) * flameGrow);
+        gInstancing[idx].color = float4(rgb, alpha);
+    }
+    else if (p.curveFlag == 6)
+    {
+        // 出た直後は白く、すぐ指定色になり、細かく瞬く
+        float3 rgb = lerp(float3(1.0f, 1.0f, 1.0f), p.color.rgb, saturate(t * kEmberColorRate));
+        float twinkle = 1.0f - kEmberTwinkle + kEmberTwinkle * sin(p.currentTime * kEmberTwinkleHz + phase * 3.0f);
+        gInstancing[idx].color = float4(rgb, p.color.a * (1.0f - t) * twinkle);
+    }
+    else if (p.curveFlag == 7)
+    {
+        // ふわっと現れてふわっと消える
+        gInstancing[idx].color = float4(p.color.rgb, p.color.a * sin(t * kPi));
+    }
+    else if (p.curveFlag == 8)
+    {
+        // 間隔ごとに点いたり消えたりし、点いた時は白へ寄せる
+        bool lit = rand01(crackleRng) < kCrackleOnRate;
+        float3 rgb = lerp(p.color.rgb, float3(1.0f, 1.0f, 1.0f), rand01(crackleRng) * kCrackleWhite);
+        gInstancing[idx].color = float4(rgb, lit ? p.color.a * (1.0f - t * t) : 0.0f);
     }
     else
     {

@@ -147,6 +147,10 @@ void EnemyEntity::UpdateDuringHitStop() {
         const float punchedScale = kBodyScale * (1.0f + kHitScalePunch);
         object_->SetScale({ punchedScale, punchedScale, punchedScale });
     }
+    // ボスの技の動きで持ち上げていたら、止まっている間もその高さを保つ
+    if (motionApplied_) {
+        visualPos.y += motionFrame_.pose.lift;
+    }
     object_->SetPosition(visualPos);
     PlaceWeapon(visualPos);
 
@@ -155,9 +159,75 @@ void EnemyEntity::UpdateDuringHitStop() {
     object_->SetAnimSpeed(0.0f);
     object_->Update();
     object_->SetAnimSpeed(animSpeed);
+    // 技の動きの最中は、武器を手元に付けたままにする
+    PlaceMotionWeapon();
     UpdateOfferedWeapon(false);
     weaponObject_->Update();
     SyncMonsterVisual(false);
+}
+
+/** @brief 位置だけ再計算する（AI/物理は一切進めない、StageEditor等が外部からpos_を書き換えた後の追従用） */
+void EnemyEntity::RefreshVisualTransforms() {
+    const Vector3 visualPos = VisualPosition();
+    object_->SetPosition(visualPos);
+    object_->Update();
+    // 手に持つ武器も体へ付け直す（付け直さないと、開始演出などで止めている間は作った時の位置に残り、手ぶらに見える）
+    if (!defeated_) {
+        PlaceWeapon(visualPos);
+        PlaceMotionWeapon();
+        weaponObject_->Update();
+    }
+    SyncMonsterVisual(false);
+}
+
+/** @brief HP を回復する（増えた時は体を一瞬緑に光らせ、回復されたことを見た目で伝える） */
+void EnemyEntity::Heal(int amount) {
+    if (defeated_) {
+        return;
+    }
+    const int before = hp_;
+    hp_ = (std::min)(hp_ + amount, maxHp_);
+    if (hp_ > before) {
+        healFlashTimer_ = EnemyTuning::GetInstance()->Basic().healFlashSeconds;
+    }
+}
+
+/** @brief 回復されて光っている間、渡した色を緑へ寄せて返す（時間を進めるのは Update だけ） */
+Vector4 EnemyEntity::ApplyHealGlow(const Vector4& color, bool advance) {
+    const BasicEnemyTuning& tuning = EnemyTuning::GetInstance()->Basic();
+    if (healFlashTimer_ <= 0.0f || tuning.healFlashSeconds <= 0.0f) {
+        return color;
+    }
+    if (advance) {
+        healFlashTimer_ = (std::max)(healFlashTimer_ - gameConstants::kFrameDeltaTime, 0.0f);
+    }
+    // 光り始めが一番強く、時間とともに元の色へ戻す
+    const float glow = healFlashTimer_ / tuning.healFlashSeconds;
+    const Vector4& green = tuning.healFlashColor;
+    return { color.x + (green.x - color.x) * glow, color.y + (green.y - color.y) * glow, color.z + (green.z - color.z) * glow, color.w };
+}
+
+/** @brief AI を止めて外から動かす間のアニメを、動いているかで待機か走りに合わせる */
+void EnemyEntity::PlayHeldAnimation(bool moving) {
+    if (defeated_ || MotionOwnsAnimation()) {
+        return;
+    }
+    const VisualAnim desired = moving ? VisualAnim::kRun : VisualAnim::kIdle;
+    if (desired != animationState_ || motionAnimOverride_) {
+        object_->SetAnimation(moving ? runAnimation_ : idleAnimation_);
+        animationState_ = desired;
+        motionAnimOverride_ = false;
+    }
+}
+
+/** @brief 台本で動かしている時に、攻撃の見た目を頭から出す（味方のボスの攻撃に使う） */
+void EnemyEntity::PlayScriptedAttackAnimation() {
+    if (defeated_ || MotionOwnsAnimation()) {
+        return;
+    }
+    object_->SetAnimation(attackAnimation_);
+    animationState_ = VisualAnim::kAttack;
+    motionAnimOverride_ = false;
 }
 
 /** @brief 台本で動かす間の1フレーム（位置・向き・武器の位置を見た目へ反映するだけで、AI と物理は進めない） */
@@ -175,7 +245,12 @@ void EnemyEntity::UpdateScripted() {
     const Vector3 visualPos = VisualPosition();
     object_->SetPosition(visualPos);
     PlaceWeapon(visualPos);
+    // ボスの技の動きは体の行列を作る前に掛け、武器は体の行列ができてから手元へ付ける
+    ApplyMotionBody();
     object_->Update();
+    PlaceMotionWeapon();
     weaponObject_->Update();
+    // モンスターの見た目にも位置と向きを写す（写さないと急降下などで見た目だけその場に残り、体力バーや当たりとずれる）
+    SyncMonsterVisual(true);
 }
 } // namespace engine::game

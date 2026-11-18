@@ -177,6 +177,22 @@ void ComboFeelDirector::Update(const Player& player, const Vector4& weaponColor,
     UpdateImpact(camera);
 }
 
+/** @brief 手に持っている武器の刃の根元と先端をワールド座標で返す（持っていなければ false） */
+bool ComboFeelDirector::GetBladeWorld(const Player& player, Vector3& outBase, Vector3& outTip) const {
+    WeaponType type { };
+    Matrix4x4 weaponMatrix { };
+    if (!player.GetHeldWeaponTransform(type, weaponMatrix)) {
+        return false;
+    }
+    const size_t index = static_cast<size_t>(type);
+    if (index >= settings_.blades.size()) {
+        return false;
+    }
+    outBase = TransformPoint(settings_.blades[index].base, weaponMatrix);
+    outTip = TransformPoint(settings_.blades[index].tip, weaponMatrix);
+    return true;
+}
+
 /** @brief 刃の範囲を武器行列でワールドへ移して軌跡に積む */
 void ComboFeelDirector::SampleBlade(const Player& player) {
     // 近接の段が出ていない・武器を持っていない間は帯を途切れさせて何も積まない

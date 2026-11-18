@@ -61,6 +61,25 @@ struct CombatEnemyRef {
     EnemyEntity* enemy = nullptr; // 非所有。StageEditorのobjects_が生存させる
 };
 
+/** @brief 敵グループの全滅を待つ条件が見ている敵1体の様子（自動テストプレイの見張り用） */
+struct WatchedEnemyState {
+    std::string name; ///< 配置物の名前
+    Vector3 position; ///< 今の位置
+    int hp = 0; ///< 残りの体力
+    bool defeated = false; ///< 倒された扱いか
+    bool visible = true; ///< 見えているか
+    bool active = true; ///< 有効か（無効中の敵は攻撃が当たらないので、生きていると倒し切れない）
+};
+
+/** @brief 敵グループの全滅を待つ条件1つの様子（自動テストプレイの見張り用） */
+struct EnemyGroupWatch {
+    std::string conditionName; ///< 条件の配置物の名前
+    std::string group; ///< 見ている敵グループ
+    bool met = false; ///< 条件が成立しているか
+    bool waitingSpawn = false; ///< まだ出ていない敵がいるか（出現待ちの間は成立しなくて当然）
+    std::vector<WatchedEnemyState> enemies; ///< 出ている敵の様子
+};
+
 /** @brief 壊せる配置物のヒット判定と爆風に必要な読み取り専用の設定値 */
 struct BreakableSettings {
     Vector3 scale;
@@ -68,7 +87,7 @@ struct BreakableSettings {
     float radius;
     int playerDamage;
     int enemyDamage;
-    std::string_view requiredWeapon;
+    bool isWall; ///< 当たり判定ありで爆風なしの物（壊せる壁）。壊すと敵を巻き込みながら吹き飛ぶ
     std::string_view name;
 };
 
@@ -82,7 +101,8 @@ public:
     /** @brief 判定と爆風に必要な設定だけを値として返す */
     BreakableSettings Settings() const {
         return { desc_->scale, desc_->breakableColor, desc_->breakableRadius,
-            desc_->breakablePlayerDamage, desc_->breakableEnemyDamage, desc_->breakableWeapon, desc_->name };
+            desc_->breakablePlayerDamage, desc_->breakableEnemyDamage,
+            desc_->solid && desc_->breakableRadius <= 0.0f, desc_->name };
     }
     /** @brief 親子階層を解決した現在位置を返す */
     Vector3 GetPosition() const {
@@ -228,6 +248,8 @@ public:
      * 増減・変更できるようにするための仕組み（GetKnights()と同じ規約）
      */
     std::vector<CombatEnemyRef> GetCombatEnemies() const;
+    /** @brief 敵グループの全滅を待つ条件ごとに、成立したかと見ている敵の様子を返す（自動テストプレイの見張り用） */
+    std::vector<EnemyGroupWatch> CollectEnemyGroupWatches() const;
 
     /**
      * @brief kind=="breakable"で未破壊の配置物一覧を返す（毎フレーム呼ぶ想定）
@@ -250,6 +272,8 @@ public:
     bool SetObjectVisibleByName(const std::string& name, bool visible);
     /** @brief 配置物のローカル位置を即座に書き換える @return 名前が見つかればtrue */
     bool TeleportObjectByName(const std::string& name, const Vector3& position);
+    /** @brief 配置した敵を世界の位置へ置き直す（進行を止めている間も、その位置に留まるよう配置情報も書き換える） @return その敵が見つかればtrue */
+    bool PlaceEnemyAt(const EnemyEntity* enemy, const Vector3& worldPosition);
     /** @brief 配置物のローカル位置をseconds秒かけて目標へ補間移動させる（0以下なら即座） @return 名前が見つかればtrue */
     bool MoveObjectByName(const std::string& name, const Vector3& target, float seconds);
     /** @brief 配置物の有効/無効を上書きする（activationFlagより優先。レベルJSONには保存しない） @return 名前が見つかればtrue */
@@ -264,6 +288,13 @@ public:
     std::vector<engine::AABB> GetSolidColliders() const;
     /** @brief 敵の体を除いた、壁と床だけの当たり判定の一覧を返す（技で動かす先が壁の中かを調べる時に使う） */
     std::vector<engine::AABB> GetTerrainColliders() const;
+    /**
+     * @brief カメラが動ける範囲を測るための当たり判定の一覧を返す（敵の体と、条件で開く扉を除いた地形だけ）
+     * @note 扉はせり上がって開くので、含めるとその間だけステージの上端が伸び、空中にいるとカメラが上へ付いていく
+     */
+    std::vector<engine::AABB> GetCameraBoundColliders() const;
+    /** @brief 条件が成立するまで道を塞いでいる、まだ閉まっている扉の当たり判定の一覧を返す（画面外の敵を指す矢印が扉の向こうを指さないように使う） */
+    std::vector<engine::AABB> GetClosedGateColliders() const;
 
     /**
      * @brief 編集UIが表示中か返す
@@ -343,6 +374,7 @@ private:
         bool previousActivationFlag = false; // 前フレームの有効化フラグ
         bool activationFlagInitialized = false; // フラグ履歴の初期化済み状態
         bool fallFloorWasSolid = true; // "fall"ギミック用: 直前フレームの床の有無（崩落/復帰の瞬間だけ砂ぼこりを出す判定に使う）
+        float healTimer = 0.0f; // healer用: 次の回復までの経過秒数（runtimeTimer は出現の遅れに使うので分ける。共有すると遅れて出た回復役が消えたり出たりする）
         bool healChanneling = false; // healer用: 詠唱（回復発動までのタメ）中かどうか
         int healChannelHpAtStart = 0; // healer用: 詠唱開始時のHP。詠唱中に減ったら被弾＝中断とみなす
         bool pickupCollected = false; // pickup用: 回収済みなら描画・判定から外す
@@ -400,10 +432,10 @@ private:
     void SeparateOverlappingEnemies(const std::vector<engine::AABB>& walls, const std::optional<Vector3>& playerPosition);
     /** @brief 歩く敵の高さを地形に合わせる（壁を登る・段差に乗る・足場から落ちる。ボスと巡回する敵は配置どおり） */
     void UpdateEnemiesOnTerrain(const std::vector<engine::AABB>& solids);
-    /** @brief 敵の位置の真下にある床の上で、倒れた体を置く高さを返す（床が無ければ今の高さ） */
-    float FindCorpseFloorY(const Vector3& position) const;
+    /** @brief 敵の位置の真下にある床の上で、倒れた体を置く高さを返す（床が無ければ空） */
+    std::optional<float> FindCorpseFloorY(const Vector3& position, const std::vector<engine::AABB>& solids) const;
     /** @brief solid=trueの配置物のワールドAABB一覧（includeEnemyBodies=falseなら敵の体を除いた地形だけ） */
-    std::vector<engine::AABB> CollectSolidColliders(bool includeEnemyBodies) const;
+    std::vector<engine::AABB> CollectSolidColliders(bool includeEnemyBodies, bool includeGates = true) const;
     /** @brief 敵を倒す等の条件が成立するまで道を塞ぐ扉で、まだ条件が成立していないか */
     static bool IsClosedGate(const ObjectDesc& desc);
     /** @brief 敵を倒す等の条件が成立すると開く扉か（条件成立で消える当たり判定持ちのギミック） */
@@ -432,6 +464,8 @@ private:
         const Vector3& playerPos, float dt);
     /** @brief 敵に設定された巡回ルートへ沿って位置を更新する */
     bool UpdatePatrol(ObjectEntry& entry);
+    /** @brief 回復役から回復された敵へ走る光の筋と、回復された敵から立ちのぼる粒を出す */
+    void EmitHealLink(engine::graphics::ParticleManager& pm, const Vector3& from, const Vector3& to) const;
 
     /** @brief F2による編集セッションの開始と終了を処理する */
     void UpdateEditorVisibility(engine::Input* input);
@@ -1012,7 +1046,6 @@ private:
     char newLevelName_[textBufferCapacity::kIdentifier] = "level03";
     char templateGuideText_[textBufferCapacity::kLabel] = "案内文をここに";
     char templateDoorCondition_[textBufferCapacity::kName] = "condition_room_clear";
-    int templateWallWeapon_ = 3; // 壊せる壁テンプレの武器（kWeaponTypesの添字、既定はHammer）
     bool showWavePanel_ = false;
     bool showEnemyTypeEditor_ = false; ///< 「敵を作る」画面を開いているか
     EnemyTypeEditor enemyTypeEditor_; ///< 「敵を作る」画面

@@ -163,6 +163,8 @@
     <ClCompile Include="Game\cpp\Scene\BattleTestSceneRenderer.cpp" />
     <ClCompile Include="Game\cpp\Player\BulletPool.cpp" />
     <ClCompile Include="Game\cpp\Player\EnemyEntity.cpp" />
+    <ClCompile Include="Game\cpp\Player\AllyBoss.cpp" />
+    <ClCompile Include="Game\cpp\Scene\GamePlaySceneAlly.cpp" />
     <ClCompile Include="Game\cpp\Player\KnightEnemy.cpp" />
     <ClCompile Include="Game\cpp\Effect\CameraShaker.cpp" />
     <ClCompile Include="Game\cpp\Effect\ComboFeelDirector.cpp" />
@@ -175,6 +177,7 @@
     <ClCompile Include="Game\cpp\Effect\ThrownWeaponPool.cpp" />
     <ClCompile Include="Game\cpp\Scripting\WeaponFinisherTuning.cpp" />
     <ClCompile Include="Game\cpp\Scripting\MonsterTraitTuning.cpp" />
+    <ClCompile Include="Game\cpp\Scene\GamePlaySceneBugChecks.cpp" />
     <ClCompile Include="Game\cpp\Scene\GamePlaySceneBombs.cpp" />
     <ClCompile Include="Game\cpp\Scene\GamePlaySceneFinishers.cpp" />
     <ClCompile Include="Game\cpp\Scene\GamePlaySceneMonsters.cpp" />
@@ -187,6 +190,9 @@
     <ClCompile Include="Game\cpp\Scene\GamePlaySceneCombat.cpp" />
     <ClCompile Include="Game\cpp\Scene\GamePlaySceneDraw.cpp" />
     <ClCompile Include="Game\cpp\Scene\GamePlaySceneUI.cpp" />
+    <ClCompile Include="Game\cpp\Scene\GamePlaySceneGuideUI.cpp" />
+    <ClCompile Include="Game\cpp\Scene\GamePlaySceneFallRescue.cpp" />
+    <ClCompile Include="Game\cpp\Scene\GamePlaySceneElementStatus.cpp" />
     <ClCompile Include="Game\cpp\Scene\GamePlaySceneClear.cpp" />
     <ClCompile Include="Game\cpp\Scene\GamePlaySceneInitializer.cpp" />
     <ClCompile Include="Game\cpp\Core\App\GameSettings.cpp" />
@@ -206,6 +212,8 @@
     <ClCompile Include="Game\cpp\Player\AutoComboAssist.cpp" />
     <ClCompile Include="Game\cpp\Player\ComboMotion.cpp" />
     <ClCompile Include="Game\cpp\Player\ReachPoseLayer.cpp" />
+    <ClCompile Include="Game\cpp\Player\BossMotion.cpp" />
+    <ClCompile Include="Game\cpp\Player\EnemyEntityMotion.cpp" />
     <ClCompile Include="Game\cpp\Player\ComboMotionEditor.cpp" />
     <ClCompile Include="Game\cpp\Player\GunCombo.cpp" />
     <ClCompile Include="Game\cpp\Player\WeaponManager.cpp" />
@@ -215,6 +223,7 @@
     <ClCompile Include="Game\cpp\Util\PlaytestLog.cpp" />
     <ClCompile Include="Game\cpp\Scripting\GraphTypes.cpp" />
     <ClCompile Include="Game\cpp\Scripting\NodeRegistry.cpp" />
+    <ClCompile Include="Game\cpp\Scripting\NodeRegistryProgressNodes.cpp" />
     <ClCompile Include="Game\cpp\Scripting\GraphRuntime.cpp" />
     <ClCompile Include="Game\cpp\Scripting\GraphEditor.cpp" />
     <ClCompile Include="Game\cpp\Scripting\GraphEditorDraw.cpp" />
@@ -255,7 +264,6 @@
     <ClCompile Include="Game\cpp\Scene\BaseScene.cpp" />
     <ClCompile Include="Game\cpp\Scene\SceneShared.cpp" />
     <ClCompile Include="Game\cpp\UI\ScoreManager.cpp" />
-    <ClCompile Include="Game\cpp\UI\DebugButton.cpp" />
     <ClCompile Include="Game\cpp\UI\GuidePanel.cpp" />
     <ClCompile Include="Game\cpp\UI\StyleMeter.cpp" />
     <ClCompile Include="Game\cpp\UI\ResultBackdrop.cpp" />
@@ -266,6 +274,7 @@
     <ClCompile Include="Game\cpp\Scene\BossExecution.cpp" />
     <ClCompile Include="Game\cpp\Scene\BossExecutionTuning.cpp" />
     <ClCompile Include="Game\cpp\Scene\ClearFinish.cpp" />
+    <ClCompile Include="Game\cpp\Scene\ClearFinishTuning.cpp" />
     <ClCompile Include="Game\cpp\Scene\FinalBossArena.cpp" />
     <ClCompile Include="Game\cpp\Scene\FinalBossBody.cpp" />
     <ClCompile Include="Game\cpp\Scene\FinalBossBattle.cpp" />
@@ -778,6 +787,7 @@
     <ClInclude Include="Game\h\Scene\BossExecution.h" />
     <ClInclude Include="Game\h\Scene\BossExecutionTuning.h" />
     <ClInclude Include="Game\h\Scene\ClearFinish.h" />
+    <ClInclude Include="Game\h\Scene\ClearFinishTuning.h" />
     <ClInclude Include="Game\h\Scene\FinalBossArena.h" />
     <ClInclude Include="Game\h\Scene\FinalBossBattle.h" />
     <ClInclude Include="Game\h\Scene\FinalBossTelegraph.h" />
@@ -789,6 +799,7 @@
     <ClInclude Include="Game\h\Scene\BattleTestSceneRenderer.h" />
     <ClInclude Include="Game\h\Player\BulletPool.h" />
     <ClInclude Include="Game\h\Player\EnemyEntity.h" />
+    <ClInclude Include="Game\h\Player\AllyBoss.h" />
     <ClInclude Include="Game\h\Player\IEnemyEntity.h" />
     <ClInclude Include="Game\h\Player\KnightEnemy.h" />
     <ClInclude Include="Game\h\Effect\CameraShaker.h" />
@@ -824,6 +835,7 @@
     <ClInclude Include="Game\h\Player\AutoComboAssist.h" />
     <ClInclude Include="Game\h\Player\ComboMotion.h" />
     <ClInclude Include="Game\h\Player\ReachPoseLayer.h" />
+    <ClInclude Include="Game\h\Player\BossMotion.h" />
     <ClInclude Include="Game\h\Player\ComboMotionEditor.h" />
     <ClInclude Include="Game\h\Player\GunCombo.h" />
     <ClInclude Include="Game\h\Player\ComboTable.h" />
@@ -844,7 +856,6 @@
     <ClInclude Include="Game\h\Scene\SceneManager.h" />
     <ClInclude Include="Game\h\Scene\SceneShared.h" />
     <ClInclude Include="Game\h\UI\ScoreManager.h" />
-    <ClInclude Include="Game\h\UI\DebugButton.h" />
     <ClInclude Include="Game\h\UI\GuidePanel.h" />
     <ClInclude Include="Game\h\UI\StyleMeter.h" />
     <ClInclude Include="Game\h\UI\ResultBackdrop.h" />
@@ -928,6 +939,7 @@
     <ClInclude Include="Game\h\Util\EventBus.h" />
     <ClInclude Include="Game\h\Scripting\GraphTypes.h" />
     <ClInclude Include="Game\h\Scripting\NodeRegistry.h" />
+    <ClInclude Include="Game\h\Scripting\NodeParamHelpers.h" />
     <ClInclude Include="Game\h\Scripting\GraphRuntime.h" />
     <ClInclude Include="Game\h\Scripting\GraphEditor.h" />
     <ClInclude Include="Game\h\Scripting\GraphEditorServices.h" />
@@ -1070,6 +1082,7 @@
     <ClInclude Include="Game\h\Util\IPositionTarget.h" />
     <ClInclude Include="Engine\graphics\h\Manager\ResourceAlignment.h" />
     <ClCompile Include="Game\cpp\Player\EnemyEntityVisuals.cpp" />
+    <ClCompile Include="Game\cpp\Player\EnemyEntityReactions.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Engine\core\h\Util\TextBufferCapacity.h" />

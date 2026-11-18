@@ -71,10 +71,10 @@ struct IntroTuning {
     float hideHeight = 80.0f; ///< 降下するまでプレイヤーを置いておく高さ（引いた画にも映らない所）
     float goSeconds = 0.8f; ///< GO の文字を出しておく長さ
     float goPopSeconds = 0.25f; ///< GO の文字が弾んで大きさが落ち着くまでの長さ
-    std::string landImpact = "intro_land"; ///< 着地のヒットストップとカメラ揺れ（impacts）
-    std::string landRing = "intro_land"; ///< 着地の衝撃リング（rings）
-    std::string landSparks = "land_dust"; ///< 着地の砂ぼこり（sparks）
-    std::string goFlash = "intro_go"; ///< GO の瞬間の画面フラッシュ（flashes）
+    std::string landImpact = "intro_land"; ///< 着地のヒットストップとカメラ揺れ。impacts の項目の名前
+    std::string landRing = "intro_land"; ///< 着地の衝撃リング。rings の項目の名前
+    std::string landSparks = "land_dust"; ///< 着地の砂ぼこり。sparks の項目の名前
+    std::string goFlash = "intro_go"; ///< GO の瞬間の画面フラッシュ。flashes の項目の名前
     float skipLockSeconds = 0.2f; ///< 開始直後のこの間はボタンで飛ばせない（前の画面の決定ボタンを拾わないように）
 };
 
@@ -107,7 +107,7 @@ constexpr JsonField<IntroTuning> kIntroFields[] = {
     { nullptr, "skipLockSeconds", &IntroTuning::skipLockSeconds },
 };
 
-/** @brief 演出の段階の並び（sequence）と、そのステージの初回だけ出す段階（firstVisitOnly） */
+/** @brief 演出の段階の並び sequence と、そのステージの初回だけ出す段階 firstVisitOnly */
 struct IntroSequence {
     std::vector<std::string> phases = { "slash", "overview", "boss", "drop", "land" };
     std::set<std::string> firstVisitOnly;

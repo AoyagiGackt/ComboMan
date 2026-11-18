@@ -578,6 +578,29 @@
       "name": "所持済み武器タイプを再度奪った時に覚醒ゲージへ転用する量",
       "type": "float"
     },
+    "fusionDurability": {
+      "name": "武器の合体の耐久",
+      "help": "近接・固有技を当てるたびに1減り、0になると合体した武器ごと砕ける",
+      "type": "int"
+    },
+    "fusionDamageMult": {
+      "name": "合体した武器のダメージ倍率",
+      "type": "float"
+    },
+    "bossWeaponDamageMult": {
+      "name": "ボスの枠の武器のダメージ倍率",
+      "help": "合体していない時。ボスの枠の武器は入れ替わらず砕けない",
+      "type": "float"
+    },
+    "bossFusionDamageMult": {
+      "name": "ボスの武器どうしの合体のダメージ倍率",
+      "type": "float"
+    },
+    "bossWeaponFatigueMult": {
+      "name": "ボスの枠の武器の効きの落ちやすさ",
+      "help": "ほかの武器で当てた時の何倍たまるか。大きいほど持ち替えないとダメージが出にくい",
+      "type": "float"
+    },
     "styleRankAwakenGaugeBonus": {
       "name": "スタイルランク1段ごとに攻撃・ジャスト回避の覚醒ゲージ量へ足す倍率",
       "help": "スタイルランク1段ごとに攻撃・ジャスト回避の覚醒ゲージ量へ足す倍率（D=1.0倍、SSS=1.6倍）",
@@ -1339,18 +1362,6 @@
     "gameOverOnHpZero": {
       "name": "trueならラン中にHPが0になるとゲームオーバー結果へ遷移する"
     },
-    "debugGameOverButton": {
-      "name": "trueならゲーム中にやられ演出をすぐ見るボタン",
-      "help": "trueならゲーム中にやられ演出をすぐ見るボタン（F9かクリック）を出す（評価・確認用）"
-    },
-    "debugClearButton": {
-      "name": "trueならゲーム中にクリアの決め演出をすぐ見るボタン",
-      "help": "trueならゲーム中にクリアの決め演出をすぐ見るボタン（F5かクリック。剣か銃かはランダム）を出す（評価・確認用）"
-    },
-    "debugLiberationButton": {
-      "name": "trueならマップにステージの解放演出をすぐ見るボタン",
-      "help": "trueならマップにステージの解放演出をすぐ見るボタン（F5かクリック。進行は変えない）を出す（評価・確認用）"
-    },
     "resultDisplaySeconds": {
       "name": "クリア結果表示の秒数",
       "type": "float"
@@ -1700,6 +1711,26 @@
     },
     "halfRange": {
       "name": "扇状分布の中心補正",
+      "type": "float"
+    },
+    "tracerCount": {
+      "name": "弾の光の尾の粒の数",
+      "type": "int"
+    },
+    "tracerSpeedStep": {
+      "name": "尾の粒ごとに遅らせる速さの割合",
+      "type": "float"
+    },
+    "tracerSizeStep": {
+      "name": "尾の粒ごとに縮める大きさの割合",
+      "type": "float"
+    },
+    "tracerAlphaStep": {
+      "name": "尾の粒ごとに薄める不透明度の割合",
+      "type": "float"
+    },
+    "muzzleForward": {
+      "name": "銃口を撃つ向きへずらす距離",
       "type": "float"
     },
     "sequenceSlashAngleStep": {
@@ -2492,6 +2523,22 @@
     "rampage.juggleMaxSlashes": {
       "type": "int",
       "name": "乱舞の最大斬撃数"
+    },
+    "rampage.rampageSearchRange": {
+      "type": "float",
+      "name": "乱舞が向かう相手を探す横の距離"
+    },
+    "rampage.rampageSearchHeight": {
+      "type": "float",
+      "name": "乱舞が向かう相手を探す高さの差"
+    },
+    "rampage.rampageLaunchMaxSeconds": {
+      "type": "float",
+      "name": "相手へ着かない時に突進をやめるまでの秒数"
+    },
+    "rampage.juggleIdleSeconds": {
+      "type": "float",
+      "name": "攻撃が途切れて空中連撃を終えるまでの秒数"
     }
   },
   "stage_intro.json": {

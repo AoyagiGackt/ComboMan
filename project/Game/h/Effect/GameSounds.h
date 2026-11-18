@@ -20,6 +20,10 @@ enum class SoundCue {
     kGlassShatter, ///< 画面がガラスのように割れた
     kExplosion, ///< 爆風を伴う物が爆発した
     kRubble, ///< 壁などが崩れた
+    kRampageStart, ///< 覚醒乱舞を始めた（相手へ突進し始めた）
+    kRampageLaunch, ///< 覚醒乱舞で相手を打ち上げた
+    kRampageSlash, ///< 覚醒乱舞の空中連撃を1回入れた
+    kRampageFinish, ///< 覚醒乱舞の最後の一撃を入れた
     kCount
 };
 

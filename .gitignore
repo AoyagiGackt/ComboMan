@@ -368,3 +368,4 @@ externals/**/Release/
 project/log.txt
 project/scores.txt
 project/playtest_log.csv
+project/smoke_test

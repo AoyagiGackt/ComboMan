@@ -83,7 +83,7 @@ void SpaceDistortionEffect::Reset() {
 
 /** @brief バックバッファをキャプチャし、歪みを重ねて描画する3D描画の後に呼ぶ */
 void SpaceDistortionEffect::CaptureAndApply() {
-    pipelineHelper::CaptureAndDrawFullscreen(IsActive(), dxCommon_, srvManager_, captureTexture_.Get(),
+    pipelineHelper::CaptureAndDrawFullscreen(IsActive(), dxCommon_, srvManager_, captureTexture_,
         rootSignature_.Get(), pipelineState_.Get(), cbResource_.Get(), captureSrvIndex_);
 }
 

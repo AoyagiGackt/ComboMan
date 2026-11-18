@@ -169,6 +169,20 @@ void ParticleManager::EmitWithColor(const std::string& name,
         .lifeTime = lifeTime, .motion = flicker ? ParticleMotion::kFlicker : ParticleMotion::kLinear });
 }
 
+/** @brief 動き方と向きを指定して1粒放出する（炎・火の粉・もや・放電など） */
+void ParticleManager::EmitMotion(const std::string& name,
+    const Vector3& position,
+    const Vector3& velocity,
+    const Vector4& color,
+    float lifeTime,
+    float scale,
+    ParticleMotion motion,
+    float rotateZ) {
+    ENGINE_ASSERT(particleGroups_.contains(name));
+    SpawnParticle(particleGroups_[name], { .position = position, .velocity = velocity, .color = color, .scale = Uniform(scale),
+        .lifeTime = lifeTime, .rotateZ = rotateZ, .motion = motion });
+}
+
 /** @brief 横長の楕円形スケールで1粒放出する（斬撃の残光等に使用） */
 void ParticleManager::EmitEllipse(const std::string& name,
     const Vector3& position,

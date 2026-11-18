@@ -53,18 +53,20 @@ bool GamePlayScene::BossCanSeePlayer() const {
     if (enemy_ == nullptr) {
         return false;
     }
-    const Vector3 boss = enemy_->GetPosition();
+    return !IsWallBetweenEnemyAndPlayer(enemy_->GetPosition());
+}
+
+/** @brief 敵とプレイヤーの間に、壁や閉じた扉があるか */
+bool GamePlayScene::IsWallBetweenEnemyAndPlayer(const Vector3& enemyPosition) const {
     const float playerX = player_->GetPosition().x;
-    const float sightY = boss.y + kBossWallBandTop;
-    const AABB sight = { { (std::min)(boss.x, playerX), sightY, -kStageHalfDepth },
-        { (std::max)(boss.x, playerX), sightY + kBossSightThickness, kStageHalfDepth } };
-    // 敵の体は除いた地形だけで調べる（ボス自身やほかの敵で見えなくならないように）
-    for (const AABB& solid : GetStageEditor().GetTerrainColliders()) {
-        if (Collision::CheckCollision(sight, solid)) {
-            return false;
-        }
-    }
-    return true;
+    const float sightY = enemyPosition.y + kBossWallBandTop;
+    const AABB sight = { { (std::min)(enemyPosition.x, playerX), sightY, -kStageHalfDepth },
+        { (std::max)(enemyPosition.x, playerX), sightY + kBossSightThickness, kStageHalfDepth } };
+    // 敵の体は除いた地形だけで調べる（相手自身やほかの敵で見えなくならないように）
+    const std::vector<AABB> solids = GetStageEditor().GetTerrainColliders();
+    return std::any_of(solids.begin(), solids.end(), [&](const AABB& solid) {
+        return Collision::CheckCollision(sight, solid);
+    });
 }
 
 /** @brief ボス戦の進行役を1フレーム進め、起きたことに合わせて演出と当たり判定を出す */
@@ -81,6 +83,12 @@ void GamePlayScene::UpdateStageBoss(float dt) {
     input.canSeePlayer = BossCanSeePlayer();
     BossFrameOutput output;
     bossDirector_.Update(dt, input, output);
+    // 今の技と区切りに合わせた動きをボスの体へ渡す（倒れたら外し、膝をつく姿勢に任せる）
+    if (enemy_->IsDefeated()) {
+        enemy_->ClearMotion();
+    } else {
+        enemy_->SetMotionFrame(bossMotion_.Update(bossDirector_.BossKey(), output.motion, dt));
+    }
 
     const HitEffectPlayer fx(pm_, &cameraShaker_, &rng_);
     const Vector3 bossPosition = enemy_->GetPosition();

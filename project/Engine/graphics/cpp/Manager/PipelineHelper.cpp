@@ -499,14 +499,78 @@ Microsoft::WRL::ComPtr<ID3D12PipelineState> CreateFullscreenPipeline(DirectXComm
         L"Resources/shaders/postprocess/FullscreenVS.hlsl", pixelShaderPath);
 }
 
-/** @brief リソース状態を戻してからキャプチャ画像を全画面へ合成する */
+/** @brief 画面の写し取り先を、バックバッファの中でゲームの絵がある範囲と同じ大きさにそろえる */
+void MatchCaptureTextureToGameArea(DirectXCommon* dxCommon, SrvManager* srvManager,
+    Microsoft::WRL::ComPtr<ID3D12Resource>& captureTexture, uint32_t textureSrvIndex) {
+    // ゲームの絵は内部解像度の縦横比のまま、バックバッファの中に余白を付けて描かれている
+    const D3D12_RECT area = dxCommon->GetBackBufferScissorRect();
+    const UINT64 width = static_cast<UINT64>((std::max)(area.right - area.left, 1L));
+    const UINT height = static_cast<UINT>((std::max)(area.bottom - area.top, 1L));
+    const D3D12_RESOURCE_DESC current = captureTexture->GetDesc();
+    if (current.Width == width && current.Height == height) {
+        return;
+    }
+    // 前のフレームの描画が古い写し取り先を読み終えてから作り直す（このフレームではまだ使っていない）
+    dxCommon->WaitForGpu();
+    D3D12_RESOURCE_DESC desc = MakeRenderTextureDesc(static_cast<UINT>(width), height, current.Format);
+    desc.Flags = D3D12_RESOURCE_FLAG_NONE; // コピー先なので描画先にはしない
+    D3D12_HEAP_PROPERTIES heap { };
+    heap.Type = D3D12_HEAP_TYPE_DEFAULT;
+    Microsoft::WRL::ComPtr<ID3D12Resource> texture;
+    const HRESULT hr = dxCommon->GetDevice()->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &desc,
+        D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, nullptr, IID_PPV_ARGS(&texture));
+    ENGINE_ASSERT(SUCCEEDED(hr));
+    captureTexture = texture;
+    srvManager->CreateSrvForTexture2D(textureSrvIndex, captureTexture.Get(), current.Format, 1);
+}
+
+/** @brief バックバッファのうちゲームの絵がある範囲だけを、写し取り先の左上から写す */
+void CaptureGameArea(DirectXCommon* dxCommon, ID3D12Resource* destination) {
+    auto* cmd = dxCommon->GetCommandList();
+    ID3D12Resource* source = dxCommon->GetCurrentBackBufferResource();
+    constexpr UINT kBarrierCount = 2;
+    const D3D12_RESOURCE_BARRIER toCopy[kBarrierCount] = {
+        DirectXCommon::MakeTransitionBarrier(source, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_COPY_SOURCE),
+        DirectXCommon::MakeTransitionBarrier(destination, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COPY_DEST),
+    };
+    cmd->ResourceBarrier(kBarrierCount, toCopy);
+    // 写す範囲は、バックバッファと写し取り先のどちらからもはみ出さないようにする（はみ出すと D3D12 のエラーで落ちる）
+    const D3D12_RESOURCE_DESC sourceDesc = source->GetDesc();
+    const D3D12_RESOURCE_DESC destinationDesc = destination->GetDesc();
+    const D3D12_RECT area = dxCommon->GetBackBufferScissorRect();
+    const UINT left = static_cast<UINT>((std::max)(area.left, 0L));
+    const UINT top = static_cast<UINT>((std::max)(area.top, 0L));
+    const UINT right = (std::min)({ static_cast<UINT>((std::max)(area.right, 0L)), static_cast<UINT>(sourceDesc.Width),
+        left + static_cast<UINT>(destinationDesc.Width) });
+    const UINT bottom = (std::min)({ static_cast<UINT>((std::max)(area.bottom, 0L)), sourceDesc.Height, top + destinationDesc.Height });
+    if (right > left && bottom > top) {
+        D3D12_TEXTURE_COPY_LOCATION from { };
+        from.pResource = source;
+        from.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+        D3D12_TEXTURE_COPY_LOCATION to { };
+        to.pResource = destination;
+        to.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+        const D3D12_BOX box = { left, top, 0, right, bottom, 1 };
+        cmd->CopyTextureRegion(&to, 0, 0, 0, &from, &box);
+    }
+    const D3D12_RESOURCE_BARRIER toRestore[kBarrierCount] = {
+        DirectXCommon::MakeTransitionBarrier(source, D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET),
+        DirectXCommon::MakeTransitionBarrier(destination, D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE),
+    };
+    cmd->ResourceBarrier(kBarrierCount, toRestore);
+}
+
+/** @brief 現在の画面のゲームの絵がある範囲をコピーし、指定した全画面エフェクトで同じ範囲へ描き戻す */
 void CaptureAndDrawFullscreen(bool active, DirectXCommon* dxCommon, SrvManager* srvManager,
-    ID3D12Resource* captureTexture, ID3D12RootSignature* signature, ID3D12PipelineState* pipeline,
+    Microsoft::WRL::ComPtr<ID3D12Resource>& captureTexture, ID3D12RootSignature* signature, ID3D12PipelineState* pipeline,
     ID3D12Resource* constantsResource, uint32_t textureSrvIndex) {
     if (!active || !captureTexture) {
         return;
     }
-    CaptureRenderTarget(dxCommon->GetCommandList(), dxCommon->GetCurrentBackBufferResource(), captureTexture);
+    // 全画面などでバックバッファが内部解像度より大きい時も、絵の全体を同じ細かさで写す
+    // （左上の内部解像度ぶんだけを写して画面全体へ戻すと、演出の間だけ世界が拡大されて粗く見え、中心もずれる）
+    MatchCaptureTextureToGameArea(dxCommon, srvManager, captureTexture, textureSrvIndex);
+    CaptureGameArea(dxCommon, captureTexture.Get());
     DrawCapturedFullscreen(dxCommon, srvManager, signature, pipeline,
         constantsResource->GetGPUVirtualAddress(), textureSrvIndex);
 }

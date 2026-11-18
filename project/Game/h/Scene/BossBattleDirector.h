@@ -3,6 +3,7 @@
  * @brief ステージボス戦の進行（ひるみ値・体力が減った時の第2段階・武器ごとの技）をまとめる
  */
 #pragma once
+#include "BossMotion.h"
 #include "Vector3.h"
 #include "Vector4.h"
 #include <functional>
@@ -93,6 +94,8 @@ struct BossBattleTuning {
     int leapDamage = 3;
     float leapRecoverSeconds = 0.8f; ///< 着地した後の隙
     std::string leapWarningRing = "boss_dash_warning";
+    // 叩きつけ（予告の長さ・範囲・ダメージは enemy_params.json の bossSlam）
+    float slamRecoverSeconds = 0.6f; ///< 叩きつけた後の隙
     /** @brief 投げる技の名前ごとの中身（技の並びに名前を書くと、その中身で投げる） */
     std::map<std::string, BossVolleyData> volleys;
     /** @brief 武器種別名ごとのボス（無い武器は既定の名前と叩きつけだけ） */
@@ -133,6 +136,7 @@ struct BossFrameOutput {
     const BossVolleyData* volley = nullptr; ///< このフレームに投げる技（投げないなら nullptr）
     bool waveStarted = false; ///< 地面を叩いて衝撃波を出した
     bool leapLanded = false; ///< 跳びかかりで着地した
+    BossMotionCue motion; ///< 今ボスが何をしているか（技ごとの動きを選ぶ）
 };
 
 /**
@@ -163,6 +167,10 @@ public:
     }
     /** @brief 叩きつけの範囲の倍率（第2段階で広がる） */
     float SlamRadiusMult() const;
+    /** @brief ボスの種類の名前（武器種別名。技ごとの動きを引く） */
+    const std::string& BossKey() const {
+        return bossKey_;
+    }
     /** @brief 今のボスの名前と技 */
     const BossProfile& Profile() const {
         return profile_;
@@ -172,7 +180,7 @@ private:
     /** @brief 戦いの段階 */
     enum class Phase { kWaiting, kFight, kRage };
     /** @brief 技の段階 */
-    enum class Move { kNone, kChargeTelegraph, kCharging, kDashTelegraph, kDashing, kVolleyTelegraph, kWaveTelegraph, kLeapTelegraph, kLeaping, kRecover };
+    enum class Move { kNone, kChargeTelegraph, kCharging, kDashTelegraph, kDashing, kVolleyTelegraph, kWaveTelegraph, kLeapTelegraph, kLeaping, kSlamTelegraph, kRecover };
 
     /** @brief 戦う前: プレイヤーが近づいたら戦い始める */
     void UpdateWaiting(const BossFrameInput& input);
@@ -190,9 +198,16 @@ private:
     void SetScripted(bool scripted, const Vector3& playerPosition);
     /** @brief 技の後の隙に入る */
     void BeginRecover(float seconds);
+    /** @brief 時間で区切る段階に入る（身構え・隙。経過割合を出せるよう長さも覚える） */
+    void BeginTimedMove(Move move, float seconds);
+    /** @brief 今ボスが何をしているか（技・区切り・経過割合） */
+    BossMotionCue CurrentMotionCue() const;
 
     EnemyEntity* boss_ = nullptr;
     BossProfile profile_;
+    std::string bossKey_; ///< ボスの種類の名前（武器種別名）
+    std::string currentAttack_; ///< 出している技の名前
+    float stageSeconds_ = 0.0f; ///< 今の身構えか隙の長さ
     Phase phase_ = Phase::kWaiting;
     Move move_ = Move::kNone;
     bool raging_ = false;

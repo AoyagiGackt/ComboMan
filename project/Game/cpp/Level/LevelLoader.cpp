@@ -68,7 +68,6 @@ namespace {
         { nullptr, "breakableRadius", &ObjectDesc::breakableRadius },
         { nullptr, "breakablePlayerDamage", &ObjectDesc::breakablePlayerDamage },
         { nullptr, "breakableEnemyDamage", &ObjectDesc::breakableEnemyDamage },
-        { nullptr, "breakableWeapon", &ObjectDesc::breakableWeapon },
         { nullptr, "breakableColor", &ObjectDesc::breakableColor },
         { nullptr, "count", &ObjectDesc::count },
         { nullptr, "step", &ObjectDesc::step },

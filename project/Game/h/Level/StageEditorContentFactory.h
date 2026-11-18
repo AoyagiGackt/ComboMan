@@ -55,12 +55,11 @@ public:
     static StageEditorGeneratedContent CreateSlidingDoor(const Vector3& center, const std::string& conditionFlag, int& nextSerial);
 
     /**
-     * @brief 指定武器の近接攻撃でしか壊れない壁を生成する（solid、爆風なし）
+     * @brief どの武器でも壊せる壁を生成する（solid、爆風なし。壊すと敵を巻き込みながら吹き飛ぶ）
      * @param center 壁の中心位置
-     * @param weaponType 壊せる武器種別名（"Hammer"等、空なら何でも壊せる）
      * @param nextSerial 一意な名前の生成に使用して更新する連番
      */
-    static StageEditorGeneratedContent CreateBreakableWall(const Vector3& center, const std::string& weaponType, int& nextSerial);
+    static StageEditorGeneratedContent CreateBreakableWall(const Vector3& center, int& nextSerial);
 
     /**
      * @brief 区画トリガーと、そのフラグで表示される画面下の案内文をセットで生成する

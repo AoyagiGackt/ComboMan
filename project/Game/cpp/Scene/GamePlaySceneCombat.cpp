@@ -182,7 +182,7 @@ void GamePlayScene::ApplyMeleeComboStyleHit(const AABB& enemyAABB) {
     const WeaponData& weapon = wm->GetCurrent();
     const float damageMult = attack != nullptr ? attack->damageMult : 1.0f;
     const int damage = (std::max)(1,
-        static_cast<int>(std::round(weapon.damage * damageMult / CombatTune().meleeDamageDivisor * CurrentDamageMult())));
+        static_cast<int>(std::round(weapon.damage * damageMult / CombatTune().meleeDamageDivisor * CurrentDamageMult() * FusionDamageMult())));
     // 覚醒中の多段ヒットの2発目以降は、押し出し・止め・締め演出を軽くして刻みの速さを見せる
     const bool extraHit = player_->JustComboExtraHit();
     const float knockbackMult = weapon.knockbackMult * player_->GetAwakenedKnockbackMult() * CombatTune().knockbackScale
@@ -223,7 +223,9 @@ void GamePlayScene::ApplyMeleeComboStyleHit(const AABB& enemyAABB) {
     // 属性の弾けは効きが落ちていない武器でだけ出す（持ち替えた瞬間に派手さが戻るのを見せる）
     if (fatigueMult >= 1.0f) {
         EmitElementalHitEffect(weapon, enemy_->GetPosition(), player_->GetComboStep());
+        ApplyElementStatus(enemy_, weapon.element, ColorFromArray(weapon.effectColor));
     }
+    ApplyFusionHit(enemy_, 1.0f);
 
     // 段ごとのヒットストップとカメラ揺れ（多段ヒットの2発目以降は軽く）
     if (extraHit) {
@@ -281,7 +283,7 @@ void GamePlayScene::ApplyWeaponSkillStyleHit(const AABB& enemyAABB) {
     // ダメージ: 叩きつけか通常の固有技かの固定値（ボス技を奪っていれば上乗せ）
     const int slamBonus = (slam && HasBossSlamTechnique()) ? GameRules::GetInstance()->Get().bossTechniqueBonusDamage : 0;
     const float rawDamage = static_cast<float>((slam ? CombatTune().bossSlamBaseDamage : CombatTune().bossSkillBaseDamage) + slamBonus);
-    enemy_->TakeDamage((std::max)(1, static_cast<int>(std::round(rawDamage * CurrentDamageMult()))));
+    enemy_->TakeDamage((std::max)(1, static_cast<int>(std::round(rawDamage * CurrentDamageMult() * FusionDamageMult()))));
     if (BossReactsToHits()) {
         enemy_->ApplyHitstun(CombatTune().skillHitstunSeconds, true);
         enemy_->ApplyComboReaction(player_->GetLastDirX() * wm->GetCurrent().knockbackMult, CombatTune().skillKnockY,
@@ -295,6 +297,8 @@ void GamePlayScene::ApplyWeaponSkillStyleHit(const AABB& enemyAABB) {
         weapon.effectBurstCount, weapon.effectRingRadius);
     EmitWeaponStyleHit(enemy_->GetPosition(), true);
     EmitElementalHitEffect(weapon.element, ColorFromArray(weapon.effectColor), enemy_->GetPosition(), CombatTune().skillElementScale);
+    ApplyElementStatus(enemy_, weapon.element, ColorFromArray(weapon.effectColor));
+    ApplyFusionHit(enemy_, CombatTune().skillElementScale);
 
     // 固有技は通常コンボより一段大きいヒットストップ・カメラ揺れにする（叩きつけはさらに大きく）
     fx.Impact(slam ? "skill_slam" : "skill");
@@ -323,7 +327,16 @@ int GamePlayScene::GunFatigueIndex() const {
 /** @brief 手に持っている近接武器の疲労の添字（素手なら-1） */
 int GamePlayScene::HeldMeleeFatigueIndex() const {
     const auto* wm = WeaponManager::GetInstance();
+    // ボスの枠の武器は、ふつうの枠の同じ種類の武器とは別に数える
+    if (wm->IsBossSlotSelected()) {
+        return BossFatigueIndex();
+    }
     return wm->HasEquippedWeapon() ? wm->GetIndex() : -1;
+}
+
+/** @brief ボスの枠の武器の効きの落ちの添字（銃の次） */
+int GamePlayScene::BossFatigueIndex() const {
+    return GunFatigueIndex() + 1;
 }
 
 /** @brief 指定した武器の疲労から、今のダメージ倍率を返す（1.0=万全〜weaponFatigueMinDamageMult） */
@@ -343,12 +356,14 @@ void GamePlayScene::RegisterFatigueHit(int fatigueIndex, float amount) {
         return;
     }
     pendingFatigueIndex_ = fatigueIndex;
-    pendingFatigueAmount_ = (std::max)(pendingFatigueAmount_, amount);
+    // ボスの枠の武器は強い代わりに、当て続けると効きが早く落ちる（持ち替えると戻る）
+    const float scaled = fatigueIndex == BossFatigueIndex() ? amount * CombatTune().bossWeaponFatigueMult : amount;
+    pendingFatigueAmount_ = (std::max)(pendingFatigueAmount_, scaled);
 }
 
 /** @brief 当てた武器へ疲労を足し、それ以外の武器の疲労を抜く（ヒット判定の後に毎フレーム呼ぶ） */
 void GamePlayScene::UpdateWeaponFatigue() {
-    weaponFatigue_.resize(static_cast<size_t>(GunFatigueIndex()) + 1, 0.0f);
+    weaponFatigue_.resize(static_cast<size_t>(BossFatigueIndex()) + 1, 0.0f);
     if (pendingFatigueIndex_ >= 0 && pendingFatigueIndex_ < static_cast<int>(weaponFatigue_.size())) {
         float& fatigue = weaponFatigue_[pendingFatigueIndex_];
         fatigue = (std::min)(fatigue + pendingFatigueAmount_, 1.0f);
@@ -446,32 +461,35 @@ void GamePlayScene::ApplyGunShotStyleHit() {
     EmitEnemyHitEffect(enemy_->GetPosition(), gunHitColor, gunHitStrength);
     if (gunFatigueMult >= 1.0f) {
         EmitElementalHitEffect(gun.element, ColorFromArray(gun.effectColor), enemy_->GetPosition(), CombatTune().gunElementScale);
+        ApplyElementStatus(enemy_, gun.element, ColorFromArray(gun.effectColor));
     }
 }
 
 /** @brief UpdateStyleAndUI()の下請け 覚醒乱舞ラッシュのヒット判定とスタイル加点を処理する */
-void GamePlayScene::ApplyRampageStyleHit(const AABB& enemyAABB) {
-    // 乱舞のボス向け加点は、対象の実体がある場合に限る
-    if (!enemy_) {
-        return;
-    }
-    if (!player_->JustRampageHit()) {
+void GamePlayScene::ApplyRampageStyleHit() {
+    // 乱舞は相手に選んだ敵（いなければボス）に当てる
+    EnemyEntity* const target = RampageTargetEnemy();
+    if (target == nullptr || target->IsDefeated() || !player_->JustRampageHit()) {
         return;
     }
     const Vector3& ppos = player_->GetPosition();
     AABB rushRange = { { ppos.x - CombatTune().rampageRushRadiusX, ppos.y - CombatTune().rampageRushRadiusY, -kStageHalfDepth },
         { ppos.x + CombatTune().rampageRushRadiusX, ppos.y + CombatTune().rampageRushRadiusY, kStageHalfDepth } };
-    if (!Collision::CheckCollision(rushRange, enemyAABB)) {
+    if (!Collision::CheckCollision(rushRange, EnemyHitBoxAt(target->GetPosition()))) {
         return;
     }
     // 乱舞スラッシュ 回数が増えるほど多くゲージが溜まる
     styleMeter_ = std::clamp(
         styleMeter_ + CombatTune().rampageBaseStyleGain + player_->GetJuggleCount() * CombatTune().rampageJuggleStyleGain, 0.0f, 1.0f);
-    enemy_->TakeDamage(CombatTune().rampageDamage);
+    target->TakeDamage(CombatTune().rampageDamage);
+    // 道中の敵は斬られている間は攻撃させない（ボスはひるんでいる間だけ）
+    if (target != enemy_ || BossReactsToHits()) {
+        target->ApplyHitstun(CombatTune().defaultHitstunSeconds, true);
+    }
     styleRankHud_.RegisterHit("rampage", 1.0f);
 
     // 乱舞は手数が多いので控えめな弾けで1発ごとの命中を示す
-    EmitEnemyHitEffect(enemy_->GetPosition(), HitEffectLibrary::GetInstance()->Color("rampage_hit"), CombatTune().rampageHitStrength);
+    EmitEnemyHitEffect(target->GetPosition(), HitEffectLibrary::GetInstance()->Color("rampage_hit"), CombatTune().rampageHitStrength);
 }
 
 /** @brief 近接の一撃ぶんのスタイルを加える（ボスにも道中の敵にも共通） */
@@ -581,7 +599,7 @@ void GamePlayScene::UpdateStyleAndUI(float dt) {
     ApplyMeleeComboStyleHit(enemyAABB);
     ApplyWeaponSkillStyleHit(enemyAABB);
     ApplyGunShotStyleHit();
-    ApplyRampageStyleHit(enemyAABB);
+    ApplyRampageStyleHit();
     UpdateDodgeStyle();
     // フィニッシャースラッシュのダメージは UpdateFinisherSlash の本命ヒットで適用する
     DecayStyleMeter(dt);
@@ -620,6 +638,9 @@ void GamePlayScene::UpdateParticles(float dt) {
         UpdateMonsterTraits(dt);
     }
     UpdateStyleTechniqueParticles(dt);
+    // 属性で敵に残った状態（燃焼・凍結など）と、手に入れた武器の名前の表示を進める
+    UpdateElementStatuses(dt);
+    UpdateWeaponAcquireBanner(dt);
 
     // 倒した瞬間の演出と、HUD のフィニッシュ!（コンボの締めではなく、倒した時だけ出す）
     auto emitDefeat = [this](const Vector3& pos) {
@@ -676,7 +697,12 @@ void GamePlayScene::UpdateGhostTrail(float dt) {
         ghostSpawnTimer_ -= dt;
         if (ghostSpawnTimer_ <= 0.0f) {
             ghostSpawnTimer_ = HitEffectLibrary::GetInstance()->SceneParticles().ghostSpawnInterval;
-            ghostTrail_.push_back({ ppos, 0.0f });
+            // 本体の見た目と同じ所・大きさ・向きで残す（体の中心に素の大きさで置くと、頭上に大きな像が出る）
+            GhostEntry ghost { };
+            player_->GetStaticModelPlacement(ghost.pos, ghost.scale);
+            ghost.yaw = player_->GetLastDirX() >= 0.0f ? gameConstants::kHalfPi : -gameConstants::kHalfPi;
+            ghost.age = 0.0f;
+            ghostTrail_.push_back(ghost);
         }
     } else {
         ghostSpawnTimer_ = 0.0f;

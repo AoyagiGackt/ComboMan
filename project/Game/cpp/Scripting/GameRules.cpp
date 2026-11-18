@@ -19,9 +19,6 @@ constexpr JsonField<GameRulesData> kFields[] = {
     { nullptr, "requireBossWeaponSteal", &GameRulesData::requireBossWeaponSteal },
     { nullptr, "clearFlag", &GameRulesData::clearFlag },
     { nullptr, "gameOverOnHpZero", &GameRulesData::gameOverOnHpZero },
-    { nullptr, "debugGameOverButton", &GameRulesData::debugGameOverButton },
-    { nullptr, "debugClearButton", &GameRulesData::debugClearButton },
-    { nullptr, "debugLiberationButton", &GameRulesData::debugLiberationButton },
     { nullptr, "resultDisplaySeconds", &GameRulesData::resultDisplaySeconds },
     { nullptr, "finalFloor", &GameRulesData::finalFloor },
     { "bossHp", "combat", &GameRulesData::bossHpCombat },
@@ -39,6 +36,8 @@ constexpr JsonField<GameRulesData> kFields[] = {
     { nullptr, "bossTechniqueRadiusMult", &GameRulesData::bossTechniqueRadiusMult },
     { nullptr, "bossTechniqueBonusDamage", &GameRulesData::bossTechniqueBonusDamage },
     { nullptr, "allPickupsBonus", &GameRulesData::allPickupsBonus },
+    { nullptr, "tutorialLevelPath", &GameRulesData::tutorialLevelPath },
+    { nullptr, "tutorialPortalX", &GameRulesData::tutorialPortalX },
 };
 }
 

@@ -82,8 +82,31 @@ std::vector<engine::AABB> StageEditor::GetTerrainColliders() const {
     return CollectSolidColliders(false);
 }
 
-/** @brief solid=trueの配置物のワールドAABB一覧（includeEnemyBodies=falseなら敵の体を除いた地形だけ） */
-std::vector<engine::AABB> StageEditor::CollectSolidColliders(bool includeEnemyBodies) const {
+/** @brief カメラが動ける範囲を測るための当たり判定の一覧を返す（敵の体と、条件で開く扉を除いた地形だけ） */
+std::vector<engine::AABB> StageEditor::GetCameraBoundColliders() const {
+    return CollectSolidColliders(false, false);
+}
+
+/** @brief 条件が成立するまで道を塞いでいる、まだ閉まっている扉の当たり判定の一覧を返す */
+std::vector<engine::AABB> StageEditor::GetClosedGateColliders() const {
+    std::vector<engine::AABB> result;
+    for (const auto& entry : objects_) {
+        if (!entry.runtimeActive || !entry.visibleOverride || !IsClosedGate(entry.desc)) {
+            continue;
+        }
+        // 列配置の各実体ごとに、回した箱を囲む軸平行の箱にする（CollectSolidColliders と同じ形）
+        const ObjectDesc& desc = entry.desc;
+        const Vector3 basePos = WorldPositionOf(desc);
+        const Vector3 half = { 0.5f * std::abs(desc.scale.x), 0.5f * std::abs(desc.scale.y), 0.5f * std::abs(desc.scale.z) };
+        for (int i = 0; i < static_cast<int>(entry.instances.size()); ++i) {
+            result.push_back(MakeRotatedBounds(PlacementInstancePosition(desc, basePos, i), half, desc.rotation));
+        }
+    }
+    return result;
+}
+
+/** @brief solid=trueの配置物のワールドAABB一覧（includeEnemyBodies=falseなら敵の体を、includeGates=falseなら条件で開く扉を除く） */
+std::vector<engine::AABB> StageEditor::CollectSolidColliders(bool includeEnemyBodies, bool includeGates) const {
     // 当たり判定を持ち、今ゲーム中で有効な（回収・破壊されていない）配置物だけを対象にする
     std::vector<engine::AABB> result;
     std::vector<size_t> gateIndices;
@@ -101,6 +124,10 @@ std::vector<engine::AABB> StageEditor::CollectSolidColliders(bool includeEnemyBo
             continue;
         }
         const ObjectDesc& desc = entry.desc;
+        // 開いていく途中で動く扉は、カメラの範囲を測る時には数えない
+        if (!includeGates && IsGate(desc)) {
+            continue;
+        }
         Vector3 basePos = WorldPositionOf(desc);
         Vector3 colliderRotation = desc.rotation;
         if (const GimmickMotion* motion = ObjectKind::Of(desc.kind).MotionOf(desc)) {
@@ -411,6 +438,37 @@ std::vector<CombatEnemyRef> StageEditor::GetCombatEnemies() const {
         ref.enemy = entry.enemy.get();
         ref.instanceId = entry.enemyInstanceId;
         result.push_back(ref);
+    }
+    return result;
+}
+
+/** @brief 敵グループの全滅を待つ条件ごとに、成立したかと見ている敵の様子を返す */
+std::vector<EnemyGroupWatch> StageEditor::CollectEnemyGroupWatches() const {
+    std::vector<EnemyGroupWatch> result;
+    for (const auto& condition : objects_) {
+        const ObjectDesc& desc = condition.desc;
+        if (!desc.enabled || desc.enemyGroup.empty() || !ObjectKind::Of(desc.kind).WatchesEnemyGroup(desc)) {
+            continue;
+        }
+        EnemyGroupWatch watch;
+        watch.conditionName = desc.name;
+        watch.group = desc.enemyGroup;
+        watch.met = GameFlags::GetInstance()->GetFlag(std::string(kConditionFlagPrefix) + desc.name);
+        // 同じグループの敵を、倒されたかと見えているかと一緒に集める（判定は ObjectKind::IsEnemyGroupDefeated と同じ見方）
+        for (const auto& entry : objects_) {
+            if (entry.desc.enemyGroup != desc.enemyGroup || &entry == &condition) {
+                continue;
+            }
+            if (entry.knight) {
+                watch.enemies.push_back({ entry.desc.name, entry.knight->GetPosition(), entry.knight->GetHp(), !entry.knight->IsAlive(), true, entry.runtimeActive });
+            } else if (entry.enemy) {
+                watch.enemies.push_back({ entry.desc.name, entry.enemy->GetPosition(), entry.enemy->GetHp(),
+                    entry.enemy->IsDefeated(), entry.enemy->IsVisible(), entry.runtimeActive });
+            } else if (ObjectKind::Of(entry.desc.kind).SpawnsLater()) {
+                watch.waitingSpawn = true;
+            }
+        }
+        result.push_back(std::move(watch));
     }
     return result;
 }

@@ -146,6 +146,24 @@ void Player::PlayStealStab() {
     PlayAttackAnim(rig_->slashAnim, Tuning().stealStabAnimSpeed);
 }
 
+/** @brief 持っている武器が砕けた時に、振っている途中のコンボと技を打ち切る */
+void Player::CancelAttacksForWeaponBreak() {
+    meleeCombo_.Reset();
+    ResetWeaponSkills();
+}
+
+/** @brief 床を抜けて落ちた時に、指定した所へ置き直す（落ちる速さ・前のフレームの位置・技の途中の動きも消す） */
+void Player::PlaceAfterFallRescue(const Vector3& position) {
+    pos_ = position;
+    // 前のフレームの位置も合わせないと、床の上面を上から越えた判定や壁の押し戻しが、落ちていた所との差で働いてしまう
+    prevFrameX_ = position.x;
+    prevFrameY_ = position.y;
+    velocityY_ = 0.0f;
+    onGround_ = false;
+    InterruptWeaponSkills();
+    meleeCombo_.Reset();
+}
+
 /** @brief 被弾時の無敵時間を開始する */
 void Player::OnHit() {
     invincibleTimer_ = Tuning().invincibleDuration;
@@ -358,11 +376,15 @@ void Player::Update(Input* input, const Vector3& enemyPos, bool enemySolid, bool
         NotifyWeaponSkillsLanded(); // 空中ダッシュなどは着地で回復する
     }
 
+    // 乱舞はシーンが選んだ近くの相手へ向かう（選ばれていなければ渡された敵の位置）
+    const Vector3 rampageTarget = hasRampageTarget_ ? rampageTarget_ : enemyPos;
+    hasRampageTarget_ = false;
+
     HandleRangedCombat(input);
-    HandleMeleeCombat(input, enemyPos);
+    HandleMeleeCombat(input, rampageTarget);
     HandleFinisherSlash(input);
     HandleWeaponSkill(input);
-    UpdateRampagePhysics(enemyPos);
+    UpdateRampagePhysics(rampageTarget);
     UpdateAwakenState(input);
     if (enemySolid) {
         ResolveEnemyOverlap(enemyPos);
@@ -393,7 +415,7 @@ void Player::ResolveBlockCollision(const std::vector<AABB>& blocks) {
 
     // 上昇中に頭がブロック下面を横切った場合は、下面の直下へ戻して上昇速度を止める。
     if (velocityY_ > 0.0f) {
-        const float previousHeadY = pos_.y - velocityY_ + kHalf;
+        const float previousHeadY = prevFrameY_ + kHalf;
         const float currentHeadY = pos_.y + kHalf;
         float nearestCeiling = (std::numeric_limits<float>::max)();
         for (const auto& b : blocks) {
@@ -415,8 +437,10 @@ void Player::ResolveBlockCollision(const std::vector<AABB>& blocks) {
 
     // 1フレームの落下量は側面判定の余白より大きくなり得るため、今フレームで上面を
     // 上から跨いだブロックは着地扱いにする（側面押し出しで横へ弾くと着地できない）
+    // 移動前の高さは、フレームの頭で覚えた値を使う（今の速さから逆算すると、空中攻撃で落下を弱めた分だけ
+    // 実際より低く出て、速く落ちてきたフレームに上面を越えたと分からず床の中へ沈む）
     const float feetYBeforeResolve = pos_.y - kHalf;
-    const float prevFeetY = pos_.y - velocityY_ - kHalf;
+    const float prevFeetY = prevFrameY_ - kHalf;
     // 上昇する床は1フレームで足元へ少し食い込むことがある。
     // その食い込みを側面衝突として横へ押し出さず、上面への着地として扱う。
     // 60fps時の移動床の最大移動量を少しだけ上回る値に留める。
@@ -429,6 +453,49 @@ void Player::ResolveBlockCollision(const std::vector<AABB>& blocks) {
             && feetYBeforeResolve <= b.max.y + kMovingFloorTopTolerance;
         return velocityY_ <= 0.0f && (crossedTopWhileFalling || shallowMovingFloorPenetration);
     };
+    // 壁のように同じX/Zに積み重なったブロックの途中の継ぎ目に、ジャンプで壁へ突っ込んだ際に
+    // 乗ってしまわないよう、頭上（立った時に体が収まる高さ）に別のブロックが無いことも確認する
+    auto hasClearanceAbove = [&](const AABB& candidate) {
+        for (const auto& other : blocks) {
+            if (&other == &candidate) {
+                continue;
+            }
+            bool otherOverlapXZ = (pos_.x + kHalf) > other.min.x && (pos_.x - kHalf) < other.max.x
+                && (pos_.z + kHalf) > other.min.z && (pos_.z - kHalf) < other.max.z;
+            if (!otherOverlapXZ) {
+                continue;
+            }
+            // すぐ上に積まれたブロック（壁の継ぎ目）だけを見る。床から少し浮いた低いブロックの下でも床に立てないと、
+            // 床の中へ沈み、体が床に隠れて透明に見えたり埋まったりする
+            if (other.min.y <= candidate.max.y + kStackedBlockGap && other.max.y > candidate.max.y) {
+                return false;
+            }
+        }
+        return true;
+    };
+    // 支持判定は体の幅よりかなり狭くし、見た目上ブロックの外（空中）なのに乗れてしまうのを防ぐ
+    constexpr float kSupportHalf = 0.15f;
+    // 床の中に沈んでいたら上面へ戻す（横の押し出しより前に行う。押し出すと床の中を横へずれて戻れなくなる）
+    // 戻すのは、移動前も今もそのブロックの真上か中にいて、足が上面から体の高さ以内に沈んでいる時だけ
+    // （横から壁へ入った時は戻さない。戻すと壁を登れてしまう）
+    if (velocityY_ <= 0.0f) {
+        const float sunkFeetY = pos_.y - kHalf;
+        float recoverTop = (std::numeric_limits<float>::lowest)();
+        for (const auto& b : blocks) {
+            const bool overlapNow = (pos_.x + kSupportHalf) > b.min.x && (pos_.x - kSupportHalf) < b.max.x
+                && (pos_.z + kSupportHalf) > b.min.z && (pos_.z - kSupportHalf) < b.max.z;
+            const bool overlapBefore = (prevFrameX_ + kSupportHalf) > b.min.x && (prevFrameX_ - kSupportHalf) < b.max.x;
+            const bool feetInside = sunkFeetY > b.min.y && sunkFeetY < b.max.y - kGroundStepTolerance;
+            const bool shallow = b.max.y - sunkFeetY <= kHalf * 2.0f;
+            if (overlapNow && overlapBefore && feetInside && shallow && b.max.y > recoverTop && hasClearanceAbove(b)) {
+                recoverTop = b.max.y;
+            }
+        }
+        if (recoverTop != (std::numeric_limits<float>::lowest)()) {
+            pos_.y = recoverTop + kHalf;
+            velocityY_ = 0.0f; // 足が上面ちょうどに来るので、この後の着地の判定でそのまま床に立つ
+        }
+    }
 
     // 水平方向  側面から重なっているブロックがあれば侵入量が小さい側へ押し出す
     for (const auto& b : blocks) {
@@ -467,28 +534,6 @@ void Player::ResolveBlockCollision(const std::vector<AABB>& blocks) {
     // 垂直方向  足元付近に上面があるブロックのうち一番高いものへ着地させる
     float feetY = pos_.y - kHalf;
     float bestTop = useStageFloor_ ? (std::numeric_limits<float>::lowest)() : Tuning().groundY;
-    // 壁のように同じX/Zに積み重なったブロックの途中の継ぎ目に、ジャンプで壁へ突っ込んだ際に
-    // 乗ってしまわないよう、頭上（立った時に体が収まる高さ）に別のブロックが無いことも確認する
-    auto hasClearanceAbove = [&](const AABB& candidate) {
-        for (const auto& other : blocks) {
-            if (&other == &candidate) {
-                continue;
-            }
-            bool otherOverlapXZ = (pos_.x + kHalf) > other.min.x && (pos_.x - kHalf) < other.max.x
-                && (pos_.z + kHalf) > other.min.z && (pos_.z - kHalf) < other.max.z;
-            if (!otherOverlapXZ) {
-                continue;
-            }
-            // すぐ上に積まれたブロック（壁の継ぎ目）だけを見る。床から少し浮いた低いブロックの下でも床に立てないと、
-            // 床の中へ沈み、体が床に隠れて透明に見えたり埋まったりする
-            if (other.min.y <= candidate.max.y + kStackedBlockGap && other.max.y > candidate.max.y) {
-                return false;
-            }
-        }
-        return true;
-    };
-    // 支持判定は体の幅よりかなり狭くし、見た目上ブロックの外（空中）なのに乗れてしまうのを防ぐ
-    constexpr float kSupportHalf = 0.15f;
     for (const auto& b : blocks) {
         bool overlapXZ = (pos_.x + kSupportHalf) > b.min.x && (pos_.x - kSupportHalf) < b.max.x
             && (pos_.z + kSupportHalf) > b.min.z && (pos_.z - kSupportHalf) < b.max.z;

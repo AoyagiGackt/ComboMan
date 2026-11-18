@@ -140,7 +140,7 @@
       "type": "row",
       "kind": "prop",
       "axis": "x",
-      "count": 62,
+      "count": 63,
       "step": 1,
       "model": "Resources/block/block.obj",
       "texture": "Resources/block/block.png",

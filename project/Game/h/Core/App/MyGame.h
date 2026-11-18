@@ -48,10 +48,13 @@ public:
     void Draw() override;
 
 private:
+    /** @brief ゲームを1回分進める（Update が速回しの時に何回か呼ぶ） */
+    void UpdateOnce();
     /** @brief シーン生成を担う抽象ファクトリのスマートポインタ */
     std::unique_ptr<AbstractSceneFactory> sceneFactory_;
     /** @brief F8 で開閉するエンジン共通の実行時診断パネルを表示しているか */
     bool showEngineDiagnostics_ = false;
+    bool fastSmokeTest_ = false; ///< 自動テストを速回ししているか（--realtime なしで起動した時）
     /** @brief 効果音・BGMの割り当て画面（F8のパネルから開く） */
     engine::game::SoundAssignEditor soundAssignEditor_;
     /** @brief 音の割り当て画面を表示しているか */
