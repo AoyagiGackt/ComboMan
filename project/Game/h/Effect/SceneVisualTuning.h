@@ -105,6 +105,8 @@ struct PlayerVisualSettings {
     float awakenRed = 0.15f;
     float awakenGreen = 0.55f;
     bool showGunModel = false; ///< 手に銃のモデルを持たせて描くか（描かない時は弾の光だけで射撃を見せる）
+    float fusionPartnerScale = 0.8f; ///< 合体の素材の武器を土台の柄頭に付ける時の大きさ（素材そのままの大きさに対する倍率）
+    float fusionPartnerGap = 0.1f; ///< 合体の素材の武器を土台の柄頭からどれだけ先へずらすか（手の骨の空間の長さ）
 };
 
 /** @brief 本編のヒットとフィニッシャー演出の調整値 */

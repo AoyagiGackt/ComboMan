@@ -4,6 +4,7 @@
  *       このプロジェクトは起動と結果の読み取りだけを受け持つ。手順の表は同じフォルダの bug_hunt.json
  *       使い方: BugHunt をスタートアッププロジェクトにして実行する（先に CG2-1 をビルドしておく）。
  *       引数に --realtime を付けると、人が見られるふだんの速さで遊ぶ。--runs N で N 回続けて回す（付けなければ起動した時に聞く）
+ *       通常は前回の記録から変わった所を回し、--all を付けると全部回す。記録が無い時は全部回す。
  */
 #include "TestReport.h"
 #include <Windows.h>
@@ -24,12 +25,24 @@ using engine::tests::testReport::Print;
 constexpr const wchar_t* kEngineExeName = L"Engine.exe";
 constexpr const wchar_t* kBugHuntFlag = L"--bug-hunt";
 constexpr const wchar_t* kRealtimeFlag = L"--realtime";
+constexpr const wchar_t* kAllFlag = L"--all"; // 前回の記録に関係なく全部回す
 constexpr const wchar_t* kRunsFlag = L"--runs"; // 続けて回す回数（例: --runs 5）
 constexpr int kMaxRuns = 50; // 回す回数の上限（1回で十数分かかるので、うっかり大きな数を入れても止まるように）
 constexpr int kDecimalBase = 10; // 回数を読む時の基数
 constexpr int kInputBufferSize = 32; // 回数を入力してもらう時の1行の長さ
 constexpr const char* kReportDirectory = "smoke_test";
 constexpr const char* kReportPrefix = "result_";
+constexpr const char* kRunScopePrefix = "回した所:"; // 結果のファイルの、どこを回したかの行の頭
+constexpr const char* kStateFile = "bug_hunt_state.json"; // 前回の記録（ゲームがこれと比べて回す所を決める）
+constexpr const char* kNextStateFile = "bug_hunt_state_next.json"; // ゲームが最後まで回った時に書く今回の様子
+constexpr const char* kScopePrompt = "どこを回しますか？（Enter だけなら前回から変えた所だけ / a なら全部）: ";
+constexpr char kAllChoice = 'a'; // 全部回す時に入れる文字
+constexpr char kAllChoiceUpper = 'A'; // 大文字でも受け付ける
+constexpr const char* kScopeLineFormat = "%s\n"; // 回した所の行をそのまま出す書式
+constexpr const char* kStateUpdatedMessage = "次からは、ここから変えた所だけを回します\n";
+constexpr const char* kStateFailedMessage = "記録を更新できませんでした\n";
+constexpr const char* kStateRetainedMessage = "止まった回があったので記録は前のまま（次も同じ所を回します）\n";
+constexpr const char* kChangedStartFormat = "バグ探しを %d 回回します（%s）。前回から変えたステージだけを回し、変えた配置物は近くへ移って試します。記録が無い初回は全部回します\n";
 constexpr const char* kIssueSectionHeader = "--- 見つけたおかしな所";
 constexpr const char* kStepSectionHeader = "--- 手順の記録";
 constexpr const char* kCrashDirectory = "crash";
@@ -119,7 +132,16 @@ int PrintReport(const fs::path& reportPath) {
     int issueCount = 0;
     bool inIssues = false;
     Print("\n==== バグ探しの結果 ====\n");
+    // 実行範囲は結果ファイルのどこにあっても表示する
     for (const std::string& line : lines) {
+        if (line.rfind(kRunScopePrefix, 0) == 0) {
+            Print(kScopeLineFormat, line.c_str());
+        }
+    }
+    for (const std::string& line : lines) {
+        if (line.rfind(kRunScopePrefix, 0) == 0) {
+            continue;
+        }
         if (line.rfind(kIssueSectionHeader, 0) == 0) {
             inIssues = true;
             Print("\n[見つけたおかしな所]\n");
@@ -143,10 +165,13 @@ int PrintReport(const fs::path& reportPath) {
 }
 
 /** @brief Engine.exe を --bug-hunt で起動し、終わるまで待つ（起動できなければ false） */
-bool RunGame(const fs::path& engineExe, const fs::path& projectDirectory, bool realtime, DWORD& exitCode) {
+bool RunGame(const fs::path& engineExe, const fs::path& projectDirectory, bool realtime, bool all, DWORD& exitCode) {
     std::wstring commandLine = L"\"" + engineExe.wstring() + L"\" " + kBugHuntFlag;
     if (realtime) {
         commandLine += std::wstring(L" ") + kRealtimeFlag;
+    }
+    if (all) {
+        commandLine += std::wstring(L" ") + kAllFlag;
     }
     STARTUPINFOW startup {};
     startup.cb = sizeof(startup);
@@ -207,13 +232,56 @@ int DecideRunCount() {
     return std::clamp(runs <= 0 ? 1 : runs, 1, kMaxRuns);
 }
 
+/** @brief 全部回す指定がなければコンソールで回す範囲を聞く */
+bool DecideRunScope() {
+    if (HasFlag(kAllFlag)) {
+        return true;
+    }
+    DWORD mode = 0;
+    if (!GetConsoleMode(GetStdHandle(STD_INPUT_HANDLE), &mode)) {
+        return false;
+    }
+    Print(kScopePrompt);
+    char line[kInputBufferSize] = {};
+    return std::fgets(line, sizeof(line), stdin) != nullptr &&
+        (line[0] == kAllChoice || line[0] == kAllChoiceUpper) &&
+        (line[1] == '\n' || line[1] == '\0');
+}
+
+/** @brief 全回終了後に今回の記録を反映する */
+void UpdateState(const fs::path& projectDirectory, fs::file_time_type startTime, bool allPassed) {
+    const fs::path directory = projectDirectory / kReportDirectory;
+    const fs::path next = directory / kNextStateFile;
+    const fs::path state = directory / kStateFile;
+    std::error_code error;
+    if (!allPassed) {
+        Print(kStateRetainedMessage);
+        return;
+    }
+    // 今回書かれた記録だけを使う
+    const fs::file_time_type written = fs::last_write_time(next, error);
+    if (error || written <= startTime) {
+        return;
+    }
+    fs::rename(next, state, error);
+    if (error) {
+        error.clear();
+        fs::copy_file(next, state, fs::copy_options::overwrite_existing, error);
+    }
+    if (error) {
+        Print(kStateFailedMessage);
+    } else {
+        Print(kStateUpdatedMessage);
+    }
+}
+
 /** @brief バグ探しを1回回して、結果を一覧にして出す */
-RunResult RunOnce(const fs::path& engineExe, const fs::path& projectDirectory, bool realtime) {
+RunResult RunOnce(const fs::path& engineExe, const fs::path& projectDirectory, bool realtime, bool all) {
     RunResult result;
     // 結果ファイルは時刻で見分けるので、始める前の時刻を覚えておく（ファイルの時刻と同じ時計で測る）
     const fs::file_time_type startTime = fs::file_time_type::clock::now();
     DWORD exitCode = 0;
-    if (!RunGame(engineExe, projectDirectory, realtime, exitCode)) {
+    if (!RunGame(engineExe, projectDirectory, realtime, all, exitCode)) {
         Print("Engine.exe を起動できませんでした（エラー %lu）\n", GetLastError());
         return result;
     }
@@ -262,14 +330,21 @@ int main() {
 
     const bool realtime = HasFlag(kRealtimeFlag);
     const int runCount = DecideRunCount();
-    Print("バグ探しを %d 回回します（%s）。1回で全ステージとラスボス戦を回します（ふだんの速さだと十数分。速さは bug_hunt.json の speed）\n",
-        runCount, realtime ? "ふだんの速さ" : "速回し");
+    const bool all = DecideRunScope();
+    if (all) {
+        Print("バグ探しを %d 回回します（%s）。1回で全ステージとラスボス戦を回します（ふだんの速さだと十数分。速さは bug_hunt.json の speed）\n",
+            runCount, realtime ? "ふだんの速さ" : "速回し");
+    } else {
+        Print(kChangedStartFormat, runCount, realtime ? "ふだんの速さ" : "速回し");
+    }
     Print("ゲーム: %s\n作業フォルダ: %s\n", ToUtf8(engineExe).c_str(), ToUtf8(projectDirectory).c_str());
 
+    // 全回に同じ記録を使い、開始後に書かれた次の記録を最後に反映する
+    const fs::file_time_type startTime = fs::file_time_type::clock::now();
     std::vector<RunResult> results;
     for (int run = 1; run <= runCount; ++run) {
         Print("\n######## %d / %d 回目 ########\n", run, runCount);
-        results.push_back(RunOnce(engineExe, projectDirectory, realtime));
+        results.push_back(RunOnce(engineExe, projectDirectory, realtime, all));
     }
 
     // 回ごとの結果と合計（1回だけの時は上の結果がそのまま全部なので出さない）
@@ -288,6 +363,7 @@ int main() {
         }
         Print("合計: おかしな所 %d 件\n", totalIssues);
     }
+    UpdateState(projectDirectory, startTime, allPassed);
     WaitForEnterIfInteractive();
     if (!allPassed) {
         return kExitFailed;

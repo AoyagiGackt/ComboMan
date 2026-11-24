@@ -5,6 +5,7 @@
 #pragma once
 #include "CollisionConfig.h"
 #include "EnemyEntity.h"
+#include "PlayerCloneBody.h"
 #include "Vector3.h"
 #include "Vector4.h"
 #include "Weapon.h"
@@ -21,7 +22,10 @@ namespace engine::game {
 
 /** @brief 味方のボスの調整値（Resources/Config/ally_boss.json） */
 struct AllyBossTuning {
+    bool enabled = false; ///< 分身を使うか（本編では使わない。後でエンドレスのステージなどで入れる時に true にする）
     int maxHp = 24; ///< 体力
+    float fusedHpMult = 1.5f; ///< ボスの武器どうしを合体させている時に体力へ掛ける倍率
+    float fusedDamageMult = 1.6f; ///< ボスの武器どうしを合体させている時にダメージへ掛ける倍率
     float damage = 0.6f; ///< 1回の攻撃のダメージ（敵の体力は1より下げない）
     float attackInterval = 0.9f; ///< 自動の時に攻撃する間隔（秒）
     float attackHitTime = 0.18f; ///< 攻撃を始めてから当たるまでの秒数
@@ -48,7 +52,13 @@ struct AllyBossTuning {
     float idleSeconds = 12.0f; ///< 2P がこれだけ操作しなければ自動に戻る
     float footOffset = 0.1f; ///< 床の上面から体の位置までの高さ
     float screenMargin = 1.0f; ///< 2P の時に画面の端から内側に止める幅
-    Vector4 color = { 0.35f, 0.8f, 1.0f, 1.0f }; ///< 体の色（敵のボスと見分けるため、敵のボスの色とは違う色にする）
+    Vector4 color = { 0.3f, 0.5f, 1.0f, 1.0f }; ///< 分身の体と武器に掛ける色（プレイヤーと見分けるため青く染める）
+    float cloneScale = 0.85f; ///< 分身の体の大きさ（プレイヤーに対する割合。見分けやすいよう一回り小さくする）
+    Vector3 rimColor = { 0.3f, 0.95f, 1.0f }; ///< 体のふちの光の色（敵には付けない、味方の目印）
+    float rimPower = 2.0f; ///< ふちの光の鋭さ（大きいほど細い）
+    float rimIntensity = 2.4f; ///< ふちの光の強さ
+    float rimPulseSpeed = 4.0f; ///< ふちの光が強まったり弱まったりする速さ（ラジアン毎秒）
+    float rimPulseDepth = 0.45f; ///< ふちの光が一番弱まった時に減る割合（0 なら点滅しない）
     // ラスボス戦の援護（闘技場では味方は出さず、合図で飛び込んで一撃入れて消える）
     float arenaAssistDamage = 2.0f; ///< 援護の一撃のダメージ（敵の体力は1より下げない）
     float arenaAssistCooldown = 6.0f; ///< 援護してから次に援護できるまでの秒数
@@ -88,8 +98,8 @@ struct AllySurroundings {
 };
 
 /**
- * @brief 味方のボス（呼ぶと現れて近接で戦う。体力が尽きると消え、しばらく呼べない）
- * @note 体の見た目は敵の体（EnemyEntity）を台本で動かす形で使う。武器の種類ごとに一度だけ作り、ステージを出るまで消さない
+ * @brief 分身（ボスの武器を持ったプレイヤーの分身。呼ぶと現れて近接で戦う。体力が尽きると消え、しばらく呼べない）
+ * @note 体の見た目はプレイヤーと同じモデルを青く染めた PlayerCloneBody。武器の種類ごとに一度だけ作り、ステージを出るまで消さない
  */
 class AllyBoss {
 public:
@@ -104,8 +114,15 @@ public:
      * @param weapon 主軸の武器の種類
      * @param color 体の色
      * @param position 出す位置
+     * @param fused ボスの武器どうしを合体させているか（体力とダメージが上がる）
      */
-    void Summon(WeaponType weapon, const Vector4& color, const Vector3& position);
+    void Summon(WeaponType weapon, const Vector4& color, const Vector3& position, bool fused);
+    /** @brief 呼んだ時にボスの武器どうしを合体させていたか（体力とダメージが上がる） */
+    bool IsFused() const {
+        return fused_;
+    }
+    /** @brief 今の体力の上限（合体していれば上がる） */
+    int MaxHp() const;
     /** @brief 引っ込める（体を隠す。体力はそのまま次に呼んだ時に満タンへ戻す） */
     void Dismiss();
     /** @brief 呼び出しているか */
@@ -184,7 +201,7 @@ public:
 
 private:
     /** @brief 主軸の武器の体を返す（まだ無ければ作る。作った体はステージを出るまで残す） */
-    EnemyEntity* BodyFor(WeaponType weapon);
+    PlayerCloneBody* BodyFor(WeaponType weapon);
     /** @brief 自動の時の左右の動きを決める（狙う敵へ近づくか、プレイヤーの後ろへ戻る） */
     float ThinkMoveX(const AllySurroundings& around, bool& wantsAttack) const;
     /** @brief 一番近い生きている敵を返す（狙う距離の外なら nullptr） */
@@ -193,10 +210,12 @@ private:
     void ApplyGravity(const std::vector<engine::AABB>& terrain);
     /** @brief 攻撃の段を始める */
     void StartAttack();
+    /** @brief 体のふちの光を進める（味方の目印。ゆっくり強まったり弱まったりさせる） */
+    void UpdateRimGlow();
 
     engine::graphics::ModelCommon* modelCommon_ = nullptr;
-    std::map<WeaponType, std::unique_ptr<EnemyEntity>> bodies_; ///< 武器の種類ごとの体（使い回す）
-    EnemyEntity* body_ = nullptr; ///< 今使っている体
+    std::map<WeaponType, std::unique_ptr<PlayerCloneBody>> bodies_; ///< 武器の種類ごとの体（使い回す）
+    PlayerCloneBody* body_ = nullptr; ///< 今使っている体
     WeaponType weapon_ = WeaponType::kSword;
     Vector3 position_ {};
     float velocityY_ = 0.0f;
@@ -204,6 +223,7 @@ private:
     bool onGround_ = false;
     bool active_ = false;
     bool hidden_ = false;
+    bool fused_ = false; ///< 呼んだ時にボスの武器どうしを合体させていたか
     int hp_ = 0;
     float respawnTimer_ = 0.0f; ///< 倒れてから再び呼べるまでの残り秒数
     float invincibleTimer_ = 0.0f; ///< 無敵の残り秒数
@@ -216,6 +236,7 @@ private:
     float assistTimer_ = -1.0f; ///< ラスボス戦の援護の経過秒数（援護していなければ負）
     bool assistHitDone_ = false; ///< この援護の一撃をもう出したか
     float assistCooldown_ = 0.0f; ///< 次に援護できるまでの残り秒数
+    float rimTimer_ = 0.0f; ///< ふちの光の点滅の経過秒数
 };
 
 } // namespace engine::game

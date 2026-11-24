@@ -201,40 +201,40 @@ void GraphEditorInteraction::DrawGuidance(GraphEditor& editor) {
     // 折りたためる使い方一覧
     if (ImGui::CollapsingHeader("使い方")) {
         // ノードの追加と探し方
-        ImGui::BulletText("何もない所を右クリック → ノードやコメント枠を追加（よく使う物は直接、他はジャンル別サブメニューに分類）");
-        ImGui::BulletText("追加メニュー上部の検索欄に入力すると、名前・ジャンル・説明で絞り込める");
-        ImGui::BulletText("ノードにマウスを乗せると、何ができるノードか説明がツールチップで出る");
-        ImGui::BulletText("Ctrl+Z: 元に戻す  Ctrl+Y: やり直す  Ctrl+S: 保存  Ctrl+D: 選択ノードを複製  Ctrl+A: 全選択");
-        ImGui::BulletText("F: 選択中のノード（無ければ全体）が収まるように表示");
-        ImGui::BulletText("ホイール: カーソル位置を中心にズーム  中ドラッグかスペース+左ドラッグ: パン");
+        graphics::editorUI::BulletWrapped("何もない所を右クリック → ノードやコメント枠を追加（よく使う物は直接、他はジャンル別サブメニューに分類）");
+        graphics::editorUI::BulletWrapped("追加メニュー上部の検索欄に入力すると、名前・ジャンル・説明で絞り込める");
+        graphics::editorUI::BulletWrapped("ノードにマウスを乗せると、何ができるノードか説明がツールチップで出る");
+        graphics::editorUI::BulletWrapped("Ctrl+Z: 元に戻す  Ctrl+Y: やり直す  Ctrl+S: 保存  Ctrl+D: 選択ノードを複製  Ctrl+A: 全選択");
+        graphics::editorUI::BulletWrapped("F: 選択中のノード（無ければ全体）が収まるように表示");
+        graphics::editorUI::BulletWrapped("ホイール: カーソル位置を中心にズーム  中ドラッグかスペース+左ドラッグ: パン");
         // 実行の線と値の線のつなぎ方
-        ImGui::BulletText("実行の流れ: ノード右上の黄ピンを、次のノードへドラッグして接続（ノードのどこに落としてもよい）");
-        ImGui::BulletText("配線中は接続できるピンに輪が付き、近づくと吸着する");
-        ImGui::BulletText("Ifノードは緑ピン=条件が真のとき、赤ピン=偽のときの行き先");
-        ImGui::BulletText("値の受け渡し: ノード右下の出力ピンを、パラメータ左の同じ色のピンへドラッグ");
-        ImGui::BulletText("　ピンの色 = 型: 緑=数値  赤=ON/OFF  紫=文字列  白=なんでも接続可");
-        ImGui::BulletText("線かピンを右クリック → 配線を解除");
-        ImGui::BulletText("つながったパラメータ左のピンをドラッグ → 線を抜いて別の場所へつなぎ替え（何もない所で離すと切断）");
+        graphics::editorUI::BulletWrapped("実行の流れ: ノード右上の黄ピンを、次のノードへドラッグして接続（ノードのどこに落としてもよい）");
+        graphics::editorUI::BulletWrapped("配線中は接続できるピンに輪が付き、近づくと吸着する");
+        graphics::editorUI::BulletWrapped("Ifノードは緑ピン=条件が真のとき、赤ピン=偽のときの行き先");
+        graphics::editorUI::BulletWrapped("値の受け渡し: ノード右下の出力ピンを、パラメータ左の同じ色のピンへドラッグ");
+        graphics::editorUI::BulletWrapped("　ピンの色 = 型: 緑=数値  赤=ON/OFF  紫=文字列  白=なんでも接続可");
+        graphics::editorUI::BulletWrapped("線かピンを右クリック → 配線を解除");
+        graphics::editorUI::BulletWrapped("つながったパラメータ左のピンをドラッグ → 線を抜いて別の場所へつなぎ替え（何もない所で離すと切断）");
         // ノードの移動・削除と、テスト実行・ほかの機能との連携
-        ImGui::BulletText("タイトルかノードの余白をドラッグ: 選択中のノードをまとめて移動（Ctrlで格子に吸着）");
-        ImGui::BulletText("Delete: 選択中のノードを削除");
-        ImGui::BulletText("何もない所をドラッグ: 範囲選択（Ctrl/Shiftで追加）  クリック: 選択解除");
-        ImGui::BulletText("Ctrl/Shift+クリック: ノードを選択に追加、もう一度で外す");
-        ImGui::BulletText("コメント枠は上の帯をドラッグで移動、右下の角をドラッグで大きさ変更");
-        ImGui::BulletText("実行ボタンでこのグラフをその場でテスト（黄色い枠 = 今実行中のノード）");
-        ImGui::BulletText("Subgraphノード: 別のグラフJSONを部品として呼び出す（カプセル化）");
-        ImGui::BulletText("フラグはステージエディタ(F2)のトリガーと共有（GetFlag/SetFlagで読み書き）");
+        graphics::editorUI::BulletWrapped("タイトルかノードの余白をドラッグ: 選択中のノードをまとめて移動（Ctrlで格子に吸着）");
+        graphics::editorUI::BulletWrapped("Delete: 選択中のノードを削除");
+        graphics::editorUI::BulletWrapped("何もない所をドラッグ: 範囲選択（Ctrl/Shiftで追加）  クリック: 選択解除");
+        graphics::editorUI::BulletWrapped("Ctrl/Shift+クリック: ノードを選択に追加、もう一度で外す");
+        graphics::editorUI::BulletWrapped("コメント枠は上の帯をドラッグで移動、右下の角をドラッグで大きさ変更");
+        graphics::editorUI::BulletWrapped("実行ボタンでこのグラフをその場でテスト（黄色い枠 = 今実行中のノード）");
+        graphics::editorUI::BulletWrapped("Subgraphノード: 別のグラフJSONを部品として呼び出す（カプセル化）");
+        graphics::editorUI::BulletWrapped("フラグはステージエディタ(F2)のトリガーと共有（GetFlag/SetFlagで読み書き）");
     }
     // 初めて使う人向けに、イベントを1本作る手順を番号付きで出す
     if (ImGui::CollapsingHeader("はじめてのイベント作成", ImGuiTreeNodeFlags_DefaultOpen)) {
         ImGui::TextWrapped("例として、ステージのトリガーがONになったら1秒待ち、効果音を鳴らす流れを作ります。");
-        ImGui::BulletText("1  空白を右クリックし、GetFlag、Wait、PlaySEを追加する");
-        ImGui::BulletText("2  GetFlagのflagへステージエディタで設定したフラグ名を入力する");
-        ImGui::BulletText("3  ノード上部の実行ピンを GetFlag から Wait、PlaySE の順につなぐ");
-        ImGui::BulletText("4  Waitのsecondsへ1、PlaySEのpathへ音声ファイルを指定する");
-        ImGui::BulletText("5  最初のGetFlagを選択し、開始ノードに設定する");
-        ImGui::BulletText("6  実行で黄色い枠が順に進むことを確認して保存する");
-        ImGui::TextDisabled("値ピンは計算結果を渡す時に使います。固定値だけなら入力欄へ直接入力できます。");
+        graphics::editorUI::BulletWrapped("1  空白を右クリックし、GetFlag、Wait、PlaySEを追加する");
+        graphics::editorUI::BulletWrapped("2  GetFlagのflagへステージエディタで設定したフラグ名を入力する");
+        graphics::editorUI::BulletWrapped("3  ノード上部の実行ピンを GetFlag から Wait、PlaySE の順につなぐ");
+        graphics::editorUI::BulletWrapped("4  Waitのsecondsへ1、PlaySEのpathへ音声ファイルを指定する");
+        graphics::editorUI::BulletWrapped("5  最初のGetFlagを選択し、開始ノードに設定する");
+        graphics::editorUI::BulletWrapped("6  実行で黄色い枠が順に進むことを確認して保存する");
+        graphics::editorUI::TextDisabledWrapped("値ピンは計算結果を渡す時に使います。固定値だけなら入力欄へ直接入力できます。");
     }
     // ノードを選んでいる時は、その種類の説明とパラメーターごとの意味を出す
     if (!editor.selectedNodeId_.empty()) {
@@ -245,7 +245,7 @@ void GraphEditorInteraction::DrawGuidance(GraphEditor& editor) {
             : nullptr;
         if (selected && selectedSpec && ImGui::CollapsingHeader("選択中ノードの説明", ImGuiTreeNodeFlags_DefaultOpen)) {
             // 種類名と分類、ノード全体の説明
-            ImGui::Text("%s (%s)  %s", GraphNodeLabels::TypeName(selected->type).c_str(), selected->type.c_str(),
+            ImGui::TextWrapped("%s (%s)  %s", GraphNodeLabels::TypeName(selected->type).c_str(), selected->type.c_str(),
                 selectedSpec->category.c_str());
             ImGui::TextWrapped("%s", selectedSpec->description.c_str());
             /** @brief ノードのパラメーター名と編集時に表示する説明の対応 */
@@ -294,11 +294,11 @@ void GraphEditorInteraction::DrawGuidance(GraphEditor& editor) {
             };
             // 表に無いパラメーター名は汎用の説明を出す
             for (const NodeParamSpec& param : selectedSpec->params) {
-                ImGui::BulletText("%s (%s)  %s", GraphNodeLabels::ParamName(selected->type, param.key).c_str(),
+                graphics::editorUI::BulletWrapped("%s (%s)  %s", GraphNodeLabels::ParamName(selected->type, param.key).c_str(),
                     param.key.c_str(), parameterHelp(param.key));
             }
             // 値を出力するノードかどうかで、次のノードへの渡し方の案内を変える
-            ImGui::TextDisabled(selectedSpec->hasOutput
+            graphics::editorUI::TextDisabledWrapped(selectedSpec->hasOutput
                     ? "右下の色付きピンから処理結果を別ノードへ渡せます"
                     : "このノードは値を出力せず、上部の実行線だけで次へ進みます");
         }
@@ -452,7 +452,7 @@ void GraphEditorInteraction::Update(GraphEditor& editor, engine::Input* input) {
 
     // 説明の開閉でキャンバスが上下に動かないよう、説明は右側のパネルへ分ける
     DrawToolbar(editor);
-    ImGui::TextDisabled("F1: 表示/非表示    右クリック: 追加/メニュー/配線解除    ホイール: ズーム    中ドラッグ: パン    左ドラッグ: 範囲選択    F: 全体表示");
+    graphics::editorUI::TextDisabledWrapped("F1: 表示/非表示    右クリック: 追加/メニュー/配線解除    ホイール: ズーム    中ドラッグ: パン    左ドラッグ: 範囲選択    F: 全体表示");
     ImGui::Separator();
     editor.DrawCanvas();
     if (editor.showHelpPanel_) {
@@ -492,9 +492,9 @@ void GraphNodeRenderer::Draw(GraphEditor& editor, ImDrawList* dl, const ImVec2& 
     if (ImGui::IsItemHovered()) {
         ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeAll);
         if (spec && !spec->description.empty()) {
-            ImGui::SetTooltip("%s\n%s", node.type.c_str(), spec->description.c_str());
+            graphics::editorUI::TooltipWrapped("%s\n%s", node.type.c_str(), spec->description.c_str());
         } else {
-            ImGui::SetTooltip("%s", node.type.c_str());
+            graphics::editorUI::TooltipWrapped("%s", node.type.c_str());
         }
     }
     // タイトルを掴んだら選択して移動の準備をする（移動は全ノードを描いた後に UpdateNodeDrag で進める）

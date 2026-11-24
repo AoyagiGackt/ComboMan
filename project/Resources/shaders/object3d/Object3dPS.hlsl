@@ -84,6 +84,8 @@ struct PixelShaderOutput
 static const float kShadowMapSize = 2048.0f;
 // 深度アクネを防ぐオフセットシャドウの縞模様が出たら増やし、影の浮きが出たら減らす
 static const float kShadowBias = 0.002f;
+// ライティングを使わない物が影の中にある時の明るさ（1 で影なし、小さいほど濃い影）
+static const float kUnlitShadowBrightness = 0.6f;
 
 float GetShadowFactor(float4 lightSpacePos)
 {
@@ -355,7 +357,10 @@ PixelShaderOutput main(VertexShaderOutput input)
     }
     else
     {
+        // ライティングを使わない物（地形のブロックなど）も、影の中は少しだけ暗くする
         output.color = baseColor;
+        float unlitShadow = GetShadowFactor(input.lightSpacePos);
+        output.color.rgb *= lerp(kUnlitShadowBrightness, 1.0f, unlitShadow);
     }
 
     if (output.color.a == 0.0f)

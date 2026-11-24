@@ -3,6 +3,7 @@
  * @brief 敵・ギミックの更新とプレイヤーへの被弾処理
  */
 #include "GamePlayScene.h"
+#include "EnemyEffectLibrary.h"
 #include "CrashBreadcrumbs.h"
 #include "AudioBridge.h"
 #include "CombatTuning.h"
@@ -218,7 +219,7 @@ void GamePlayScene::ApplyWeaponEnemyHit(WeaponEnemyEntry& entry, WeaponEnemyHit&
                                     : 1.0f)
         * player_->GetAwakenedKnockbackMult() * CombatTune().knockbackScale
         * (hit.extraHit ? CombatTune().awakenExtraHitKnockScale : 1.0f);
-    hit.comboFinisher = hit.melee && !hit.extraHit && IsMeleeFinisher(wm->GetCurrent().type, hit.attack);
+    hit.comboFinisher = hit.melee && !hit.extraHit && IsMeleeFinisher(wm->GetCurrent().type, hit.attack, wm->IsCurrentFused(), wm->IsBossSlotSelected());
     // 固有技は締めと同じく大きく吹き飛ばす
     hit.blowAway = hit.comboFinisher || hit.skill;
     // 近接と銃は武器ごとの疲労でダメージが落ちる（固有技はクールタイムがあるので対象外）
@@ -662,6 +663,8 @@ void GamePlayScene::ApplyEnemyMeleeSwing(EnemyEntity* attacker) {
     const Vector3 swingCenter = { epos.x + dirX * tuning.meleeReach * 0.5f, epos.y + HitEffectLibrary::GetInstance()->SceneParticles().swingCenterHeight, 0.0f };
     const HitEffectPlayer fx(pm_, &cameraShaker_, &rng_);
     fx.Slash("enemy_swing", swingCenter, dirX);
+    // 敵の種類ごとの GPU パーティクル（騎士は刃の火花、スライムは粘液、ドラゴンは炎 など）
+    EnemyEffectLibrary::EmitAttack({ pm_, &rng_ }, EnemyEffectLibrary::KindOf(*attacker), swingCenter, dirX);
     // モンスターは種類ごとの粒と輪も出す（スライムの体当たりは飛び散る粘液）
     if (attacker->IsMonster()) {
         const MonsterTraitData& trait = MonsterTraitTuning::Get(attacker->GetMonsterKind());

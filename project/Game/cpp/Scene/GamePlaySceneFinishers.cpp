@@ -32,9 +32,12 @@ constexpr float kPathSideClearance = 0.01f; // 通り道を調べる時に左右
 constexpr float kThrowHitReactionScale = 0.5f; // 投げた武器が当たった時の吹き飛びは、締めの半分にする
 constexpr float kSlamImpactShare = 0.5f; // 振り下ろしの演出は、届く長さのこの割合の所に出す
 
-/** @brief 段がその武器の地上コンボの最後の段か（技IDで比べる） */
-bool IsLastGroundStep(WeaponType type, const MeleeAttackDef& attack) {
-    const MeleeComboSet& set = GetMeleeComboSet(type);
+/** @brief 段がその武器の地上コンボの最後の段か（技IDで比べる。合体中は最後に増えた素材の締め、ボスの武器は専用のコンボで見る） */
+bool IsLastGroundStep(WeaponType type, const MeleeAttackDef& attack, bool fused, bool bossWeapon) {
+    if (fused) {
+        return attack.finisher;
+    }
+    const MeleeComboSet& set = GetMeleeComboSet(type, bossWeapon);
     return set.ground.count > 0 && std::strcmp(set.ground.data[set.ground.count - 1].id, attack.id) == 0;
 }
 
@@ -78,7 +81,7 @@ void GamePlayScene::UpdateWeaponFinisher() {
     if (!wm->HasEquippedWeapon()) {
         return;
     }
-    if (!IsLastGroundStep(wm->GetCurrent().type, *attack)) {
+    if (!IsLastGroundStep(wm->GetCurrent().type, *attack, wm->IsCurrentFused(), wm->IsBossSlotSelected())) {
         return;
     }
     // ボスへの通常の当たり（UpdateStyleAndUI）が吹き飛ばしを上書きしないよう、出すのはその後（ApplyPendingWeaponFinisher）

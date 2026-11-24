@@ -284,7 +284,10 @@ void GamePlayScene::SetupModelRenderState() {
 
 /** @brief 影用の深度を描く */
 void GamePlayScene::DrawShadowPass() {
-    shadowManager_->RunShadowPass(dxCommon_->GetCommandList(), modelCommon_.get());
+    // ステージの配置物（地形・足場・仕掛け・背景）を影を落とす物として描く（骨のあるモデルは影用の描き方が無いので入れない）
+    shadowManager_->RunShadowPass(dxCommon_->GetCommandList(), modelCommon_.get(), [this] {
+        GetStageEditor().DrawObjectShadows();
+    });
 }
 
 /** @brief 3Dワールドと画面UIを描画する */
@@ -304,6 +307,7 @@ bool GamePlayScene::DrawClearOverlayIfNeeded() {
         return false;
     }
     DrawClearResultScreen(!IsSandboxClear());
+    sceneShared::BindCaptureTarget(glassShatter_, { imageFilter_, grayscaleEffect_, hsvFilter_ });
     glassShatter_.Apply();
     return true;
 }

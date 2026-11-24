@@ -28,6 +28,7 @@ public:
     enum class Style {
         kBlade, ///< 剣などの近接武器: 画面を斬線が何本も走り、最後に大きく斬る
         kGun, ///< 銃: 画面に弾が何発も入り、最後に大きく撃ち抜く
+        kBomb, ///< 爆弾: 画面のあちこちで爆発が続き、最後に真ん中で大爆発する
     };
     /** @brief 演出を始める時にシーンから渡す情報 */
     struct Setup {
@@ -74,6 +75,7 @@ public:
     class IStrikeStyle;
     class BladeStyle;
     class GunStyle;
+    class BombStyle;
 
 private:
     /** @brief 画面に入れる斬線1本・弾痕1つ（始めるたびに並びを作り直す） */
@@ -115,6 +117,8 @@ private:
     std::vector<std::unique_ptr<engine::graphics::Sprite>> slashGlows_;
     std::vector<std::unique_ptr<engine::graphics::Sprite>> holes_;
     std::vector<std::unique_ptr<engine::graphics::Sprite>> sparks_; ///< 着弾の瞬間に弾痕の上へ重ねる火花（弾痕と同じ数）
+    std::vector<std::unique_ptr<engine::graphics::Sprite>> blastGlows_; ///< 爆発の火の玉（小さな爆発の数と大爆発の1つぶん）
+    std::vector<std::unique_ptr<engine::graphics::Sprite>> blastCores_; ///< 爆発の白く熱い芯（火の玉と同じ数）
 };
 
 } // namespace engine::game

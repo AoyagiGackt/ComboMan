@@ -1,4 +1,5 @@
 {
+  "sky": "Resources/SkyDome/sky_factory.png",
   "checkpoints": [],
   "enemySpawn": [
     28.0,

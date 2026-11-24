@@ -38,6 +38,7 @@ constexpr float kFallMargin = 10.0f; // 地形の一番下からこれ以上下�
 constexpr float kBossNearDistance = 30.0f; // ボスがこの距離にいる間は、ボス戦の最中として進めなくても知らせない
 constexpr float kPassThroughWallHeight = 4.0f; // これより高い壁や扉を、前に調べた時から今までに横切っていたら、すり抜けたとみなす（跳び越せない高さ）
 constexpr float kPlayerBodyHalfHeight = 0.5f; // プレイヤーの当たり判定の高さの半分
+constexpr float kEnemyTeleportDistance = 8.0f; // 前に調べた時（約0.25秒前）からこれ以上横へ動いた生きている敵は、瞬間移動したとみなす（速く動いて当然の時は除く）
 constexpr float kHalf = 0.5f;
 constexpr float kFightableEnemyDistance = 6.0f; // 扉の条件で待っている倒せる敵がこの距離にいる間は、ボットが倒せていないだけとみなして知らせない
 
@@ -246,6 +247,14 @@ void GamePlayScene::CheckPlayerForBugs(const AABB& stageBounds, bool hasBounds, 
         SmokeTestRunner::ReportIssue("プレイヤー", "位置", "位置に数でない値が入った");
         return;
     }
+    // 手順がプレイヤーを離れた所へ移した後は、移す前の位置と比べない（壁抜けや先へ進めないと間違えないように）
+    if (bugWatch_.teleportCount != SmokeTestRunner::TeleportCount()) {
+        bugWatch_.teleportCount = SmokeTestRunner::TeleportCount();
+        bugWatch_.hasLastPlayerPosition = false;
+        bugWatch_.wasExpectingProgress = false;
+        bugWatch_.playerTrail.clear();
+        bugWatch_.lastGroundedPosition = position;
+    }
     if (player_->IsOnGround()) {
         bugWatch_.lastGroundedPosition = position;
     }
@@ -404,6 +413,18 @@ void GamePlayScene::CheckEnemiesForBugs(const AABB& stageBounds, bool hasBounds,
             SustainedFor(bugWatch_.suspectSeconds, "enemy_" + ref.name, false, elapsed, kSustainSeconds);
             continue;
         }
+        // 前に調べた時から理由も無く一気に遠くへ動いていたら、どこからどこへ動いたかを知らせる（端へ戻された・持ち場へ戻された敵を見つける）
+        // ボスの技・吹き飛び・急降下などの台本の動きは速くて当然なので、前か今のどちらかがそうなら数えない
+        const Vector3 position = enemy->GetPosition();
+        const bool fastMoveExpected = ref.isStageBoss || enemy->IsBlownAway() || enemy->IsScripted();
+        const auto last = bugWatch_.enemyLastPositions.find(ref.instanceId);
+        if (last != bugWatch_.enemyLastPositions.end() && !last->second.fastMoveExpected && !fastMoveExpected
+            && std::abs(position.x - last->second.position.x) >= kEnemyTeleportDistance) {
+            SmokeTestRunner::ReportIssue("敵の位置", "瞬間移動 " + ref.name,
+                FormatPosition(last->second.position) + " から " + FormatPosition(position) + " へ、吹き飛びも技も無しに一気に動いた（体力 "
+                    + std::to_string(enemy->GetHp()) + "）");
+        }
+        bugWatch_.enemyLastPositions[ref.instanceId] = { position, fastMoveExpected };
         // 倒されたのを見た敵が、同じ実体のまま倒されていない扱いに戻った
         if (wasDefeated) {
             SmokeTestRunner::ReportIssue("敵が生き返った", ref.name,

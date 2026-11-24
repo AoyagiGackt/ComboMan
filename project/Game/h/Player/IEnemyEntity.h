@@ -34,6 +34,13 @@ public:
     virtual float WallBodyHeight(float fallback) const {
         return fallback;
     }
+    /**
+     * @brief 持ち場（出てきた位置）へ戻し、吹き飛びの勢いを止める（ステージの外へ出てしまった時に使う）
+     * @return 戻せたら true（持ち場を持たない種類は false で、呼び出し側が別の方法で戻す）
+     */
+    virtual bool ReturnHome() {
+        return false;
+    }
 };
 
 } // namespace engine::game

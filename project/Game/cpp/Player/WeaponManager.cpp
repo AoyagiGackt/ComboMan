@@ -381,7 +381,7 @@ bool WeaponManager::FuseInto(int slot, WeaponType type, int durability) {
 }
 
 /** @brief ボスから奪った武器をボスの枠へ入れる（ボスの枠の武器は入れ替わらず、合体しても砕けない） */
-WeaponManager::BossAcquireResult WeaponManager::AcquireBossWeapon(WeaponType type) {
+WeaponManager::BossAcquireResult WeaponManager::AcquireBossWeapon(WeaponType type, bool allowFusion) {
     const auto found = std::find_if(weapons_.begin(), weapons_.end(), [type](const WeaponData& data) {
         return data.type == type;
     });
@@ -396,7 +396,13 @@ WeaponManager::BossAcquireResult WeaponManager::AcquireBossWeapon(WeaponType typ
         SelectSlot(kBossSlot);
         return BossAcquireResult::kAdded;
     }
-    // 主軸か相棒と同じ種類なら、今のまま
+    // 合体していない主軸と同じ種類なら、同じ種類どうしで合体する（ふつうの枠と同じく、同じ種類でも合体できる）
+    if (allowFusion && index == bossWeaponIndex_ && bossPartnerIndex_ < 0) {
+        bossPartnerIndex_ = index;
+        SelectSlot(kBossSlot);
+        return BossAcquireResult::kFusedSame;
+    }
+    // もう合体している組み合わせの種類なら、今のまま
     if (index == bossWeaponIndex_ || index == bossPartnerIndex_) {
         return BossAcquireResult::kSame;
     }

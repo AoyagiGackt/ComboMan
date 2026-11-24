@@ -79,11 +79,51 @@ namespace spriteRootSlot {
 inline constexpr UINT kMaterial = 0;
 inline constexpr UINT kTransform = 1;
 inline constexpr UINT kTexture = 2;
+inline constexpr UINT kTextureIndex = 2; ///< バインドレス版で、テクスチャの記述子テーブルの代わりに番号のルート定数を置く所
 }
 
 namespace particleRootSlot {
 inline constexpr UINT kInstances = 0;
 inline constexpr UINT kTexture = 1;
+inline constexpr UINT kSoftConstants = 2; ///< ソフトパーティクルの定数（ピクセルシェーダーの b0）
+inline constexpr UINT kSceneDepth = 3; ///< 写し取った深度（ピクセルシェーダーの t2）
+}
+
+/** @brief GPU パーティクルの計算用シェーダーのルートの並び（ParticleManagerPipeline.cpp で作る順と同じ） */
+namespace particleComputeSlot {
+// ParticleInit.CS: b0 定数, u0 粒, u1 描画用, u2 空き一覧, u3 空きの数
+namespace init {
+inline constexpr UINT kConstants = 0;
+inline constexpr UINT kParticles = 1;
+inline constexpr UINT kInstances = 2;
+inline constexpr UINT kFreeList = 3;
+inline constexpr UINT kCounter = 4;
+}
+// ParticleSpawn.CS: b0 定数, t0 頼まれた粒, u0 粒, u2 空き一覧, u3 空きの数
+namespace spawn {
+inline constexpr UINT kConstants = 0;
+inline constexpr UINT kRequests = 1;
+inline constexpr UINT kParticles = 2;
+inline constexpr UINT kFreeList = 3;
+inline constexpr UINT kCounter = 4;
+}
+// EmitParticle.CS: b0 エミッター, u0 粒, u2 空き一覧, u3 空きの数
+namespace emit {
+inline constexpr UINT kEmitter = 0;
+inline constexpr UINT kParticles = 1;
+inline constexpr UINT kFreeList = 2;
+inline constexpr UINT kCounter = 3;
+}
+// ParticleUpdate.CS: b0 定数, b1 出し直し, u0 粒, u1 描画用, u2 空き一覧, u3 空きの数, b2 場
+namespace update {
+inline constexpr UINT kConstants = 0;
+inline constexpr UINT kLoop = 1;
+inline constexpr UINT kParticles = 2;
+inline constexpr UINT kInstances = 3;
+inline constexpr UINT kFreeList = 4;
+inline constexpr UINT kCounter = 5;
+inline constexpr UINT kFields = 6;
+}
 }
 
 namespace normalPrepassRootSlot {

@@ -180,6 +180,8 @@ void MapScene::InitializeRenderFoundationAndPlayer() {
 
     player_ = std::make_unique<Player>();
     player_->Initialize(modelCommon_.get());
+    // マップでは戦わないので、武器を持たずに歩く
+    player_->SetExplorationMode(true);
     player_->SetHorizontalBounds(kPlayerMinX, kPlayerMaxX);
     player_->SetPosition({ stageWorldX_[0], kPlayerGroundY, 0.0f });
 }

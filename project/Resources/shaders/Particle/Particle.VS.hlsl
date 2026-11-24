@@ -27,6 +27,13 @@ VertexShaderOutput main(VertexShaderInput input, uint instanceId : SV_InstanceID
 
 	// 座標変換
     output.position = mul(input.position, particle.WVP);
+    // 透視投影の w はカメラから見た奥行きそのもの
+    output.viewDepth = output.position.w;
+    // 死んでいる枠（透明）は画面の外へ追い出して、ピクセルシェーダーを走らせずに捨てる
+    if (particle.color.a <= 0.0f)
+    {
+        output.position = float4(2.0f, 2.0f, 2.0f, 1.0f);
+    }
     output.texcoord = input.texcoord * particle.uvRect.zw + particle.uvRect.xy;
     output.maskcoord = input.texcoord;
     output.params = particle.params;

@@ -24,6 +24,7 @@
 #include "SlashMark.h"
 #include "StageEditor.h"
 #include "TimeManager.h"
+#include "ParticleFieldLibrary.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -196,8 +197,9 @@ bool BattleTestScene::UpdateGreatswordSpin() {
         return false;
     }
 
-    // 渦の吸い込み範囲にいるダミーを、渦の中心へ向けて引き寄せる
+    // 渦の吸い込み範囲にいるダミーを、渦の中心へ向けて引き寄せる（まわりの粒も同じ渦に吸い込ませる）
     const Vector3& center = player_->GetGreatswordThrowPos();
+    ParticleFieldLibrary::Emit(pm_, "greatsword_vortex", center);
     for (auto& d : dummies_) {
         if (d.hp <= 0.0f) {
             continue;
@@ -440,7 +442,7 @@ void BattleTestScene::ApplyMeleeHitToDummy(Dummy& d, const MeleeAttackDef* atk, 
         pm_->EmitRing("bt_hit_ring", hitPosition, weapon.effectRingRadius,
             effectColor, SceneVisualTuning::BattleCombat().effectRingBaseCount + weapon.effectBurstCount, SceneVisualTuning::BattleCombat().effectRingLifetime, SceneVisualTuning::BattleCombat().effectRingSize);
     }
-    comboFeel_.OnMeleeHit(atk, !extraHit && IsMeleeFinisher(weapon.type, atk), hitPosition, effectColor,
+    comboFeel_.OnMeleeHit(atk, !extraHit && IsMeleeFinisher(weapon.type, atk, weaponManager_->IsCurrentFused(), weaponManager_->IsBossSlotSelected()), hitPosition, effectColor,
         player_->GetLastDirX(), camera_.get());
 
     if (extraHit) {

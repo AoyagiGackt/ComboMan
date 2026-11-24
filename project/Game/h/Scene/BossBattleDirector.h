@@ -94,6 +94,17 @@ struct BossBattleTuning {
     int leapDamage = 3;
     float leapRecoverSeconds = 0.8f; ///< 着地した後の隙
     std::string leapWarningRing = "boss_dash_warning";
+    // 渦（周りの粒とプレイヤーを引き寄せてから、中心で弾けさせる。引き寄せる間に離れるか、弾ける瞬間にかわせばよい）
+    float vortexTelegraphSeconds = 0.8f; ///< 渦を作る前に身構える秒数
+    float vortexPullSeconds = 1.8f; ///< 引き寄せている秒数
+    float vortexPullRadius = 7.0f; ///< これより近いプレイヤーを引き寄せる
+    float vortexPullSpeed = 3.2f; ///< 引き寄せる速さ（中心に近いほど強い。歩いて逆らえる程度にする）
+    float vortexHeight = 0.8f; ///< 渦の中心の、足元からの高さ
+    float vortexBurstRadius = 2.0f; ///< 弾けた時にダメージを受ける半径
+    int vortexDamage = 3;
+    float vortexRecoverSeconds = 1.0f; ///< 弾けた後の隙
+    std::string vortexWarningRing = "boss_dash_warning"; ///< 身構えている間に出す輪
+    std::string vortexDebris = "gate_dust"; ///< 引き寄せている間に、渦のまわりから出して吸い込ませる土煙
     // 叩きつけ（予告の長さ・範囲・ダメージは enemy_params.json の bossSlam）
     float slamRecoverSeconds = 0.6f; ///< 叩きつけた後の隙
     /** @brief 投げる技の名前ごとの中身（技の並びに名前を書くと、その中身で投げる） */
@@ -136,6 +147,10 @@ struct BossFrameOutput {
     const BossVolleyData* volley = nullptr; ///< このフレームに投げる技（投げないなら nullptr）
     bool waveStarted = false; ///< 地面を叩いて衝撃波を出した
     bool leapLanded = false; ///< 跳びかかりで着地した
+    float rushDirX = 0.0f; ///< 動いている最中の向き（+1 で +X。突進とダッシュの間だけ）
+    bool vortexPulling = false; ///< 渦で引き寄せている最中
+    float vortexProgress = 0.0f; ///< 引き寄せの経過割合（0〜1）
+    bool vortexBurst = false; ///< 渦が弾けた
     BossMotionCue motion; ///< 今ボスが何をしているか（技ごとの動きを選ぶ）
 };
 
@@ -180,7 +195,7 @@ private:
     /** @brief 戦いの段階 */
     enum class Phase { kWaiting, kFight, kRage };
     /** @brief 技の段階 */
-    enum class Move { kNone, kChargeTelegraph, kCharging, kDashTelegraph, kDashing, kVolleyTelegraph, kWaveTelegraph, kLeapTelegraph, kLeaping, kSlamTelegraph, kRecover };
+    enum class Move { kNone, kChargeTelegraph, kCharging, kDashTelegraph, kDashing, kVolleyTelegraph, kWaveTelegraph, kLeapTelegraph, kLeaping, kSlamTelegraph, kVortexTelegraph, kVortexPull, kRecover };
 
     /** @brief 戦う前: プレイヤーが近づいたら戦い始める */
     void UpdateWaiting(const BossFrameInput& input);

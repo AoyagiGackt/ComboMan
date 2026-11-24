@@ -313,6 +313,7 @@ void TitleScene::Finalize() {
     // シーン切り替え元でGPUの完了を待ってから呼ばれるので、安全に解放できる。
     if (particleManager_) {
         particleManager_->ClearAllGroups();
+        particleManager_->ClearFields();
         particleManager_ = nullptr;
     }
     // デモ用に全解放していた武器を元に戻し、自動操作用のオーバーライドも解除する

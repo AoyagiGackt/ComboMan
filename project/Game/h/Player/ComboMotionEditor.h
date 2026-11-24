@@ -6,6 +6,9 @@
 #include "ComboMotion.h"
 #include "EditorHistory.h"
 #include <map>
+#include <optional>
+#include <utility>
+#include <vector>
 #include <string>
 
 namespace engine {
@@ -60,6 +63,25 @@ private:
     /** @brief 保存・読み直しなどのファイル操作を描く */
     void DrawFileControls();
 
+    /** @brief 姿勢の複製操作を描く */
+    void DrawPoseControls(MotionClip& clip, bool canEdit);
+    /** @brief 姿勢と段の操作を描く */
+    void DrawMotionControls(MotionClip& clip);
+    /** @brief 全トラックの現在の姿勢を保存する */
+    void CopyPose(const MotionClip& clip);
+    /** @brief 保存した姿勢を現在の時刻に貼り付ける */
+    void PastePose(MotionClip& clip);
+    /** @brief 現在の姿勢を左右反転する */
+    void MirrorPose(MotionClip& clip);
+    /** @brief 段全体を左右反転する */
+    void MirrorClip(MotionClip& clip);
+    /** @brief 前後のキーへ時刻を移動する */
+    void MoveToKey(const MotionClip& clip, bool forward);
+
+    std::vector<std::pair<std::string, Vector3>> copiedPose_; ///< コピーした全ボーンの姿勢
+    std::optional<Vector3> copiedBone_; ///< コピーした選択ボーンの姿勢
+    std::optional<MotionClip> copiedClip_; ///< コピーした段の動き
+    std::string copiedAttackId_; ///< コピー元の段の技ID
     bool open_ = false;
     bool previewing_ = true; ///< ゲームを止めて段の姿勢を見せるか
     bool wasPreviewing_ = false; ///< 前フレームにプレビューしていたか（終わった瞬間に姿勢を戻すため）

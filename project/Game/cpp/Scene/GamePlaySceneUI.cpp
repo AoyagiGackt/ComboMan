@@ -205,6 +205,8 @@ void GamePlayScene::DrawOverlaysAndUI() {
         spriteCommon_->CommonDrawSettings();
         clearFinish_.DrawStrikeOverlay();
         if (glassShatter_.NeedCapture()) {
+            // 色の加工中はオフスクリーンへ描いているので、そこから写してそこへ重ねる
+            sceneShared::BindCaptureTarget(glassShatter_, { imageFilter_, grayscaleEffect_, hsvFilter_ });
             glassShatter_.CaptureFrame();
             glassShatter_.Apply();
         }
@@ -339,7 +341,7 @@ void GamePlayScene::DrawStyleUI() {
         const int maxStep = (std::max)(player_->GetComboMax(), 1);
         // 打ち上げて空中へ行く武器と、地上の締めで戦う武器で案内を分ける（締めの説明は weapon_finishers.json の guide）
         const WeaponType weaponType = WeaponManager::GetInstance()->GetCurrent().type;
-        const bool hasLauncher = GetMeleeComboSet(weaponType).launcher != nullptr;
+        const bool hasLauncher = GetMeleeComboSet(weaponType, WeaponManager::GetInstance()->IsBossSlotSelected()).launcher != nullptr;
         const std::wstring finisherGuide = StringUtility::ConvertString(WeaponFinisherTuning::Get(weaponType).guide);
         if (!chainActive) {
             fontRenderer_.DrawStringW(L"推奨コンボルート",
@@ -417,7 +419,6 @@ void GamePlayScene::DrawStyleUI() {
     DrawWeaponAcquireBanner();
     DrawOffscreenEnemyGuide();
     DrawAllyMark();
-    DrawTwoPlayerHud();
 
     // ── ロックオン中の対象にマーカーを出す ────────────────────────
     if (lockedEnemy_ != nullptr) {
@@ -525,7 +526,6 @@ void GamePlayScene::SetupPauseMenu() {
          } });
     pauseMenu_.InitializeCommandPreview(modelCommon_.get());
     pauseMenu_.EnableWeaponFusionOption();
-    pauseMenu_.EnableTwoPlayerGuide();
 }
 /** @brief ノードグラフのメッセージ・カメラ・操作停止の受け口を登録する */
 void GamePlayScene::RegisterScriptEffectHandlers() {

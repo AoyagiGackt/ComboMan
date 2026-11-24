@@ -107,7 +107,9 @@ void Player::GroundedPhysicsState::Update(Player& player, Input* input) const {
     // 回避中は回避の移動が位置を決めるので、通常の左右移動とジャンプは受け付けない
     // ワープ中も同じく、ワープの移動だけで進む（歩きを足すと決めた距離からずれて向きも変わる）
     if (!player.IsRampaging() && !player.finisherCharging_ && !player.dodgeActive_ && !player.warpActive_) {
-        player.ApplyHorizontalInput(input, Tuning().speed * speedMult);
+        // 歩くだけの状態（マップを移動する時）は、走りより遅い歩きの速さにする
+        const float walkMult = player.explorationMode_ ? Tuning().walkSpeedRatio : 1.0f;
+        player.ApplyHorizontalInput(input, Tuning().speed * speedMult * walkMult);
     }
 
     if (player.onGround_ && !player.finisherCharging_ && !player.dodgeActive_) {

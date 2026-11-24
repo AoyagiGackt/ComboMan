@@ -112,8 +112,12 @@ void ShadowManager::Initialize(DirectXCommon* dxCommon, SrvManager* srvManager) 
 /** @brief ライト方向から影用のビュー射影行列を求めて保持する */
 void ShadowManager::Update(const Vector3& lightDir) {
     const ShadowProjectionTuning& tuning = ProjectionTuning();
-    const Vector3 sceneCenter = SceneCenter();
-    const Vector3 lightEye = LightPosition(lightDir);
+    // 中心を決めてあればそこ、無ければ設定の中心を使い、ライト方向の逆へ設定距離だけ離れた所から見る
+    const Vector3 sceneCenter = hasFocus_ ? focus_ : SceneCenter();
+    const Vector3 lightEye = {
+        sceneCenter.x - lightDir.x * tuning.lightDistance,
+        sceneCenter.y - lightDir.y * tuning.lightDistance,
+        sceneCenter.z - lightDir.z * tuning.lightDistance };
 
     Matrix4x4 view {};
     if (!TryMakeLightViewMatrix(lightEye, sceneCenter, view)) {

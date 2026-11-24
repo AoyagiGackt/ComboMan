@@ -11,6 +11,7 @@
 #include "Skeleton.h"
 #include "Weapon.h"
 #include <algorithm>
+#include <array>
 #include <cfloat>
 #include <cmath>
 #include <cstdio>
@@ -29,6 +30,27 @@ namespace {
 namespace editorUI = engine::graphics::editorUI;
 constexpr ImVec2 kInitialWindowSize = { 460.0f, 680.0f }; // 初めて開いた時のウィンドウの大きさ
 #endif
+// リグの軸に合わない場合は各成分の符号をここで調整する
+constexpr float kMirrorKeep = 1.0f; // 成分の符号を保つ
+constexpr float kMirrorInvert = -1.0f; // 成分の符号を反転する
+constexpr std::array<float, 3> kMirrorSigns = { kMirrorKeep, kMirrorInvert, kMirrorInvert }; // X、Y、Zの符号
+
+/** @brief 左右の接尾辞を入れ替えたボーン名を返す */
+std::string MirrorBoneName(const std::string& bone) {
+    std::string result = bone;
+    if (result.ends_with(".R")) {
+        result.back() = 'L';
+    } else if (result.ends_with(".L")) {
+        result.back() = 'R';
+    }
+    return result;
+}
+
+/** @brief 回転角度の各成分を左右反転する */
+Vector3 MirrorAngle(const Vector3& angle) {
+    return { angle.x * kMirrorSigns[0], angle.y * kMirrorSigns[1], angle.z * kMirrorSigns[2] };
+}
+
 constexpr float kTimeKeyStep = 0.01f; // 左右キーで時刻を送る量
 constexpr float kKeyGrabPixels = 7.0f; // 時間軸のキーを掴める距離（ピクセル）
 constexpr float kKeyScrubSnapPixels = 6.0f; // スクラブ中にキーへ吸着する距離（ピクセル）
@@ -122,6 +144,7 @@ bool ComboMotionEditor::Update(Input* input, Player& player, WeaponType weaponTy
             ImGui::TextDisabled("武器はQ/Eで切り替え。角度を動かすと今の時刻にキーが打たれます");
             ImGui::TextDisabled("Space: 再生/停止  左右キー: 時刻送り  時間軸の黄色いキーはドラッグで移動");
             // 長い一覧に隠れないよう、保存は上に置く
+            ImGui::TextDisabled("Ctrl+C/V: 姿勢コピー/貼り付け  Ctrl+Z/Y: 元に戻す/やり直す  ,/.: 前後のキー");
             DrawFileControls();
 
             // 掛かり具合の確認（データが読めていない・ボーン名が合わない時はここが0になる）
@@ -139,6 +162,7 @@ bool ComboMotionEditor::Update(Input* input, Player& player, WeaponType weaponTy
             if (attack != nullptr) {
                 library->EditClip(player.GetMotionRigId(), attack->id, [&](MotionClip& clip) {
                     DrawClipHistoryControls(clip);
+                    DrawMotionControls(clip);
                     DrawTimeline(*attack, clip);
                     DrawBoneList(player, clip);
                     DrawKeyEditor(clip);
@@ -326,6 +350,165 @@ void ComboMotionEditor::UpdateTimelineDrag(MotionClip& clip, float mouseX, float
     (void)mouseX;
     (void)originX;
     (void)width;
+#endif
+}
+
+/** @brief 全トラックの現在の姿勢を保存する */
+void ComboMotionEditor::CopyPose(const MotionClip& clip) {
+    copiedPose_.clear();
+    for (const MotionTrack& track : clip.tracks) {
+        copiedPose_.emplace_back(track.bone, track.EvaluateEuler(time_));
+    }
+}
+
+/** @brief 保存した姿勢を現在の時刻に貼り付ける */
+void ComboMotionEditor::PastePose(MotionClip& clip) {
+    if (copiedPose_.empty()) {
+        return;
+    }
+    CurrentHistory().Record(clip);
+    for (const auto& [bone, angle] : copiedPose_) {
+        clip.SetBoneKey(bone, time_, angle, kKeySnap);
+    }
+    dirty_ = true;
+    playing_ = false;
+}
+
+/** @brief 現在の姿勢を左右反転する */
+void ComboMotionEditor::MirrorPose(MotionClip& clip) {
+    if (clip.tracks.empty()) {
+        return;
+    }
+    const MotionClip source = clip;
+    CurrentHistory().Record(clip);
+    for (const MotionTrack& track : source.tracks) {
+        clip.SetBoneKey(MirrorBoneName(track.bone), time_, MirrorAngle(track.EvaluateEuler(time_)), kKeySnap);
+    }
+    // 片側だけにあるトラックの元の側は無回転にする
+    for (const MotionTrack& track : source.tracks) {
+        if (source.FindTrack(MirrorBoneName(track.bone)) == nullptr) {
+            clip.SetBoneKey(track.bone, time_, Vector3 { }, kKeySnap);
+        }
+    }
+    dirty_ = true;
+    playing_ = false;
+}
+
+/** @brief 段全体を左右反転する */
+void ComboMotionEditor::MirrorClip(MotionClip& clip) {
+    if (clip.tracks.empty()) {
+        return;
+    }
+    CurrentHistory().Record(clip);
+    for (MotionTrack& track : clip.tracks) {
+        track.bone = MirrorBoneName(track.bone);
+        for (MotionKey& key : track.keys) {
+            key.eulerDeg = MirrorAngle(key.eulerDeg);
+        }
+    }
+    dirty_ = true;
+    playing_ = false;
+}
+
+/** @brief 前後のキーへ時刻を移動する */
+void ComboMotionEditor::MoveToKey(const MotionClip& clip, bool forward) {
+    std::optional<float> target;
+    for (const MotionTrack& track : clip.tracks) {
+        if (!selectedBone_.empty() && track.bone != selectedBone_) {
+            continue;
+        }
+        for (const MotionKey& key : track.keys) {
+            if ((forward && key.time > time_ && (!target || key.time < *target)) ||
+                (!forward && key.time < time_ && (!target || key.time > *target))) {
+                target = key.time;
+            }
+        }
+    }
+    if (target) {
+        time_ = *target;
+        playing_ = false;
+    }
+}
+
+/** @brief 姿勢の複製操作を描く */
+void ComboMotionEditor::DrawPoseControls(MotionClip& clip, bool canEdit) {
+#ifdef USE_IMGUI
+    if (ImGui::Button("この時刻の姿勢をコピー") || (canEdit && editorUI::CtrlShortcut(ImGuiKey_C))) {
+        CopyPose(clip);
+    }
+    ImGui::SameLine();
+    const bool pasteShortcut = canEdit && editorUI::CtrlShortcut(ImGuiKey_V);
+    ImGui::BeginDisabled(copiedPose_.empty());
+    if (ImGui::Button("姿勢を貼り付け") || (pasteShortcut && !copiedPose_.empty())) {
+        PastePose(clip);
+    }
+    ImGui::EndDisabled();
+    ImGui::BeginDisabled(selectedBone_.empty());
+    if (ImGui::Button("選択ボーンの姿勢をコピー")) {
+        const MotionTrack* track = clip.FindTrack(selectedBone_);
+        copiedBone_ = track != nullptr ? track->EvaluateEuler(time_) : Vector3 { };
+    }
+    ImGui::SameLine();
+    ImGui::BeginDisabled(!copiedBone_);
+    if (ImGui::Button("選択ボーンに貼り付け")) {
+        CurrentHistory().Record(clip);
+        clip.SetBoneKey(selectedBone_, time_, *copiedBone_, kKeySnap);
+        dirty_ = true;
+        playing_ = false;
+    }
+    ImGui::EndDisabled();
+    ImGui::EndDisabled();
+#else
+    (void)clip;
+    (void)canEdit;
+#endif
+}
+
+/** @brief 姿勢と段の操作を描く */
+void ComboMotionEditor::DrawMotionControls(MotionClip& clip) {
+#ifdef USE_IMGUI
+    const bool canEdit = !CurrentHistory().IsCapturing();
+    ImGui::SeparatorText("姿勢と段の操作");
+    ImGui::BeginDisabled(!canEdit);
+    DrawPoseControls(clip, canEdit);
+    if (ImGui::Button("この段の動きをコピー")) {
+        copiedClip_ = clip;
+        copiedAttackId_ = selectedAttackId_;
+    }
+    ImGui::SameLine();
+    ImGui::BeginDisabled(!copiedClip_ || copiedAttackId_ == selectedAttackId_);
+    if (editorUI::ConfirmButton("ほかの段へ貼り付け（上書き）", "この段の動きを上書きしますか？\nCtrl+Z で元に戻せます。", "上書きする")) {
+        CurrentHistory().Record(clip);
+        clip = *copiedClip_;
+        dirty_ = true;
+        playing_ = false;
+        draggedKey_ = kNoDraggedKey;
+    }
+    ImGui::EndDisabled();
+    if (ImGui::Button("この時刻の姿勢を左右反転")) {
+        MirrorPose(clip);
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("この段全体を左右反転")) {
+        MirrorClip(clip);
+    }
+    ImGui::EndDisabled();
+    if (ImGui::Button("前のキーへ")) {
+        MoveToKey(clip, false);
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("次のキーへ")) {
+        MoveToKey(clip, true);
+    }
+    if (!ImGui::GetIO().WantTextInput && ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows)) {
+        if (ImGui::IsKeyPressed(ImGuiKey_Comma, false)) {
+            MoveToKey(clip, false);
+        } else if (ImGui::IsKeyPressed(ImGuiKey_Period, false)) {
+            MoveToKey(clip, true);
+        }
+    }
+#else
+    (void)clip;
 #endif
 }
 

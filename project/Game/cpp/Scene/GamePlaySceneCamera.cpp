@@ -155,6 +155,9 @@ void GamePlayScene::UpdateCamera() {
     }
     comboFeel_.ApplyCameraZoom(camera_.get());
 
+    // 影を作る範囲は、映っている所（カメラの真正面のステージ）に合わせて動かす
+    const Vector3& cameraPosition = camera_->GetTranslate();
+    shadowManager_->SetFocus({ cameraPosition.x, cameraPosition.y, 0.0f });
     shadowManager_->Update(objectCommon_->GetLightDirection());
     Object3d::SetLightViewProjection(shadowManager_->GetLightViewProjection());
 }

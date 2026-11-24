@@ -11,6 +11,7 @@
     0
   ],
   "graphPath": "Resources/Graphs/level06_main.json",
+  "sky": "Resources/SkyDome/sky_volcano.png",
   "flagGraphs": [
     {
       "flag": "s6_zone_b",
@@ -114,14 +115,90 @@
   ],
   "objects": [
     {
+      "name": "bg_ground",
+      "type": "static",
+      "kind": "background",
+      "model": "Resources/block/backdrop/backdrop_volcano_ground.obj",
+      "texture": "Resources/block/backdrop/backdrop_palette_volcano.png",
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "lighting": false,
+      "solid": false
+    },
+    {
+      "name": "bg_near",
+      "type": "static",
+      "kind": "background",
+      "model": "Resources/block/backdrop/backdrop_volcano_near.obj",
+      "texture": "Resources/block/backdrop/backdrop_palette_volcano.png",
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "lighting": false,
+      "solid": false
+    },
+    {
+      "name": "bg_mid",
+      "type": "static",
+      "kind": "background",
+      "model": "Resources/block/backdrop/backdrop_volcano_mid.obj",
+      "texture": "Resources/block/backdrop/backdrop_palette_volcano.png",
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "lighting": false,
+      "solid": false
+    },
+    {
+      "name": "bg_far",
+      "type": "static",
+      "kind": "background",
+      "model": "Resources/block/backdrop/backdrop_volcano_far.obj",
+      "texture": "Resources/block/backdrop/backdrop_palette_volcano.png",
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "lighting": false,
+      "solid": false
+    },
+    {
       "name": "floor",
       "type": "row",
       "kind": "prop",
       "axis": "x",
       "count": 62,
       "step": 1,
-      "model": "Resources/block/block.obj",
-      "texture": "Resources/block/block.png",
+      "model": "Resources/block/terrain/terrain_ground.obj",
+      "texture": "Resources/block/terrain/terrain_palette_volcano.png",
       "position": [
         2,
         -0.98,
@@ -142,8 +219,8 @@
       "axis": "x",
       "count": 63,
       "step": 1,
-      "model": "Resources/block/block.obj",
-      "texture": "Resources/block/block.png",
+      "model": "Resources/block/terrain/terrain_ceiling.obj",
+      "texture": "Resources/block/terrain/terrain_palette_volcano.png",
       "position": [
         2,
         13,
@@ -164,8 +241,8 @@
       "axis": "y",
       "count": 13,
       "step": 1,
-      "model": "Resources/block/block.obj",
-      "texture": "Resources/block/block.png",
+      "model": "Resources/block/terrain/terrain_wall.obj",
+      "texture": "Resources/block/terrain/terrain_palette_volcano.png",
       "position": [
         2,
         0,
@@ -186,8 +263,8 @@
       "axis": "y",
       "count": 14,
       "step": 1,
-      "model": "Resources/block/block.obj",
-      "texture": "Resources/block/block.png",
+      "model": "Resources/block/terrain/terrain_wall.obj",
+      "texture": "Resources/block/terrain/terrain_palette_volcano.png",
       "position": [
         64,
         -0.98,
@@ -200,28 +277,6 @@
       ],
       "lighting": false,
       "solid": true
-    },
-    {
-      "name": "bg_buildings",
-      "type": "row",
-      "kind": "background",
-      "axis": "x",
-      "count": 5,
-      "step": 13,
-      "model": "Resources/DowntownCityMegaKit[Standard]/Exports/glTF (Godot)/Building_Small_1.gltf",
-      "texture": "Resources/DowntownCityMegaKit[Standard]/Textures/T_RedBrick_BaseColor.png",
-      "position": [
-        8,
-        -0.6,
-        6
-      ],
-      "scale": [
-        0.42,
-        0.42,
-        0.42
-      ],
-      "lighting": true,
-      "solid": false
     },
     {
       "name": "guide_s6_a",
@@ -353,8 +408,8 @@
       "axis": "x",
       "count": 4,
       "step": 1,
-      "model": "Resources/block/block.obj",
-      "texture": "Resources/DowntownCityMegaKit[Standard]/Textures/T_Concrete_BaseColor.png",
+      "model": "Resources/block/terrain/terrain_platform.obj",
+      "texture": "Resources/block/terrain/terrain_palette_volcano.png",
       "position": [
         16.5,
         3,
@@ -570,8 +625,8 @@
       "axis": "x",
       "count": 2,
       "step": 1,
-      "model": "Resources/block/block.obj",
-      "texture": "Resources/DowntownCityMegaKit[Standard]/Textures/T_Concrete_BaseColor.png",
+      "model": "Resources/block/terrain/terrain_platform.obj",
+      "texture": "Resources/block/terrain/terrain_palette_volcano.png",
       "position": [
         30.5,
         1.2,
@@ -592,8 +647,8 @@
       "axis": "x",
       "count": 2,
       "step": 1,
-      "model": "Resources/block/block.obj",
-      "texture": "Resources/DowntownCityMegaKit[Standard]/Textures/T_Concrete_BaseColor.png",
+      "model": "Resources/block/terrain/terrain_platform.obj",
+      "texture": "Resources/block/terrain/terrain_palette_volcano.png",
       "position": [
         33,
         3.2,
@@ -636,8 +691,8 @@
       "axis": "x",
       "count": 4,
       "step": 1,
-      "model": "Resources/block/block.obj",
-      "texture": "Resources/DowntownCityMegaKit[Standard]/Textures/T_Concrete_BaseColor.png",
+      "model": "Resources/block/terrain/terrain_platform.obj",
+      "texture": "Resources/block/terrain/terrain_palette_volcano.png",
       "position": [
         38.5,
         4.4,
@@ -861,8 +916,8 @@
       "axis": "x",
       "count": 2,
       "step": 1,
-      "model": "Resources/block/block.obj",
-      "texture": "Resources/DowntownCityMegaKit[Standard]/Textures/T_Concrete_BaseColor.png",
+      "model": "Resources/block/terrain/terrain_platform.obj",
+      "texture": "Resources/block/terrain/terrain_palette_volcano.png",
       "position": [
         47.5,
         2.4,

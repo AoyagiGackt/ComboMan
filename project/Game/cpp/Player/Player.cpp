@@ -29,18 +29,6 @@ const PlayerTuning& Tuning() {
     return PlayerTuning::Get();
 }
 
-/** @brief 体の移動キーの高さを最初の値に固定する（高さは物理で決めるため） */
-void LockClipVerticalRootMotion(engine::graphics::Animation& animation) {
-    auto body = animation.nodeAnimations.find("Body");
-    if (body == animation.nodeAnimations.end() || body->second.translate.keyframes.empty()) {
-        return;
-    }
-
-    const float baseY = body->second.translate.keyframes.front().value.y;
-    for (auto& keyframe : body->second.translate.keyframes) {
-        keyframe.value.y = baseY;
-    }
-}
 }
 
 // ══════════════════════════════════════════════════════
@@ -83,6 +71,7 @@ void Player::Initialize(ModelCommon* modelCommon) {
         rig.runHoldAnim = LoadAnimationFile(def.dir, def.file, def.runHold);
         rig.slashAnim = LoadAnimationFile(def.dir, def.file, def.slash);
         rig.punchAnim = LoadAnimationFile(def.dir, def.file, def.punch);
+        rig.walkAnim = LoadAnimationFile(def.dir, def.file, def.walk);
 
         rig.object = std::make_unique<SkinnedObject3d>();
         rig.object->Initialize(skinCommon_.get());
@@ -137,6 +126,7 @@ void Player::Initialize(ModelCommon* modelCommon) {
     };
     // 右手の近接武器と、左手の銃を同じ手順で準備する。表示対象の選択は各更新処理が行う。
     initializeSlots(heldWeapons_, kHeldWeaponVisuals);
+    initializeSlots(fusedPartnerWeapons_, kHeldWeaponVisuals);
     initializeSlots(guns_, kGunVisuals);
 }
 
@@ -175,7 +165,7 @@ int Player::GetComboMax() const {
         return 0;
     }
     // 現在の武器の地上コンボ段数を基準にする（HUDのx段目/最大表示用）
-    const MeleeComboSet& set = GetMeleeComboSet(WeaponManager::GetInstance()->GetCurrent().type);
+    const MeleeComboSet& set = GetMeleeComboSet(WeaponManager::GetInstance()->GetCurrent().type, WeaponManager::GetInstance()->IsBossSlotSelected());
     return set.ground.count + skillMods_.comboMaxBonus;
 }
 
@@ -359,12 +349,25 @@ void Player::PlayMeleeStepAnim(const MeleeAttackDef& attack) {
 void Player::Update(Input* input, const Vector3& enemyPos, bool enemySolid, bool useStageFloor) {
     useStageFloor_ = useStageFloor;
     ResetFrameFlags();
+    // 外から引っ張られた分（吸い込みなど）を、前のフレームの位置を覚えた後にずらす（壁の当たりは入ってきた側へ戻せる）
+    pos_.x = std::clamp(pos_.x + externalShiftX_, minX_, maxX_);
+    externalShiftX_ = 0.0f;
 
     if (invincibleTimer_ > 0.0f) {
         invincibleTimer_ -= gameConstants::kFrameDeltaTime;
     }
 
     justDodgeWindowTimer_ = (std::max)(justDodgeWindowTimer_ - gameConstants::kFrameDeltaTime, 0.0f);
+
+    // 歩くだけの状態では、移動とジャンプと見た目だけを進める（戦いの入力は受け付けない）
+    if (explorationMode_) {
+        GetPhysicsState(inWater_).Update(*this, input);
+        pos_.x = std::clamp(pos_.x, minX_, maxX_);
+        UpdateWaterState();
+        UpdateVisualState(input);
+        AttachActiveWeapons();
+        return;
+    }
 
     HandleStyleSwitch(input);
     HandleDodge(input);

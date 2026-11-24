@@ -52,6 +52,15 @@ public:
     void Update(const Vector3& lightDir);
 
     /**
+     * @brief 影を作る範囲の中心を決める（横に長いステージでも、映っている所に影が出るようカメラに合わせて動かす）
+     * @param focus 範囲の中心にするワールド座標（設定しなければ graphics_tuning.json の shadow.center～）
+     */
+    void SetFocus(const Vector3& focus) {
+        focus_ = focus;
+        hasFocus_ = true;
+    }
+
+    /**
      * @brief シャドウパス開始（バリア遷移・DSVクリア・ビューポート設定）
      */
     void BeginShadowPass(ID3D12GraphicsCommandList* commandList);
@@ -89,6 +98,8 @@ private:
     SrvManager* srvManager_ = nullptr;
 
     Matrix4x4 lightVP_ = MakeIdentity4x4();
+    Vector3 focus_ { }; ///< 影を作る範囲の中心（hasFocus_ の時だけ使う）
+    bool hasFocus_ = false; ///< SetFocus で中心を決めたか
     bool shadowMapInDepthWrite_ = true; ///< リソース初期状態は DEPTH_WRITE
 };
 

@@ -1,11 +1,11 @@
 {
-  "_comment": "武器の属性（weapons.jsonのelement）ごとの命中演出(hit)と振り中のオーラ(aura)。層を上から順に重ねる。type: ring=リング scatter=左右へばらまく火花 fan=規則的に並べる火花 slash=斬線 ellipse=細長い光 mote=漂う粒 pull=吸い込まれる粒 burst=動き方(motion)を選んでばらまく粒。motion: linear spiral=渦 flicker=明滅 gravity=落ちる shrink=縮む flame=炎 ember=火の粉 mist=もや crackle=放電。alongBlade=true で刃の根元から先端に沿って出す。idle は構えているだけの間に毎フレーム出す層。color は weapon（武器の色）か [R,G,B,A]。altColor は altEvery 粒ごと（altPhase番目）か altChance の確率で混ぜる差し色。displayName は武器名の前に付ける呼び名（炎の 剣 のように画面に出す）。status は当てた敵に残る状態で、duration 秒のあいだ tickInterval 秒ごとに tickDamage の継続ダメージ（HPは1より下げない）、歩く速さに speedScale を掛け、emitInterval 秒ごとに layers の粒を敵の体から出す。acquire は武器を手に入れた瞬間に胸の高さへ1回だけ出す層",
+  "_comment": "武器の属性（weapons.jsonのelement）ごとの命中演出(hit)と振り中のオーラ(aura)。層を上から順に重ねる。type: ring=リング scatter=左右へばらまく火花 fan=規則的に並べる火花 slash=斬線 ellipse=細長い光 mote=漂う粒 pull=吸い込まれる粒 burst=動き方(motion)を選んでばらまく粒。motion: linear spiral=渦 flicker=明滅 gravity=落ちる shrink=縮む flame=炎 ember=火の粉 mist=もや crackle=放電 soul=揺れながら昇って消える魂 goo=重く落ちて伸びる粘液 flutter=ゆっくり舞い落ちて裏返るかけら。alongBlade=true で刃の根元から先端に沿って出す。idle は構えているだけの間に毎フレーム出す層。color は weapon（武器の色）か [R,G,B,A]。altColor は altEvery 粒ごと（altPhase番目）か altChance の確率で混ぜる差し色。displayName は武器名の前に付ける呼び名（炎の 剣 のように画面に出す）。status は当てた敵に残る状態で、duration 秒のあいだ tickInterval 秒ごとに tickDamage の継続ダメージ（HPは1より下げない）、歩く速さに speedScale を掛け、emitInterval 秒ごとに layers の粒を敵の体から出す。acquire は武器を手に入れた瞬間に胸の高さへ1回だけ出す層",
   "Water": {
     "displayName": "水の",
     "status": {
       "duration": 2, "tickInterval": 0, "tickDamage": 0, "speedScale": 0.8, "emitInterval": 0.1,
       "layers": [
-        {"type": "burst", "particle": "hit_spark", "motion": "gravity", "count": 1, "spread": 0.4, "chance": 0.8, "speedMin": 0, "speedMax": 0.3, "riseMin": -0.5, "riseMax": 0, "lifetime": 0.65, "size": 0.08, "color": [0.35, 0.75, 1, 1]}
+        {"type": "burst", "particle": "hit_spark", "motion": "gravity", "count": 1, "spread": 0.4, "chance": 0.72, "speedMin": 0, "speedMax": 0.3, "riseMin": -0.5, "riseMax": 0, "lifetime": 0.65, "size": 0.072, "color": [0.35, 0.75, 1, 1]}
       ]
     },
     "acquire": [
@@ -14,12 +14,12 @@
       {"type": "ring", "speed": 2.5, "count": 24, "lifetime": 0.4, "size": 0.12, "color": "weapon"}
     ],
     "hit": [
-      {"type": "scatter", "count": 14, "speedX": 3, "riseMin": 2.5, "riseMax": 5.5, "lifetime": 0.6, "size": 0.13, "scaleSize": true, "color": "weapon", "altColor": [0.85, 0.97, 1, 1], "altEvery": 3, "altPhase": 0},
-      {"type": "ring", "speed": 1.6, "scaleSpeed": true, "count": 22, "lifetime": 0.45, "size": 0.12, "color": "weapon"},
-      {"type": "ring", "speed": 3, "scaleSpeed": true, "count": 26, "lifetime": 0.35, "size": 0.08, "color": [0.85, 0.97, 1, 1]}
+      {"type": "scatter", "count": 12, "speedX": 3, "riseMin": 2.5, "riseMax": 5.5, "lifetime": 0.6, "size": 0.117, "scaleSize": true, "color": "weapon", "altColor": [0.85, 0.97, 1, 1], "altEvery": 3, "altPhase": 0},
+      {"type": "ring", "speed": 1.6, "scaleSpeed": true, "count": 19, "lifetime": 0.45, "size": 0.108, "color": "weapon"},
+      {"type": "ring", "speed": 3, "scaleSpeed": true, "count": 22, "lifetime": 0.35, "size": 0.072, "color": [0.85, 0.97, 1, 1]}
     ],
     "aura": [
-      {"type": "scatter", "count": 1, "speedX": 1.2, "riseMin": 1, "lifetime": 0.45, "size": 0.08, "color": "weapon"}
+      {"type": "scatter", "count": 1, "speedX": 1.2, "riseMin": 1, "lifetime": 0.45, "size": 0.072, "color": "weapon"}
     ]
   },
   "Fire": {
@@ -27,8 +27,8 @@
     "status": {
       "duration": 3, "tickInterval": 0.5, "tickDamage": 0.3, "speedScale": 1, "emitInterval": 0.09,
       "layers": [
-        {"type": "burst", "particle": "elem_flame", "motion": "flame", "count": 1, "spread": 0.4, "chance": 0.8, "speedMin": 0, "speedMax": 0.3, "riseMin": 0.2, "riseMax": 0.8, "lifetime": 0.5, "size": 0.28, "color": "weapon"},
-        {"type": "burst", "particle": "elem_ember", "motion": "ember", "count": 1, "spread": 0.4, "chance": 0.5, "speedMin": 0, "speedMax": 0.3, "riseMin": 0.2, "riseMax": 0.8, "lifetime": 0.8, "size": 0.06, "color": [1, 0.6, 0.15, 1]}
+        {"type": "burst", "particle": "elem_flame", "motion": "flame", "count": 1, "spread": 0.4, "chance": 0.72, "speedMin": 0, "speedMax": 0.3, "riseMin": 0.2, "riseMax": 0.8, "lifetime": 0.5, "size": 0.252, "color": "weapon"},
+        {"type": "burst", "particle": "elem_ember", "motion": "ember", "count": 1, "spread": 0.4, "chance": 0.45, "speedMin": 0, "speedMax": 0.3, "riseMin": 0.2, "riseMax": 0.8, "lifetime": 0.8, "size": 0.054, "color": [1, 0.6, 0.15, 1]}
       ]
     },
     "acquire": [
@@ -37,21 +37,21 @@
       {"type": "ring", "speed": 2.5, "count": 24, "lifetime": 0.4, "size": 0.12, "color": "weapon"}
     ],
     "hit": [
-      {"type": "fan", "count": 10, "columns": 5, "centerColumn": 2, "columnSpacing": 0.65, "riseBase": 3.2, "riseSteps": 3, "riseStep": 0.9, "lifetime": 0.5, "size": 0.18, "scaleSize": true, "color": "weapon", "altColor": [1, 0.55, 0.05, 1], "altEvery": 2, "altPhase": 1},
-      {"type": "burst", "particle": "elem_flame", "motion": "flame", "count": 36, "scaleCount": true, "spread": 0.35, "speedMin": 1.5, "speedMax": 4.5, "riseMin": 1.5, "riseMax": 4, "lifetime": 0.55, "lifetimeJitter": 0.35, "size": 0.7, "sizeJitter": 0.4, "scaleSize": true, "color": "weapon", "altColor": [1, 0.5, 0.05, 1], "altChance": 0.5},
-      {"type": "burst", "particle": "elem_flame", "motion": "flame", "count": 14, "scaleCount": true, "spread": 0.2, "speedMin": 0.5, "speedMax": 1.5, "riseMin": 4, "riseMax": 7, "lifetime": 0.5, "lifetimeJitter": 0.35, "size": 0.56, "sizeJitter": 0.4, "scaleSize": true, "color": [1, 0.75, 0.2, 1], "altColor": [1, 0.5, 0.05, 1], "altChance": 0.5},
-      {"type": "burst", "particle": "elem_ember", "motion": "ember", "count": 28, "speedMin": 2, "speedMax": 6, "riseMin": 1.5, "riseMax": 4, "lifetime": 1.1, "lifetimeJitter": 0.4, "size": 0.07, "sizeJitter": 0.4, "color": [1, 0.6, 0.15, 1]},
-      {"type": "burst", "particle": "elem_smoke", "motion": "mist", "count": 8, "spread": 0.4, "speedMin": 0.5, "speedMax": 1.5, "riseMin": 0.8, "riseMax": 1.6, "lifetime": 1, "lifetimeJitter": 0.3, "size": 0.7, "sizeJitter": 0.35, "scaleSize": true, "randomRotate": true, "color": [0.14, 0.09, 0.07, 0.55]},
-      {"type": "ring", "speed": 3.5, "scaleSpeed": true, "count": 24, "lifetime": 0.3, "size": 0.14, "color": [1, 0.5, 0.05, 1]}
+      {"type": "fan", "count": 10, "columns": 5, "centerColumn": 2, "columnSpacing": 0.65, "riseBase": 3.2, "riseSteps": 3, "riseStep": 0.9, "lifetime": 0.5, "size": 0.162, "scaleSize": true, "color": "weapon", "altColor": [1, 0.55, 0.05, 1], "altEvery": 2, "altPhase": 1},
+      {"type": "burst", "particle": "elem_flame", "motion": "flame", "count": 31, "scaleCount": true, "spread": 0.35, "speedMin": 1.5, "speedMax": 4.5, "riseMin": 1.5, "riseMax": 4, "lifetime": 0.55, "lifetimeJitter": 0.35, "size": 0.63, "sizeJitter": 0.4, "scaleSize": true, "color": "weapon", "altColor": [1, 0.5, 0.05, 1], "altChance": 0.5},
+      {"type": "burst", "particle": "elem_flame", "motion": "flame", "count": 12, "scaleCount": true, "spread": 0.2, "speedMin": 0.5, "speedMax": 1.5, "riseMin": 4, "riseMax": 7, "lifetime": 0.5, "lifetimeJitter": 0.35, "size": 0.504, "sizeJitter": 0.4, "scaleSize": true, "color": [1, 0.75, 0.2, 1], "altColor": [1, 0.5, 0.05, 1], "altChance": 0.5},
+      {"type": "burst", "particle": "elem_ember", "motion": "ember", "count": 24, "speedMin": 2, "speedMax": 6, "riseMin": 1.5, "riseMax": 4, "lifetime": 1.1, "lifetimeJitter": 0.4, "size": 0.063, "sizeJitter": 0.4, "color": [1, 0.6, 0.15, 1]},
+      {"type": "burst", "particle": "elem_smoke", "motion": "mist", "count": 7, "spread": 0.4, "speedMin": 0.5, "speedMax": 1.5, "riseMin": 0.8, "riseMax": 1.6, "lifetime": 1, "lifetimeJitter": 0.3, "size": 0.63, "sizeJitter": 0.35, "scaleSize": true, "randomRotate": true, "color": [0.14, 0.09, 0.07, 0.55]},
+      {"type": "ring", "speed": 3.5, "scaleSpeed": true, "count": 20, "lifetime": 0.3, "size": 0.126, "color": [1, 0.5, 0.05, 1]}
     ],
     "aura": [
-      {"type": "burst", "particle": "elem_flame", "motion": "flame", "alongBlade": true, "count": 4, "spread": 0.06, "riseMin": 0.6, "riseMax": 1.6, "driftX": 0.5, "lifetime": 0.38, "lifetimeJitter": 0.3, "size": 0.45, "sizeJitter": 0.3, "color": "weapon", "altColor": [1, 0.5, 0.05, 1], "altChance": 0.5},
-      {"type": "burst", "particle": "elem_ember", "motion": "ember", "alongBlade": true, "chance": 0.6, "count": 1, "riseMin": 0.8, "riseMax": 2, "driftX": 0.8, "lifetime": 1, "lifetimeJitter": 0.4, "size": 0.06, "color": [1, 0.6, 0.15, 1]}
+      {"type": "burst", "particle": "elem_flame", "motion": "flame", "alongBlade": true, "count": 3, "spread": 0.06, "riseMin": 0.6, "riseMax": 1.6, "driftX": 0.5, "lifetime": 0.38, "lifetimeJitter": 0.3, "size": 0.405, "sizeJitter": 0.3, "color": "weapon", "altColor": [1, 0.5, 0.05, 1], "altChance": 0.5},
+      {"type": "burst", "particle": "elem_ember", "motion": "ember", "alongBlade": true, "chance": 0.54, "count": 1, "riseMin": 0.8, "riseMax": 2, "driftX": 0.8, "lifetime": 1, "lifetimeJitter": 0.4, "size": 0.054, "color": [1, 0.6, 0.15, 1]}
     ],
     "idle": [
-      {"type": "burst", "particle": "elem_flame", "motion": "flame", "alongBlade": true, "count": 2, "spread": 0.06, "riseMin": 0.6, "riseMax": 1.6, "driftX": 0.5, "lifetime": 0.4, "lifetimeJitter": 0.3, "size": 0.34, "sizeJitter": 0.3, "color": "weapon", "altColor": [1, 0.5, 0.05, 1], "altChance": 0.5},
-      {"type": "burst", "particle": "elem_ember", "motion": "ember", "alongBlade": true, "chance": 0.25, "count": 1, "riseMin": 0.8, "riseMax": 2, "driftX": 0.8, "lifetime": 1, "lifetimeJitter": 0.4, "size": 0.06, "color": [1, 0.6, 0.15, 1]},
-      {"type": "burst", "particle": "elem_smoke", "motion": "mist", "count": 1, "spread": 0.05, "speedMin": 0, "speedMax": 0, "riseMin": 0.8, "riseMax": 1.6, "lifetime": 1.2, "lifetimeJitter": 0.3, "size": 0.35, "sizeJitter": 0.35, "scaleSize": false, "randomRotate": true, "color": [0.14, 0.09, 0.07, 0.4], "alongBlade": true, "scaleSpeed": false, "chance": 0.05}
+      {"type": "burst", "particle": "elem_flame", "motion": "flame", "alongBlade": true, "count": 2, "spread": 0.06, "riseMin": 0.6, "riseMax": 1.6, "driftX": 0.5, "lifetime": 0.4, "lifetimeJitter": 0.3, "size": 0.306, "sizeJitter": 0.3, "color": "weapon", "altColor": [1, 0.5, 0.05, 1], "altChance": 0.5},
+      {"type": "burst", "particle": "elem_ember", "motion": "ember", "alongBlade": true, "chance": 0.225, "count": 1, "riseMin": 0.8, "riseMax": 2, "driftX": 0.8, "lifetime": 1, "lifetimeJitter": 0.4, "size": 0.054, "color": [1, 0.6, 0.15, 1]},
+      {"type": "burst", "particle": "elem_smoke", "motion": "mist", "count": 1, "spread": 0.05, "speedMin": 0, "speedMax": 0, "riseMin": 0.8, "riseMax": 1.6, "lifetime": 1.2, "lifetimeJitter": 0.3, "size": 0.315, "sizeJitter": 0.35, "scaleSize": false, "randomRotate": true, "color": [0.14, 0.09, 0.07, 0.4], "alongBlade": true, "scaleSpeed": false, "chance": 0.045}
     ]
   },
   "Lightning": {
@@ -59,8 +59,8 @@
     "status": {
       "duration": 2, "tickInterval": 0.7, "tickDamage": 0.15, "speedScale": 0.6, "emitInterval": 0.08,
       "layers": [
-        {"type": "burst", "particle": "elem_spark", "motion": "crackle", "count": 1, "spread": 0.4, "chance": 0.8, "speedMin": 0, "speedMax": 0.3, "riseMin": 0.2, "riseMax": 0.8, "lifetime": 0.18, "size": 0.2, "color": "weapon"},
-        {"type": "burst", "particle": "elem_spark", "motion": "shrink", "count": 1, "spread": 0.4, "chance": 0.5, "speedMin": 0, "speedMax": 0.3, "riseMin": 0.2, "riseMax": 0.8, "lifetime": 0.2, "size": 0.05, "color": [1, 1, 0.85, 1]}
+        {"type": "burst", "particle": "elem_spark", "motion": "crackle", "count": 1, "spread": 0.4, "chance": 0.72, "speedMin": 0, "speedMax": 0.3, "riseMin": 0.2, "riseMax": 0.8, "lifetime": 0.18, "size": 0.18, "color": "weapon"},
+        {"type": "burst", "particle": "elem_spark", "motion": "shrink", "count": 1, "spread": 0.4, "chance": 0.45, "speedMin": 0, "speedMax": 0.3, "riseMin": 0.2, "riseMax": 0.8, "lifetime": 0.2, "size": 0.045, "color": [1, 1, 0.85, 1]}
       ]
     },
     "acquire": [
@@ -71,19 +71,19 @@
     "hit": [
       {"type": "ellipse", "facingSpeed": 2, "lifetime": 0.16, "length": 3.4, "thickness": 0.12, "scaleLength": true, "color": "weapon"},
       {"type": "ellipse", "riseSpeed": 1, "lifetime": 0.12, "length": 3, "thickness": 0.14, "scaleLength": true, "vertical": true, "color": [1, 1, 0.85, 1]},
-      {"type": "ring", "speed": 4.5, "count": 8, "lifetime": 0.14, "size": 0.1, "color": "weapon"},
-      {"type": "burst", "particle": "elem_spark", "motion": "crackle", "count": 18, "spread": 0.9, "scaleSpeed": true, "lifetime": 0.35, "lifetimeJitter": 0.4, "size": 0.45, "sizeJitter": 0.4, "scaleSize": true, "color": "weapon"},
-      {"type": "burst", "particle": "elem_spark", "motion": "shrink", "count": 22, "speedMin": 6, "speedMax": 12, "lifetime": 0.22, "lifetimeJitter": 0.4, "size": 0.08, "sizeJitter": 0.3, "color": [1, 1, 0.85, 1], "altColor": [1, 0.9, 0.2, 1], "altChance": 0.4},
-      {"type": "ring", "speed": 2.2, "scaleSpeed": true, "count": 14, "lifetime": 0.2, "size": 0.25, "color": [1, 1, 0.9, 0.8]}
+      {"type": "ring", "speed": 4.5, "count": 7, "lifetime": 0.14, "size": 0.09, "color": "weapon"},
+      {"type": "burst", "particle": "elem_spark", "motion": "crackle", "count": 15, "spread": 0.9, "scaleSpeed": true, "lifetime": 0.35, "lifetimeJitter": 0.4, "size": 0.405, "sizeJitter": 0.4, "scaleSize": true, "color": "weapon"},
+      {"type": "burst", "particle": "elem_spark", "motion": "shrink", "count": 19, "speedMin": 6, "speedMax": 12, "lifetime": 0.22, "lifetimeJitter": 0.4, "size": 0.072, "sizeJitter": 0.3, "color": [1, 1, 0.85, 1], "altColor": [1, 0.9, 0.2, 1], "altChance": 0.4},
+      {"type": "ring", "speed": 2.2, "scaleSpeed": true, "count": 12, "lifetime": 0.2, "size": 0.225, "color": [1, 1, 0.9, 0.8]}
     ],
     "aura": [
-      {"type": "ellipse", "chance": 0.5, "lifetime": 0.06, "length": 0.6, "thickness": 0.05, "color": "weapon"},
-      {"type": "burst", "particle": "elem_spark", "motion": "crackle", "count": 2, "spread": 0.08, "scaleSpeed": false, "lifetime": 0.12, "lifetimeJitter": 0.4, "size": 0.2, "sizeJitter": 0.4, "scaleSize": false, "color": "weapon", "alongBlade": true},
-      {"type": "burst", "particle": "elem_spark", "motion": "shrink", "count": 1, "speedMin": 2, "speedMax": 4, "lifetime": 0.22, "lifetimeJitter": 0.4, "size": 0.05, "sizeJitter": 0.3, "color": [1, 1, 0.85, 1], "altColor": [1, 0.9, 0.2, 1], "altChance": 0.4, "alongBlade": true, "scaleSpeed": false, "scaleSize": false, "chance": 0.4}
+      {"type": "ellipse", "chance": 0.45, "lifetime": 0.06, "length": 0.6, "thickness": 0.05, "color": "weapon"},
+      {"type": "burst", "particle": "elem_spark", "motion": "crackle", "count": 2, "spread": 0.08, "scaleSpeed": false, "lifetime": 0.12, "lifetimeJitter": 0.4, "size": 0.18, "sizeJitter": 0.4, "scaleSize": false, "color": "weapon", "alongBlade": true},
+      {"type": "burst", "particle": "elem_spark", "motion": "shrink", "count": 1, "speedMin": 2, "speedMax": 4, "lifetime": 0.22, "lifetimeJitter": 0.4, "size": 0.045, "sizeJitter": 0.3, "color": [1, 1, 0.85, 1], "altColor": [1, 0.9, 0.2, 1], "altChance": 0.4, "alongBlade": true, "scaleSpeed": false, "scaleSize": false, "chance": 0.36}
     ],
     "idle": [
-      {"type": "burst", "particle": "elem_spark", "motion": "crackle", "count": 1, "spread": 0.06, "scaleSpeed": false, "lifetime": 0.1, "lifetimeJitter": 0.4, "size": 0.15, "sizeJitter": 0.4, "scaleSize": false, "color": "weapon", "alongBlade": true, "chance": 0.5},
-      {"type": "burst", "particle": "elem_spark", "motion": "shrink", "count": 1, "speedMin": 2, "speedMax": 4, "lifetime": 0.22, "lifetimeJitter": 0.4, "size": 0.04, "sizeJitter": 0.3, "color": [1, 1, 0.85, 1], "altColor": [1, 0.9, 0.2, 1], "altChance": 0.4, "alongBlade": true, "scaleSpeed": false, "scaleSize": false, "chance": 0.12}
+      {"type": "burst", "particle": "elem_spark", "motion": "crackle", "count": 1, "spread": 0.06, "scaleSpeed": false, "lifetime": 0.1, "lifetimeJitter": 0.4, "size": 0.135, "sizeJitter": 0.4, "scaleSize": false, "color": "weapon", "alongBlade": true, "chance": 0.45},
+      {"type": "burst", "particle": "elem_spark", "motion": "shrink", "count": 1, "speedMin": 2, "speedMax": 4, "lifetime": 0.22, "lifetimeJitter": 0.4, "size": 0.036, "sizeJitter": 0.3, "color": [1, 1, 0.85, 1], "altColor": [1, 0.9, 0.2, 1], "altChance": 0.4, "alongBlade": true, "scaleSpeed": false, "scaleSize": false, "chance": 0.108}
     ]
   },
   "Ice": {
@@ -91,8 +91,8 @@
     "status": {
       "duration": 2.5, "tickInterval": 0, "tickDamage": 0, "speedScale": 0.4, "emitInterval": 0.1,
       "layers": [
-        {"type": "burst", "particle": "elem_spark", "motion": "mist", "count": 1, "spread": 0.4, "chance": 0.8, "speedMin": 0, "speedMax": 0.3, "riseMin": 0.2, "riseMax": 0.8, "lifetime": 0.7, "size": 0.25, "color": [0.75, 0.95, 1, 0.35]},
-        {"type": "burst", "particle": "elem_ember", "motion": "flicker", "count": 1, "spread": 0.4, "chance": 0.5, "speedMin": 0, "speedMax": 0.3, "riseMin": 0.2, "riseMax": 0.8, "lifetime": 0.5, "size": 0.06, "color": [1, 1, 1, 1]}
+        {"type": "burst", "particle": "elem_spark", "motion": "mist", "count": 1, "spread": 0.4, "chance": 0.72, "speedMin": 0, "speedMax": 0.3, "riseMin": 0.2, "riseMax": 0.8, "lifetime": 0.7, "size": 0.225, "color": [0.75, 0.95, 1, 0.35]},
+        {"type": "burst", "particle": "elem_ember", "motion": "flicker", "count": 1, "spread": 0.4, "chance": 0.45, "speedMin": 0, "speedMax": 0.3, "riseMin": 0.2, "riseMax": 0.8, "lifetime": 0.5, "size": 0.054, "color": [1, 1, 1, 1]}
       ]
     },
     "acquire": [
@@ -101,20 +101,20 @@
       {"type": "ring", "speed": 2.5, "count": 24, "lifetime": 0.4, "size": 0.12, "color": "weapon"}
     ],
     "hit": [
-      {"type": "fan", "count": 12, "columns": 7, "centerColumn": 3, "columnSpacing": 0.75, "riseBase": 2, "riseSteps": 4, "riseStep": 0.8, "lifetime": 0.65, "size": 0.14, "scaleSize": true, "color": "weapon"},
-      {"type": "ring", "speed": 1.3, "count": 20, "lifetime": 0.5, "size": 0.12, "color": [0.65, 0.95, 1, 0.75]},
-      {"type": "burst", "particle": "elem_spark", "motion": "mist", "count": 10, "spread": 0.5, "speedMin": 1, "speedMax": 2.5, "riseMin": -0.3, "riseMax": 0.3, "lifetime": 0.9, "lifetimeJitter": 0.3, "size": 0.55, "sizeJitter": 0.3, "scaleSize": true, "color": [0.75, 0.95, 1, 0.35]},
-      {"type": "burst", "particle": "hit_spark", "motion": "gravity", "count": 16, "speedMin": 3, "speedMax": 6, "riseMin": 2, "riseMax": 4, "lifetime": 0.7, "lifetimeJitter": 0.3, "size": 0.12, "sizeJitter": 0.4, "scaleSize": true, "randomRotate": true, "color": [0.85, 0.98, 1, 1], "altColor": [0.3, 0.85, 1, 1], "altChance": 0.5},
-      {"type": "burst", "particle": "elem_ember", "motion": "flicker", "count": 14, "spread": 0.8, "scaleSpeed": true, "riseMin": -0.2, "riseMax": 0.2, "lifetime": 0.6, "lifetimeJitter": 0.4, "size": 0.1, "color": [1, 1, 1, 1]}
+      {"type": "fan", "count": 12, "columns": 7, "centerColumn": 3, "columnSpacing": 0.75, "riseBase": 2, "riseSteps": 4, "riseStep": 0.8, "lifetime": 0.65, "size": 0.126, "scaleSize": true, "color": "weapon"},
+      {"type": "ring", "speed": 1.3, "count": 17, "lifetime": 0.5, "size": 0.108, "color": [0.65, 0.95, 1, 0.75]},
+      {"type": "burst", "particle": "elem_spark", "motion": "mist", "count": 9, "spread": 0.5, "speedMin": 1, "speedMax": 2.5, "riseMin": -0.3, "riseMax": 0.3, "lifetime": 0.9, "lifetimeJitter": 0.3, "size": 0.495, "sizeJitter": 0.3, "scaleSize": true, "color": [0.75, 0.95, 1, 0.35]},
+      {"type": "burst", "particle": "hit_spark", "motion": "gravity", "count": 14, "speedMin": 3, "speedMax": 6, "riseMin": 2, "riseMax": 4, "lifetime": 0.7, "lifetimeJitter": 0.3, "size": 0.108, "sizeJitter": 0.4, "scaleSize": true, "randomRotate": true, "color": [0.85, 0.98, 1, 1], "altColor": [0.3, 0.85, 1, 1], "altChance": 0.5},
+      {"type": "burst", "particle": "elem_ember", "motion": "flicker", "count": 12, "spread": 0.8, "scaleSpeed": true, "riseMin": -0.2, "riseMax": 0.2, "lifetime": 0.6, "lifetimeJitter": 0.4, "size": 0.09, "color": [1, 1, 1, 1]}
     ],
     "aura": [
-      {"type": "mote", "count": 1, "driftX": 0.3, "riseMin": -0.5, "lifetime": 0.5, "size": 0.09, "color": [0.8, 0.97, 1, 0.85]},
-      {"type": "burst", "particle": "elem_spark", "motion": "mist", "count": 1, "spread": 0.05, "speedMin": 0, "speedMax": 0, "riseMin": -0.4, "riseMax": -0.1, "lifetime": 0.6, "lifetimeJitter": 0.3, "size": 0.25, "sizeJitter": 0.3, "scaleSize": false, "color": [0.75, 0.95, 1, 0.35], "alongBlade": true, "scaleSpeed": false, "chance": 0.4},
-      {"type": "burst", "particle": "elem_ember", "motion": "flicker", "count": 1, "spread": 0.05, "scaleSpeed": false, "riseMin": -0.2, "riseMax": 0.2, "lifetime": 0.4, "lifetimeJitter": 0.4, "size": 0.07, "color": [1, 1, 1, 1], "alongBlade": true, "scaleSize": false, "chance": 0.5}
+      {"type": "mote", "count": 1, "driftX": 0.3, "riseMin": -0.5, "lifetime": 0.5, "size": 0.081, "color": [0.8, 0.97, 1, 0.85]},
+      {"type": "burst", "particle": "elem_spark", "motion": "mist", "count": 1, "spread": 0.05, "speedMin": 0, "speedMax": 0, "riseMin": -0.4, "riseMax": -0.1, "lifetime": 0.6, "lifetimeJitter": 0.3, "size": 0.225, "sizeJitter": 0.3, "scaleSize": false, "color": [0.75, 0.95, 1, 0.35], "alongBlade": true, "scaleSpeed": false, "chance": 0.36},
+      {"type": "burst", "particle": "elem_ember", "motion": "flicker", "count": 1, "spread": 0.05, "scaleSpeed": false, "riseMin": -0.2, "riseMax": 0.2, "lifetime": 0.4, "lifetimeJitter": 0.4, "size": 0.063, "color": [1, 1, 1, 1], "alongBlade": true, "scaleSize": false, "chance": 0.45}
     ],
     "idle": [
-      {"type": "burst", "particle": "elem_spark", "motion": "mist", "count": 1, "spread": 0.04, "speedMin": 0, "speedMax": 0, "riseMin": -0.4, "riseMax": -0.2, "lifetime": 0.8, "lifetimeJitter": 0.3, "size": 0.22, "sizeJitter": 0.3, "scaleSize": false, "color": [0.75, 0.95, 1, 0.35], "alongBlade": true, "scaleSpeed": false, "chance": 0.25},
-      {"type": "burst", "particle": "elem_ember", "motion": "flicker", "count": 1, "spread": 0.04, "scaleSpeed": false, "riseMin": -0.2, "riseMax": 0.2, "lifetime": 0.5, "lifetimeJitter": 0.4, "size": 0.06, "color": [1, 1, 1, 1], "alongBlade": true, "scaleSize": false, "chance": 0.2}
+      {"type": "burst", "particle": "elem_spark", "motion": "mist", "count": 1, "spread": 0.04, "speedMin": 0, "speedMax": 0, "riseMin": -0.4, "riseMax": -0.2, "lifetime": 0.8, "lifetimeJitter": 0.3, "size": 0.198, "sizeJitter": 0.3, "scaleSize": false, "color": [0.75, 0.95, 1, 0.35], "alongBlade": true, "scaleSpeed": false, "chance": 0.225},
+      {"type": "burst", "particle": "elem_ember", "motion": "flicker", "count": 1, "spread": 0.04, "scaleSpeed": false, "riseMin": -0.2, "riseMax": 0.2, "lifetime": 0.5, "lifetimeJitter": 0.4, "size": 0.054, "color": [1, 1, 1, 1], "alongBlade": true, "scaleSize": false, "chance": 0.18}
     ]
   },
   "Gravity": {
@@ -122,8 +122,8 @@
     "status": {
       "duration": 2.5, "tickInterval": 0, "tickDamage": 0, "speedScale": 0.5, "emitInterval": 0.1,
       "layers": [
-        {"type": "burst", "particle": "elem_ember", "motion": "spiral", "count": 1, "spread": 0.4, "chance": 0.8, "speedMin": 0, "speedMax": 0.8, "riseMin": 0.2, "riseMax": 0.8, "lifetime": 0.5, "size": 0.09, "color": "weapon"},
-        {"type": "burst", "particle": "elem_smoke", "motion": "mist", "count": 1, "spread": 0.4, "chance": 0.5, "speedMin": 0, "speedMax": 0.3, "riseMin": 0.2, "riseMax": 0.8, "lifetime": 0.9, "size": 0.3, "color": [0.1, 0.02, 0.2, 0.4]}
+        {"type": "burst", "particle": "elem_ember", "motion": "spiral", "count": 1, "spread": 0.4, "chance": 0.72, "speedMin": 0, "speedMax": 0.8, "riseMin": 0.2, "riseMax": 0.8, "lifetime": 0.5, "size": 0.081, "color": "weapon"},
+        {"type": "burst", "particle": "elem_smoke", "motion": "mist", "count": 1, "spread": 0.4, "chance": 0.45, "speedMin": 0, "speedMax": 0.3, "riseMin": 0.2, "riseMax": 0.8, "lifetime": 0.9, "size": 0.27, "color": [0.1, 0.02, 0.2, 0.4]}
       ]
     },
     "acquire": [
@@ -132,20 +132,20 @@
       {"type": "ring", "speed": 2.5, "count": 24, "lifetime": 0.4, "size": 0.12, "color": "weapon"}
     ],
     "hit": [
-      {"type": "ring", "speed": 0.8, "count": 24, "lifetime": 0.55, "size": 0.28, "scaleSize": true, "color": "weapon"},
-      {"type": "ring", "speed": 2, "count": 18, "lifetime": 0.38, "size": 0.18, "color": [0.35, 0.08, 0.6, 0.8]},
-      {"type": "mote", "count": 1, "lifetime": 0.35, "size": 0.8, "scaleSize": true, "flicker": true, "color": [0.95, 0.7, 1, 1]},
-      {"type": "burst", "particle": "elem_ember", "motion": "spiral", "count": 24, "speedMin": 2, "speedMax": 3.5, "scaleSpeed": true, "lifetime": 0.6, "lifetimeJitter": 0.3, "size": 0.15, "sizeJitter": 0.3, "scaleSize": true, "color": "weapon", "altColor": [0.95, 0.75, 1, 1], "altChance": 0.3},
-      {"type": "pull", "particle": "elem_ember", "count": 18, "radius": 1.8, "pullSpeed": 2.5, "lifetime": 0.4, "size": 0.12, "color": [0.9, 0.7, 1, 1]},
-      {"type": "burst", "particle": "elem_smoke", "motion": "mist", "count": 6, "spread": 0.4, "speedMin": 0.5, "speedMax": 1.5, "riseMin": 0, "riseMax": 0.4, "lifetime": 1, "lifetimeJitter": 0.3, "size": 0.9, "sizeJitter": 0.35, "scaleSize": true, "randomRotate": true, "color": [0.1, 0.02, 0.2, 0.6]}
+      {"type": "ring", "speed": 0.8, "count": 20, "lifetime": 0.55, "size": 0.252, "scaleSize": true, "color": "weapon"},
+      {"type": "ring", "speed": 2, "count": 15, "lifetime": 0.38, "size": 0.162, "color": [0.35, 0.08, 0.6, 0.8]},
+      {"type": "mote", "count": 1, "lifetime": 0.35, "size": 0.72, "scaleSize": true, "flicker": true, "color": [0.95, 0.7, 1, 1]},
+      {"type": "burst", "particle": "elem_ember", "motion": "spiral", "count": 20, "speedMin": 2, "speedMax": 3.5, "scaleSpeed": true, "lifetime": 0.6, "lifetimeJitter": 0.3, "size": 0.135, "sizeJitter": 0.3, "scaleSize": true, "color": "weapon", "altColor": [0.95, 0.75, 1, 1], "altChance": 0.3},
+      {"type": "pull", "particle": "elem_ember", "count": 15, "radius": 1.8, "pullSpeed": 2.5, "lifetime": 0.4, "size": 0.108, "color": [0.9, 0.7, 1, 1]},
+      {"type": "burst", "particle": "elem_smoke", "motion": "mist", "count": 5, "spread": 0.4, "speedMin": 0.5, "speedMax": 1.5, "riseMin": 0, "riseMax": 0.4, "lifetime": 1, "lifetimeJitter": 0.3, "size": 0.81, "sizeJitter": 0.35, "scaleSize": true, "randomRotate": true, "color": [0.1, 0.02, 0.2, 0.6]}
     ],
     "aura": [
-      {"type": "pull", "count": 1, "radius": 0.8, "pullSpeed": 2, "lifetime": 0.3, "size": 0.12, "color": "weapon"},
-      {"type": "burst", "particle": "elem_ember", "motion": "spiral", "count": 2, "speedMin": 0.8, "speedMax": 1.2, "scaleSpeed": false, "lifetime": 0.4, "lifetimeJitter": 0.3, "size": 0.1, "sizeJitter": 0.3, "scaleSize": false, "color": "weapon", "altColor": [0.95, 0.75, 1, 1], "altChance": 0.3, "alongBlade": true}
+      {"type": "pull", "count": 1, "radius": 0.8, "pullSpeed": 2, "lifetime": 0.3, "size": 0.108, "color": "weapon"},
+      {"type": "burst", "particle": "elem_ember", "motion": "spiral", "count": 2, "speedMin": 0.8, "speedMax": 1.2, "scaleSpeed": false, "lifetime": 0.4, "lifetimeJitter": 0.3, "size": 0.09, "sizeJitter": 0.3, "scaleSize": false, "color": "weapon", "altColor": [0.95, 0.75, 1, 1], "altChance": 0.3, "alongBlade": true}
     ],
     "idle": [
-      {"type": "burst", "particle": "elem_ember", "motion": "spiral", "count": 1, "speedMin": 0.5, "speedMax": 0.8, "scaleSpeed": false, "lifetime": 0.45, "lifetimeJitter": 0.3, "size": 0.08, "sizeJitter": 0.3, "scaleSize": false, "color": "weapon", "altColor": [0.95, 0.75, 1, 1], "altChance": 0.3, "alongBlade": true, "chance": 0.5},
-      {"type": "burst", "particle": "elem_smoke", "motion": "mist", "count": 1, "spread": 0.05, "speedMin": 0, "speedMax": 0, "riseMin": -0.1, "riseMax": 0.1, "lifetime": 1, "lifetimeJitter": 0.3, "size": 0.3, "sizeJitter": 0.35, "scaleSize": false, "randomRotate": true, "color": [0.1, 0.02, 0.2, 0.4], "alongBlade": true, "scaleSpeed": false, "chance": 0.08}
+      {"type": "burst", "particle": "elem_ember", "motion": "spiral", "count": 1, "speedMin": 0.5, "speedMax": 0.8, "scaleSpeed": false, "lifetime": 0.45, "lifetimeJitter": 0.3, "size": 0.072, "sizeJitter": 0.3, "scaleSize": false, "color": "weapon", "altColor": [0.95, 0.75, 1, 1], "altChance": 0.3, "alongBlade": true, "chance": 0.45},
+      {"type": "burst", "particle": "elem_smoke", "motion": "mist", "count": 1, "spread": 0.05, "speedMin": 0, "speedMax": 0, "riseMin": -0.1, "riseMax": 0.1, "lifetime": 1, "lifetimeJitter": 0.3, "size": 0.27, "sizeJitter": 0.35, "scaleSize": false, "randomRotate": true, "color": [0.1, 0.02, 0.2, 0.4], "alongBlade": true, "scaleSpeed": false, "chance": 0.072}
     ]
   },
   "Blood": {
@@ -153,7 +153,7 @@
     "status": {
       "duration": 4, "tickInterval": 0.8, "tickDamage": 0.25, "speedScale": 1, "emitInterval": 0.1,
       "layers": [
-        {"type": "burst", "particle": "hit_spark", "motion": "gravity", "count": 1, "spread": 0.4, "chance": 0.8, "speedMin": 0, "speedMax": 0.3, "riseMin": -0.5, "riseMax": 0, "lifetime": 0.7, "size": 0.08, "color": [0.6, 0, 0.05, 1]}
+        {"type": "burst", "particle": "hit_spark", "motion": "gravity", "count": 1, "spread": 0.4, "chance": 0.72, "speedMin": 0, "speedMax": 0.3, "riseMin": -0.5, "riseMax": 0, "lifetime": 0.7, "size": 0.072, "color": [0.6, 0, 0.05, 1]}
       ]
     },
     "acquire": [
@@ -163,18 +163,18 @@
     ],
     "hit": [
       {"type": "slash", "angleRight": 0.45, "angleLeft": 2.69, "radius": 1.8, "scaleRadius": true, "color": "weapon"},
-      {"type": "fan", "count": 9, "facingSpeed": -0.5, "facingSpeedStep": -0.25, "riseBase": 1, "riseSteps": 4, "riseStep": 0.7, "lifetime": 0.55, "size": 0.2, "color": "weapon"},
-      {"type": "burst", "particle": "elem_flame", "motion": "flame", "count": 24, "scaleCount": true, "spread": 0.35, "speedMin": 1.5, "speedMax": 4.5, "riseMin": 1.5, "riseMax": 4, "lifetime": 0.55, "lifetimeJitter": 0.35, "size": 0.7, "sizeJitter": 0.4, "scaleSize": true, "color": "weapon", "altColor": [0.35, 0, 0.05, 1], "altChance": 0.5},
-      {"type": "burst", "particle": "hit_spark", "motion": "gravity", "count": 22, "speedMin": 2, "speedMax": 5, "riseMin": 1, "riseMax": 4, "lifetime": 0.7, "lifetimeJitter": 0.3, "size": 0.1, "sizeJitter": 0.4, "scaleSize": true, "color": [0.6, 0, 0.05, 1]},
-      {"type": "burst", "particle": "elem_smoke", "motion": "mist", "count": 6, "spread": 0.4, "speedMin": 0.5, "speedMax": 1.5, "riseMin": 0.8, "riseMax": 1.6, "lifetime": 1, "lifetimeJitter": 0.3, "size": 0.7, "sizeJitter": 0.35, "scaleSize": true, "randomRotate": true, "color": [0.25, 0, 0.03, 0.6]}
+      {"type": "fan", "count": 9, "facingSpeed": -0.5, "facingSpeedStep": -0.25, "riseBase": 1, "riseSteps": 4, "riseStep": 0.7, "lifetime": 0.55, "size": 0.18, "color": "weapon"},
+      {"type": "burst", "particle": "elem_flame", "motion": "flame", "count": 20, "scaleCount": true, "spread": 0.35, "speedMin": 1.5, "speedMax": 4.5, "riseMin": 1.5, "riseMax": 4, "lifetime": 0.55, "lifetimeJitter": 0.35, "size": 0.63, "sizeJitter": 0.4, "scaleSize": true, "color": "weapon", "altColor": [0.35, 0, 0.05, 1], "altChance": 0.5},
+      {"type": "burst", "particle": "hit_spark", "motion": "gravity", "count": 19, "speedMin": 2, "speedMax": 5, "riseMin": 1, "riseMax": 4, "lifetime": 0.7, "lifetimeJitter": 0.3, "size": 0.09, "sizeJitter": 0.4, "scaleSize": true, "color": [0.6, 0, 0.05, 1]},
+      {"type": "burst", "particle": "elem_smoke", "motion": "mist", "count": 5, "spread": 0.4, "speedMin": 0.5, "speedMax": 1.5, "riseMin": 0.8, "riseMax": 1.6, "lifetime": 1, "lifetimeJitter": 0.3, "size": 0.63, "sizeJitter": 0.35, "scaleSize": true, "randomRotate": true, "color": [0.25, 0, 0.03, 0.6]}
     ],
     "aura": [
-      {"type": "burst", "particle": "elem_flame", "motion": "flame", "alongBlade": true, "count": 3, "spread": 0.06, "riseMin": 0.6, "riseMax": 1.6, "driftX": 0.5, "lifetime": 0.38, "lifetimeJitter": 0.3, "size": 0.39, "sizeJitter": 0.3, "color": "weapon", "altColor": [0.35, 0, 0.05, 1], "altChance": 0.5},
-      {"type": "burst", "particle": "hit_spark", "motion": "gravity", "count": 1, "speedMin": 0, "speedMax": 0.5, "riseMin": 0, "riseMax": 0, "lifetime": 0.7, "lifetimeJitter": 0.3, "size": 0.07, "sizeJitter": 0.4, "scaleSize": false, "color": [0.6, 0, 0.05, 1], "alongBlade": true, "scaleSpeed": false, "chance": 0.4}
+      {"type": "burst", "particle": "elem_flame", "motion": "flame", "alongBlade": true, "count": 3, "spread": 0.06, "riseMin": 0.6, "riseMax": 1.6, "driftX": 0.5, "lifetime": 0.38, "lifetimeJitter": 0.3, "size": 0.351, "sizeJitter": 0.3, "color": "weapon", "altColor": [0.35, 0, 0.05, 1], "altChance": 0.5},
+      {"type": "burst", "particle": "hit_spark", "motion": "gravity", "count": 1, "speedMin": 0, "speedMax": 0.5, "riseMin": 0, "riseMax": 0, "lifetime": 0.7, "lifetimeJitter": 0.3, "size": 0.063, "sizeJitter": 0.4, "scaleSize": false, "color": [0.6, 0, 0.05, 1], "alongBlade": true, "scaleSpeed": false, "chance": 0.36}
     ],
     "idle": [
-      {"type": "burst", "particle": "elem_flame", "motion": "flame", "alongBlade": true, "count": 1, "spread": 0.06, "riseMin": 0.6, "riseMax": 1.6, "driftX": 0.5, "lifetime": 0.35, "lifetimeJitter": 0.3, "size": 0.31, "sizeJitter": 0.3, "color": "weapon", "altColor": [0.35, 0, 0.05, 1], "altChance": 0.5},
-      {"type": "burst", "particle": "hit_spark", "motion": "gravity", "count": 1, "speedMin": 0, "speedMax": 0.2, "riseMin": 0, "riseMax": 0, "lifetime": 0.7, "lifetimeJitter": 0.3, "size": 0.06, "sizeJitter": 0.4, "scaleSize": false, "color": [0.6, 0, 0.05, 1], "alongBlade": true, "scaleSpeed": false, "chance": 0.15}
+      {"type": "burst", "particle": "elem_flame", "motion": "flame", "alongBlade": true, "count": 1, "spread": 0.06, "riseMin": 0.6, "riseMax": 1.6, "driftX": 0.5, "lifetime": 0.35, "lifetimeJitter": 0.3, "size": 0.279, "sizeJitter": 0.3, "color": "weapon", "altColor": [0.35, 0, 0.05, 1], "altChance": 0.5},
+      {"type": "burst", "particle": "hit_spark", "motion": "gravity", "count": 1, "speedMin": 0, "speedMax": 0.2, "riseMin": 0, "riseMax": 0, "lifetime": 0.7, "lifetimeJitter": 0.3, "size": 0.054, "sizeJitter": 0.4, "scaleSize": false, "color": [0.6, 0, 0.05, 1], "alongBlade": true, "scaleSpeed": false, "chance": 0.135}
     ]
   },
   "Void": {
@@ -182,8 +182,8 @@
     "status": {
       "duration": 3, "tickInterval": 0.6, "tickDamage": 0.2, "speedScale": 0.85, "emitInterval": 0.09,
       "layers": [
-        {"type": "burst", "particle": "elem_flame", "motion": "flame", "count": 1, "spread": 0.4, "chance": 0.8, "speedMin": 0, "speedMax": 0.3, "riseMin": 0.2, "riseMax": 0.8, "lifetime": 0.5, "size": 0.3, "color": [0.42, 0.18, 0.95, 1]},
-        {"type": "burst", "particle": "elem_ember", "motion": "ember", "count": 1, "spread": 0.4, "chance": 0.5, "speedMin": 0, "speedMax": 0.3, "riseMin": 0.2, "riseMax": 0.8, "lifetime": 0.8, "size": 0.06, "color": [0.85, 0.6, 1, 1]}
+        {"type": "burst", "particle": "elem_flame", "motion": "flame", "count": 1, "spread": 0.4, "chance": 0.72, "speedMin": 0, "speedMax": 0.3, "riseMin": 0.2, "riseMax": 0.8, "lifetime": 0.5, "size": 0.27, "color": [0.42, 0.18, 0.95, 1]},
+        {"type": "burst", "particle": "elem_ember", "motion": "ember", "count": 1, "spread": 0.4, "chance": 0.45, "speedMin": 0, "speedMax": 0.3, "riseMin": 0.2, "riseMax": 0.8, "lifetime": 0.8, "size": 0.054, "color": [0.85, 0.6, 1, 1]}
       ]
     },
     "acquire": [
@@ -192,20 +192,20 @@
       {"type": "ring", "speed": 2.5, "count": 24, "lifetime": 0.4, "size": 0.12, "color": "weapon"}
     ],
     "hit": [
-      {"type": "ring", "speed": 1.4, "count": 28, "lifetime": 0.65, "size": 0.2, "scaleSize": true, "color": "weapon"},
-      {"type": "ring", "speed": 3, "count": 16, "lifetime": 0.3, "size": 0.15, "color": [0.12, 0.02, 0.24, 0.9]},
-      {"type": "mote", "count": 7, "gridColumnsX": 3, "gridCenterX": 1, "gridSpeedX": 1.4, "gridColumnsY": 4, "gridCenterY": 1, "gridSpeedY": 1.1, "lifetime": 0.45, "size": 0.2, "flicker": true, "color": "weapon"},
-      {"type": "burst", "particle": "elem_flame", "motion": "flame", "count": 30, "scaleCount": true, "spread": 0.35, "speedMin": 1.5, "speedMax": 4.5, "riseMin": 2.5, "riseMax": 5, "lifetime": 0.55, "lifetimeJitter": 0.35, "size": 0.7, "sizeJitter": 0.4, "scaleSize": true, "color": "weapon", "altColor": [0.85, 0.6, 1, 1], "altChance": 0.5},
-      {"type": "burst", "particle": "elem_ember", "motion": "spiral", "count": 16, "speedMin": 2, "speedMax": 3.5, "scaleSpeed": true, "lifetime": 0.6, "lifetimeJitter": 0.3, "size": 0.15, "sizeJitter": 0.3, "scaleSize": true, "color": [0.85, 0.6, 1, 1], "altColor": [0.42, 0.18, 0.95, 1], "altChance": 0.3},
-      {"type": "burst", "particle": "elem_smoke", "motion": "mist", "count": 7, "spread": 0.4, "speedMin": 0.5, "speedMax": 1.5, "riseMin": 0.8, "riseMax": 1.6, "lifetime": 1, "lifetimeJitter": 0.3, "size": 0.7, "sizeJitter": 0.35, "scaleSize": true, "randomRotate": true, "color": [0.08, 0, 0.15, 0.7]}
+      {"type": "ring", "speed": 1.4, "count": 24, "lifetime": 0.65, "size": 0.18, "scaleSize": true, "color": "weapon"},
+      {"type": "ring", "speed": 3, "count": 14, "lifetime": 0.3, "size": 0.135, "color": [0.12, 0.02, 0.24, 0.9]},
+      {"type": "mote", "count": 6, "gridColumnsX": 3, "gridCenterX": 1, "gridSpeedX": 1.4, "gridColumnsY": 4, "gridCenterY": 1, "gridSpeedY": 1.1, "lifetime": 0.45, "size": 0.18, "flicker": true, "color": "weapon"},
+      {"type": "burst", "particle": "elem_flame", "motion": "flame", "count": 26, "scaleCount": true, "spread": 0.35, "speedMin": 1.5, "speedMax": 4.5, "riseMin": 2.5, "riseMax": 5, "lifetime": 0.55, "lifetimeJitter": 0.35, "size": 0.63, "sizeJitter": 0.4, "scaleSize": true, "color": "weapon", "altColor": [0.85, 0.6, 1, 1], "altChance": 0.5},
+      {"type": "burst", "particle": "elem_ember", "motion": "spiral", "count": 14, "speedMin": 2, "speedMax": 3.5, "scaleSpeed": true, "lifetime": 0.6, "lifetimeJitter": 0.3, "size": 0.135, "sizeJitter": 0.3, "scaleSize": true, "color": [0.85, 0.6, 1, 1], "altColor": [0.42, 0.18, 0.95, 1], "altChance": 0.3},
+      {"type": "burst", "particle": "elem_smoke", "motion": "mist", "count": 6, "spread": 0.4, "speedMin": 0.5, "speedMax": 1.5, "riseMin": 0.8, "riseMax": 1.6, "lifetime": 1, "lifetimeJitter": 0.3, "size": 0.63, "sizeJitter": 0.35, "scaleSize": true, "randomRotate": true, "color": [0.08, 0, 0.15, 0.7]}
     ],
     "aura": [
-      {"type": "burst", "particle": "elem_flame", "motion": "flame", "alongBlade": true, "count": 3, "spread": 0.06, "riseMin": 0.6, "riseMax": 1.6, "driftX": 0.5, "lifetime": 0.38, "lifetimeJitter": 0.3, "size": 0.42, "sizeJitter": 0.3, "color": "weapon", "altColor": [0.12, 0.02, 0.24, 1], "altChance": 0.5},
-      {"type": "burst", "particle": "elem_ember", "motion": "ember", "alongBlade": true, "chance": 0.4, "count": 1, "riseMin": 0.8, "riseMax": 2, "driftX": 0.8, "lifetime": 1, "lifetimeJitter": 0.4, "size": 0.06, "color": [0.85, 0.6, 1, 1]}
+      {"type": "burst", "particle": "elem_flame", "motion": "flame", "alongBlade": true, "count": 3, "spread": 0.06, "riseMin": 0.6, "riseMax": 1.6, "driftX": 0.5, "lifetime": 0.38, "lifetimeJitter": 0.3, "size": 0.378, "sizeJitter": 0.3, "color": "weapon", "altColor": [0.12, 0.02, 0.24, 1], "altChance": 0.5},
+      {"type": "burst", "particle": "elem_ember", "motion": "ember", "alongBlade": true, "chance": 0.36, "count": 1, "riseMin": 0.8, "riseMax": 2, "driftX": 0.8, "lifetime": 1, "lifetimeJitter": 0.4, "size": 0.054, "color": [0.85, 0.6, 1, 1]}
     ],
     "idle": [
-      {"type": "burst", "particle": "elem_flame", "motion": "flame", "alongBlade": true, "count": 2, "spread": 0.06, "riseMin": 0.6, "riseMax": 1.6, "driftX": 0.5, "lifetime": 0.4, "lifetimeJitter": 0.3, "size": 0.31, "sizeJitter": 0.3, "color": "weapon", "altColor": [0.85, 0.6, 1, 1], "altChance": 0.5},
-      {"type": "burst", "particle": "elem_ember", "motion": "ember", "alongBlade": true, "chance": 0.2, "count": 1, "riseMin": 0.8, "riseMax": 2, "driftX": 0.8, "lifetime": 1, "lifetimeJitter": 0.4, "size": 0.06, "color": [0.85, 0.6, 1, 1]}
+      {"type": "burst", "particle": "elem_flame", "motion": "flame", "alongBlade": true, "count": 2, "spread": 0.06, "riseMin": 0.6, "riseMax": 1.6, "driftX": 0.5, "lifetime": 0.4, "lifetimeJitter": 0.3, "size": 0.279, "sizeJitter": 0.3, "color": "weapon", "altColor": [0.85, 0.6, 1, 1], "altChance": 0.5},
+      {"type": "burst", "particle": "elem_ember", "motion": "ember", "alongBlade": true, "chance": 0.18, "count": 1, "riseMin": 0.8, "riseMax": 2, "driftX": 0.8, "lifetime": 1, "lifetimeJitter": 0.4, "size": 0.054, "color": [0.85, 0.6, 1, 1]}
     ]
   },
   "Wind": {
@@ -213,7 +213,7 @@
     "status": {
       "duration": 1.5, "tickInterval": 0.5, "tickDamage": 0.1, "speedScale": 1, "emitInterval": 0.1,
       "layers": [
-        {"type": "burst", "particle": "elem_ember", "motion": "spiral", "count": 1, "spread": 0.4, "chance": 0.8, "speedMin": 0, "speedMax": 0.8, "riseMin": 0.2, "riseMax": 0.8, "lifetime": 0.5, "size": 0.08, "color": "weapon"}
+        {"type": "burst", "particle": "elem_ember", "motion": "spiral", "count": 1, "spread": 0.4, "chance": 0.72, "speedMin": 0, "speedMax": 0.8, "riseMin": 0.2, "riseMax": 0.8, "lifetime": 0.5, "size": 0.072, "color": "weapon"}
       ]
     },
     "acquire": [
@@ -224,16 +224,16 @@
     "hit": [
       {"type": "slash", "angleRight": 0.55, "radius": 2, "scaleRadius": true, "color": "weapon"},
       {"type": "slash", "angleRight": -0.55, "radius": 1.7, "scaleRadius": true, "color": [0.75, 1, 0.65, 0.8]},
-      {"type": "ring", "speed": 3.8, "count": 18, "lifetime": 0.28, "size": 0.1, "color": "weapon"},
-      {"type": "burst", "particle": "elem_ember", "motion": "spiral", "count": 26, "speedMin": 3, "speedMax": 5, "scaleSpeed": true, "lifetime": 0.6, "lifetimeJitter": 0.3, "size": 0.12, "sizeJitter": 0.3, "scaleSize": true, "color": "weapon", "altColor": [0.9, 1, 0.85, 1], "altChance": 0.4},
-      {"type": "burst", "particle": "elem_spark", "motion": "mist", "count": 6, "spread": 0.5, "speedMin": 2, "speedMax": 3, "riseMin": -0.3, "riseMax": 0.3, "lifetime": 0.9, "lifetimeJitter": 0.3, "size": 0.6, "sizeJitter": 0.3, "scaleSize": true, "color": [0.7, 1, 0.7, 0.3]}
+      {"type": "ring", "speed": 3.8, "count": 15, "lifetime": 0.28, "size": 0.09, "color": "weapon"},
+      {"type": "burst", "particle": "elem_ember", "motion": "spiral", "count": 22, "speedMin": 3, "speedMax": 5, "scaleSpeed": true, "lifetime": 0.6, "lifetimeJitter": 0.3, "size": 0.108, "sizeJitter": 0.3, "scaleSize": true, "color": "weapon", "altColor": [0.9, 1, 0.85, 1], "altChance": 0.4},
+      {"type": "burst", "particle": "elem_spark", "motion": "mist", "count": 5, "spread": 0.5, "speedMin": 2, "speedMax": 3, "riseMin": -0.3, "riseMax": 0.3, "lifetime": 0.9, "lifetimeJitter": 0.3, "size": 0.54, "sizeJitter": 0.3, "scaleSize": true, "color": [0.7, 1, 0.7, 0.3]}
     ],
     "aura": [
       {"type": "ellipse", "facingSpeed": 3, "lifetime": 0.15, "length": 0.5, "thickness": 0.04, "color": "weapon"},
-      {"type": "burst", "particle": "elem_ember", "motion": "spiral", "count": 2, "speedMin": 1.5, "speedMax": 2, "scaleSpeed": false, "lifetime": 0.35, "lifetimeJitter": 0.3, "size": 0.08, "sizeJitter": 0.3, "scaleSize": false, "color": "weapon", "altColor": [0.9, 1, 0.85, 1], "altChance": 0.3, "alongBlade": true}
+      {"type": "burst", "particle": "elem_ember", "motion": "spiral", "count": 2, "speedMin": 1.5, "speedMax": 2, "scaleSpeed": false, "lifetime": 0.35, "lifetimeJitter": 0.3, "size": 0.072, "sizeJitter": 0.3, "scaleSize": false, "color": "weapon", "altColor": [0.9, 1, 0.85, 1], "altChance": 0.3, "alongBlade": true}
     ],
     "idle": [
-      {"type": "burst", "particle": "elem_ember", "motion": "spiral", "count": 1, "speedMin": 1, "speedMax": 1.4, "scaleSpeed": false, "lifetime": 0.4, "lifetimeJitter": 0.3, "size": 0.07, "sizeJitter": 0.3, "scaleSize": false, "color": "weapon", "altColor": [0.9, 1, 0.85, 1], "altChance": 0.3, "alongBlade": true, "chance": 0.5}
+      {"type": "burst", "particle": "elem_ember", "motion": "spiral", "count": 1, "speedMin": 1, "speedMax": 1.4, "scaleSpeed": false, "lifetime": 0.4, "lifetimeJitter": 0.3, "size": 0.063, "sizeJitter": 0.3, "scaleSize": false, "color": "weapon", "altColor": [0.9, 1, 0.85, 1], "altChance": 0.3, "alongBlade": true, "chance": 0.45}
     ]
   }
 }

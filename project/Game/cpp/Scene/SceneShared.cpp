@@ -16,9 +16,13 @@
 #include "FontRenderer.h"
 #include "GameConstants.h"
 #include "GameSettings.h"
+#include "GamepadRumble.h"
 #include "GunCombo.h"
 #include "Input.h"
 #include "JsonHelper.h"
+#include "LevelLoader.h"
+#include "GlassShatterEffect.h"
+#include "StageEditor.h"
 #include "Object3d.h"
 #include "ParticleManager.h"
 #include "Player.h"
@@ -27,6 +31,7 @@
 #include "SceneFlow.h"
 #include "SceneManager.h"
 #include "SlashMark.h"
+#include "Skydome.h"
 #include "Sprite.h"
 #include "TimeManager.h"
 #include "UILayout.h"
@@ -43,6 +48,30 @@
 using namespace engine::graphics;
 
 namespace engine::game::sceneShared {
+
+/** @brief レベルに対応する空の画像を設定する（レベルの JSON の sky。毎回読み直すので、書き換えはステージを読み直せば効く） */
+void ApplyStageSky(Skydome* skydome, const std::string& levelPath) {
+    if (skydome == nullptr) {
+        return;
+    }
+    skydome->SetTexture(levelLoader::Load(levelPath).sky);
+}
+
+/** @brief ステージエディタで空を選び直した時に、すぐ画面の空へ映す */
+void ConnectStageSkyToEditor(StageEditor& editor, Skydome* skydome) {
+    editor.SetSkyChangedCallback([skydome](const std::string& sky) {
+        if (skydome != nullptr) {
+            skydome->SetTexture(sky);
+        }
+    });
+}
+
+/** @brief 画面を写し取る演出に、今の描画先（色の加工中はオフスクリーン、ふだんはバックバッファ）を教える */
+void BindCaptureTarget(GlassShatterEffect& effect, const std::initializer_list<IPostEffectSource*>& effects) {
+    const IPostEffectSource* active = FindActivePostEffect(effects);
+    effect.SetSceneTarget(active != nullptr ? active->GetSceneTexture() : nullptr,
+        active != nullptr ? active->GetSceneRTVHandle() : D3D12_CPU_DESCRIPTOR_HANDLE { });
+}
 
 /** @brief 訓練・戦闘テスト共通のプレイヤーと弾丸の準備を同じ順序で行う */
 void InitializePlayerAndBullets(std::unique_ptr<Player>& player, BulletPool& bullets,
@@ -144,7 +173,7 @@ void SetupMainRenderTarget(engine::DirectXCommon* dxCommon,
     SetupSceneRenderTarget(dxCommon, GetActiveSceneRTVHandle(dxCommon, effects));
 }
 
-/** @brief JSONファイル（[{name, texture, additive}, ...]）に従ってパーティクルグループを一括登録する */
+/** @brief JSONファイル（[{name, texture, additive, fields}, ...]）に従ってパーティクルグループを一括登録する */
 void CreateParticleGroupsFromJson(ParticleManager* pm, const std::string& jsonPath) {
     for (const auto& group : JsonHelper::Load(jsonPath)) {
         std::string name = group.value("name", "");
@@ -153,6 +182,8 @@ void CreateParticleGroupsFromJson(ParticleManager* pm, const std::string& jsonPa
         }
         pm->CreateParticleGroup(name, group.value("texture", ""));
         pm->SetAdditiveBlend(name, group.value("additive", false));
+        // 場（衝撃・渦・引きずり）の効き方。斬撃の線や武器の軌跡のように形を崩したくない物は 0 にする
+        pm->SetFieldScale(name, group.value("fields", 1.0f));
     }
 }
 
@@ -355,6 +386,29 @@ const char* WeaponFusionLabel() {
     return GameSettingsManager::GetInstance()->Get().weaponFusion ? "< ON >" : "< OFF >";
 }
 
+namespace {
+constexpr float kVibrationPreviewStrength = 0.5f;
+constexpr float kVibrationPreviewSeconds = 0.25f;
+constexpr const char* kVibrationOnLabel = "< ON >";
+constexpr const char* kVibrationOffLabel = "< OFF >";
+}
+/** @brief 振動の有効状態を切り替えて保存する */
+void ToggleVibration(Audio* audio) {
+    GameSettings settings = GameSettingsManager::GetInstance()->Get();
+    settings.vibration = !settings.vibration;
+    audio->PlayMenuChoice();
+    GameSettingsManager::GetInstance()->Apply(settings);
+    GameSettingsManager::GetInstance()->Save();
+    auto* rumble = GamepadRumble::GetInstance();
+    rumble->SetEnabled(settings.vibration);
+    if (settings.vibration) {
+        rumble->Request(kVibrationPreviewStrength, kVibrationPreviewStrength, kVibrationPreviewSeconds);
+    }
+}
+/** @brief 振動の状態を表示する文字列を取得する */
+const char* VibrationLabel() {
+    return GameSettingsManager::GetInstance()->Get().vibration ? kVibrationOnLabel : kVibrationOffLabel;
+}
 namespace {
 // 武器一覧HUDの文字の既定値（hud.json の weapon_list.* で上書きできる）
 constexpr float kWeaponListDefaultScale = 1.15f;

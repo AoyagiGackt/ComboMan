@@ -72,6 +72,8 @@ void StageEditor::Open(const std::string& levelPath, ModelCommon* modelCommon, C
     LevelData data = levelLoader::Load(levelPath);
     playerSpawn_ = data.playerSpawn;
     enemySpawn_ = data.enemySpawn;
+    SetSky(data.sky);
+    comment_ = data.comment;
     graphPath_ = data.graphPath;
     flagGraphs_ = data.flagGraphs;
     sActiveEditor = this;
@@ -139,6 +141,7 @@ void StageEditor::Open(const std::string& levelPath, ModelCommon* modelCommon, C
     selectedObjectIndices_.clear();
 #ifdef USE_IMGUI
     strncpy_s(graphPathBuffer_, graphPath_.c_str(), _TRUNCATE);
+    strncpy_s(commentBuffer_, comment_.c_str(), _TRUNCATE);
     eventConnection_.Reset();
     // 別ファイルを開いたら、直前のレベルに対するUndo/Redo履歴は無関係になるため破棄する
     history_.Clear();
@@ -340,11 +343,21 @@ void StageEditor::Save() {
     statusTimer_ = StageEditor::kStatusShortSeconds;
 }
 
+/** @brief レベルの空の画像を変えて、シーンへ知らせる */
+void StageEditor::SetSky(const std::string& sky) {
+    sky_ = sky;
+    if (onSkyChanged_) {
+        onSkyChanged_(sky_);
+    }
+}
+
 /** @brief 現在の編集内容を指定パスへ書き出す */
 bool StageEditor::SaveToPath(const std::string& path) const {
     LevelData data;
     data.playerSpawn = playerSpawn_;
     data.enemySpawn = enemySpawn_;
+    data.sky = sky_;
+    data.comment = comment_;
     for (const auto& entry : objects_) {
         data.objects.push_back(entry.desc);
     }
@@ -584,6 +597,9 @@ void StageEditor::RenderEditorPanels() {
     if (showGraphPanel_) {
         RenderGraphPanel();
     }
+    if (showLevelPanel_) {
+        RenderLevelPanel();
+    }
     if (showWavePanel_) {
         RenderWavePanel();
     }
@@ -598,7 +614,7 @@ void StageEditor::RenderEditorPanels() {
 
 /** @brief 補助パネル（フラグ・イベント・グラフなど）を1つでも開いているか */
 bool StageEditor::HasOpenAuxPanel() const {
-    return showFlagsPanel_ || showWorkflowPanel_ || showNoCodeEventPanel_ || showGraphPanel_ || showWavePanel_
+    return showFlagsPanel_ || showWorkflowPanel_ || showNoCodeEventPanel_ || showGraphPanel_ || showLevelPanel_ || showWavePanel_
         || showEnemyTypeEditor_ || showStageAnalysis_ || showSavedDiff_ || showEditorHelp_;
 }
 
@@ -650,6 +666,8 @@ StageEditor::LevelSnapshot StageEditor::MakeSnapshot() const {
     snap.playerSpawn = playerSpawn_;
     snap.enemySpawn = enemySpawn_;
     snap.graphPath = graphPath_;
+    snap.sky = sky_;
+    snap.comment = comment_;
     snap.flagGraphs = flagGraphs_;
     for (const UILayout::PositionHandle& handle : UILayout::CollectPositionHandles()) {
         snap.uiPositions.push_back({ handle.layout, handle.index, handle.position.x, handle.position.y });

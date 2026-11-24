@@ -11,6 +11,7 @@
     0
   ],
   "graphPath": "Resources/Graphs/level01_main.json",
+  "sky": "Resources/SkyDome/sky_meadow.png",
   "flagGraphs": [],
   "checkpoints": [
     {
@@ -102,14 +103,90 @@
   ],
   "objects": [
     {
+      "name": "bg_ground",
+      "type": "static",
+      "kind": "background",
+      "model": "Resources/block/backdrop/backdrop_meadow_ground.obj",
+      "texture": "Resources/block/backdrop/backdrop_palette_meadow.png",
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "lighting": false,
+      "solid": false
+    },
+    {
+      "name": "bg_near",
+      "type": "static",
+      "kind": "background",
+      "model": "Resources/block/backdrop/backdrop_meadow_near.obj",
+      "texture": "Resources/block/backdrop/backdrop_palette_meadow.png",
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "lighting": false,
+      "solid": false
+    },
+    {
+      "name": "bg_mid",
+      "type": "static",
+      "kind": "background",
+      "model": "Resources/block/backdrop/backdrop_meadow_mid.obj",
+      "texture": "Resources/block/backdrop/backdrop_palette_meadow.png",
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "lighting": false,
+      "solid": false
+    },
+    {
+      "name": "bg_far",
+      "type": "static",
+      "kind": "background",
+      "model": "Resources/block/backdrop/backdrop_meadow_far.obj",
+      "texture": "Resources/block/backdrop/backdrop_palette_meadow.png",
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "lighting": false,
+      "solid": false
+    },
+    {
       "name": "floor",
       "type": "row",
       "kind": "prop",
       "axis": "x",
       "count": 62,
       "step": 1,
-      "model": "Resources/block/block.obj",
-      "texture": "Resources/block/block.png",
+      "model": "Resources/block/terrain/terrain_ground.obj",
+      "texture": "Resources/block/terrain/terrain_palette_meadow.png",
       "position": [
         2,
         -0.98,
@@ -130,8 +207,8 @@
       "axis": "x",
       "count": 63,
       "step": 1,
-      "model": "Resources/block/block.obj",
-      "texture": "Resources/block/block.png",
+      "model": "Resources/block/terrain/terrain_ceiling.obj",
+      "texture": "Resources/block/terrain/terrain_palette_meadow.png",
       "position": [
         2,
         13,
@@ -152,8 +229,8 @@
       "axis": "y",
       "count": 13,
       "step": 1,
-      "model": "Resources/block/block.obj",
-      "texture": "Resources/block/block.png",
+      "model": "Resources/block/terrain/terrain_wall.obj",
+      "texture": "Resources/block/terrain/terrain_palette_meadow.png",
       "position": [
         2,
         0,
@@ -174,8 +251,8 @@
       "axis": "y",
       "count": 14,
       "step": 1,
-      "model": "Resources/block/block.obj",
-      "texture": "Resources/block/block.png",
+      "model": "Resources/block/terrain/terrain_wall.obj",
+      "texture": "Resources/block/terrain/terrain_palette_meadow.png",
       "position": [
         64,
         -0.98,

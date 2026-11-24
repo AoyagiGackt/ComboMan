@@ -25,7 +25,8 @@ cbuffer ShatterParams : register(b0)
     float4 cutLines[32];
     uint impactCount;   // 0 なら impactU/V の1点だけ
     uint reassemble;    // 1 なら割れた後に破片が集まり直して後ろの画面になる
-    float2 padding;
+    uint blast;         // 1 なら爆発で割る（破片が割れ始めの点から外へ吹き飛び、ひびが炎の色になる）
+    float padding;
     float4 impacts[16]; // 銃の弾痕など、割れ始める点（xy）
     uint cutPieceCount;           // 中心を求めた斬線の破片の数
     uint3 piecePadding;
@@ -96,6 +97,16 @@ static const float kLandFlashStrength = 0.9f;
 static const float kCrackFadeStart = 0.85f;    // はまった破片のひびが消え始める
 static const float kAssembledCrack = 0.8f;
 static const float3 kVoidColor = float3(0.02f, 0.025f, 0.06f); // 破片が抜けた後の暗い空間
+
+// 爆発で割る時（blast = 1）
+static const float kBlastPush = 0.08f;          // ひびが入った直後に外へ開く量
+static const float kBlastFly = 1.3f;            // 外へ吹き飛ぶ量（落ちる量 0〜1 に掛ける。画面の高さ単位）
+static const float kBlastGravity = 0.3f;        // 吹き飛びながら落ちる量（shardSpeed に掛ける）
+static const float kBlastDelayScale = 0.3f;     // 割れて飛び始めるまでの遅れの倍率（ほぼいっせいに吹き飛ぶ）
+static const float3 kBlastCrackColor = float3(1.0f, 0.6f, 0.25f); // 焼けたひびの色
+static const float3 kBlastHeatColor = float3(1.0f, 0.45f, 0.12f); // 割れ始めの点の近くを焼く色
+static const float kBlastHeatReach = 0.6f;      // 焼ける範囲（割れ始めの点から、画面の高さ単位）
+static const float kBlastHeat = 0.55f;          // 焼ける強さ
 static const float3 kGlassColor = float3(0.72f, 0.88f, 1.0f);  // 飛んでいる間のガラスの色
 static const float kGlassAlpha = 0.6f;
 static const float kGlassRimWidth = 0.15f;     // 飛んでいるガラスの縁を明るくする幅（セル空間の単位）
@@ -283,7 +294,8 @@ float ShardGlint(float seed, float fall)
 float GlassFallDelay(float3 cell)
 {
     float order = saturate(GlassCellPolar(cell).z / kImpactReach);
-    return lerp(hash1(cell.xy + kDelaySeed), order, kImpactOrderWeight) * kImpactMaxDelay;
+    float delay = lerp(hash1(cell.xy + kDelaySeed), order, kImpactOrderWeight) * kImpactMaxDelay;
+    return blast != 0u ? delay * kBlastDelayScale : delay;
 }
 
 // 破片ごとの落ちる進み具合（割れ始めの点に近い破片から順に落ちる）。
@@ -300,6 +312,13 @@ float2 GlassFallOffset(float3 cell, float t)
     float3 polar = GlassCellPolar(cell);
     float separate = smoothstep(0.0f, kSeparateEnd, t);
     float fall = GlassFallProgress(cell, t);
+    // 爆発の時は、割れ始めの点から外へ一気に吹き飛ばし、少しだけ落とす
+    if (blast != 0u)
+    {
+        float2 burst = polar.xy * (kBlastPush * separate + kBlastFly * fall);
+        burst.y += fall * fall * max(shardSpeed, kMinFallSpeed) * kBlastGravity;
+        return burst / float2(kScreenAspect, 1.0f);
+    }
     float2 offset = polar.xy * kSeparatePush * separate;
     offset += float2((hash1(cell.xy + kSpreadSeed2) - kHalf) * kShardSpread * fall,
                      fall * fall * max(shardSpeed, kMinFallSpeed));
@@ -343,7 +362,14 @@ float4 DrawGlassFall(float2 uv, float t)
     float seed = hash1(cell.xy);
     float shade = 1.0f + (seed - kHalf) * kShardShade * saturate(fall * kShadeRampSpeed);
     float4 scene = SampleScene(sampleUV);
-    float3 color = lerp(scene.rgb * shade, 1.0f, saturate(crack * kCrackBrightness + ShardGlint(seed, fall)));
+    // 爆発の時は、ひびを焼けた色にし、割れ始めの点の近くの破片を焼く
+    float3 crackColor = blast != 0u ? kBlastCrackColor : float3(1.0f, 1.0f, 1.0f);
+    float3 color = lerp(scene.rgb * shade, crackColor, saturate(crack * kCrackBrightness + ShardGlint(seed, fall)));
+    if (blast != 0u)
+    {
+        float heat = (1.0f - saturate(DistanceToImpact(sampleUV) / kBlastHeatReach)) * crackT * (1.0f - fall);
+        color = lerp(color, kBlastHeatColor, heat * kBlastHeat);
+    }
     return float4(color, 1.0f - fall);
 }
 

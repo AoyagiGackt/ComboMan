@@ -3,7 +3,9 @@
  * @brief 演出レシピの読み込みと、レシピどおりに演出を出す処理を実装するファイル
  */
 #include "HitEffectLibrary.h"
+#include "ActionFeelTuning.h"
 #include "CameraShaker.h"
+#include "GamepadRumble.h"
 #include "JsonHelper.h"
 #include "JsonFieldTable.h"
 #include "Logger.h"
@@ -147,6 +149,9 @@ constexpr JsonField<ImpactDef> kImpactFields[] = {
     { nullptr, "hitStopFrames", &ImpactDef::hitStopFrames },
     { nullptr, "shakeAmount", &ImpactDef::shakeAmount },
     { nullptr, "shakeSeconds", &ImpactDef::shakeSeconds },
+    { nullptr, "rumbleLow", &ImpactDef::rumbleLow },
+    { nullptr, "rumbleHigh", &ImpactDef::rumbleHigh },
+    { nullptr, "rumbleSeconds", &ImpactDef::rumbleSeconds },
 };
 
 constexpr JsonField<RingBurstDef> kRingFields[] = {
@@ -388,6 +393,15 @@ void HitEffectPlayer::Impact(const std::string& name, const EffectStyle& style) 
     }
     if (shaker_ && def.shakeAmount > 0.0f) {
         shaker_->Request(def.shakeAmount * style.scale, def.shakeSeconds);
+    }
+    // パッドの振動: 値が書いてなければ画面の揺れの強さと長さから決める
+    const ActionFeelTuning& feel = ActionFeel();
+    const float low = def.rumbleLow >= 0.0f ? def.rumbleLow : def.shakeAmount * feel.rumblePerShake;
+    const float high = def.rumbleHigh >= 0.0f ? def.rumbleHigh : low * feel.rumbleHighRatio;
+    const float seconds = def.rumbleSeconds >= 0.0f ? def.rumbleSeconds : (std::max)(def.shakeSeconds, feel.rumbleMinSeconds);
+    const float strength = style.scale * feel.rumbleScale;
+    if ((low > 0.0f || high > 0.0f) && strength > 0.0f) {
+        GamepadRumble::GetInstance()->Request((std::min)(low * strength, 1.0f), (std::min)(high * strength, 1.0f), seconds);
     }
 }
 

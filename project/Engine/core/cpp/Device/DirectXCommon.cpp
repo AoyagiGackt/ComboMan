@@ -8,6 +8,7 @@
 #include "AssetPack.h"
 #include "EngineAssert.h"
 #include "EngineConstants.h"
+#include "FrameProfiler.h"
 #include "Input.h"
 #include "Logger.h"
 #include "StringUtility.h"
@@ -58,6 +59,7 @@ void DirectXCommon::Initialize(WinApp* winApp) {
     // デバイス初期化
     InitializeDevice();
     frameUploadAllocator_.Initialize(this, kFrameCount);
+    bundleRecorder_.Initialize(device_.Get(), kFrameCount);
     // コマンド関連初期化
     CreateCommand();
     // ディスクリプタヒープ作成
@@ -114,11 +116,13 @@ void DirectXCommon::PreDraw() {
     if (frameFenceValues_[backBufferIndex] != 0
         && fence_->GetCompletedValue() < frameFenceValues_[backBufferIndex]) {
         fence_->SetEventOnCompletion(frameFenceValues_[backBufferIndex], fenceEvent_);
+        const graphics::ScopedFramePhase phase(graphics::FramePhase::kGpuWait);
         WaitForSingleObject(fenceEvent_, INFINITE);
     }
 
     // GPUの使用が完了した定数領域を再利用する。
     frameUploadAllocator_.BeginFrame(backBufferIndex);
+    bundleRecorder_.BeginFrame(backBufferIndex);
 
     // コマンドアロケータとリストをリセット
     HRESULT hr = commandAllocators_[backBufferIndex]->Reset();
@@ -133,6 +137,7 @@ void DirectXCommon::PreDraw() {
     // 描画先と深度を設定
     D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = GetBackBufferDsvHandle();
     commandList_->OMSetRenderTargets(1, &rtvHandles_[backBufferIndex], false, &dsvHandle);
+    SetActiveDepthTarget(DepthTarget::kBackBuffer);
 
     // 縦横比が異なる画面のレターボックス部分は黒でクリアする。
     static constexpr float kClearColor[] = { 0.0f, 0.0f, 0.0f, 1.0f };
@@ -185,7 +190,10 @@ void DirectXCommon::PostDraw() {
     // VSyncオフ時はSyncInterval=0。ティアリング許可済みならALLOW_TEARINGを付けて真の非同期表示にする
     const UINT syncInterval = vsyncEnabled_ ? 1 : 0;
     const UINT presentFlags = (!vsyncEnabled_ && tearingSupported_) ? DXGI_PRESENT_ALLOW_TEARING : 0;
-    hr = swapChain_->Present(syncInterval, presentFlags);
+    {
+        const graphics::ScopedFramePhase phase(graphics::FramePhase::kPresent);
+        hr = swapChain_->Present(syncInterval, presentFlags);
+    }
 
     if (FAILED(hr)) {
         if (hr == DXGI_ERROR_DEVICE_REMOVED || hr == DXGI_ERROR_DEVICE_RESET) {
@@ -248,7 +256,10 @@ Microsoft::WRL::ComPtr<IDxcBlob> DirectXCommon::CompileShader(const std::wstring
     shaderSourceBuffer.Encoding = DXC_CP_UTF8;
 
     // Compileする
-    // 入口は main、デバッグ情報を埋め込み、最適化なし・行優先の行列で出す
+    // 入口は main、行優先の行列で出す。
+    // デバッグ版はシェーダーの中を追えるようデバッグ情報を埋め込んで最適化なし、
+    // それ以外の版はデバッグ情報を付けず一番強い最適化をかける
+#ifdef _DEBUG
     LPCWSTR arguments[] = {
         filePath.c_str(),
         L"-E",
@@ -260,6 +271,17 @@ Microsoft::WRL::ComPtr<IDxcBlob> DirectXCommon::CompileShader(const std::wstring
         L"-Od",
         L"-Zpr",
     };
+#else
+    LPCWSTR arguments[] = {
+        filePath.c_str(),
+        L"-E",
+        L"main",
+        L"-T",
+        profile,
+        L"-O3",
+        L"-Zpr",
+    };
+#endif
 
     IDxcResult* shaderResult = nullptr;
     hr = dxcCompiler_->Compile(
@@ -399,6 +421,7 @@ void DirectXCommon::SetBackBufferRenderTarget() {
     const D3D12_CPU_DESCRIPTOR_HANDLE rtv = GetCurrentBackBufferHandle();
     const D3D12_CPU_DESCRIPTOR_HANDLE dsv = GetBackBufferDsvHandle();
     commandList_->OMSetRenderTargets(1, &rtv, FALSE, &dsv);
+    SetActiveDepthTarget(DepthTarget::kBackBuffer);
     const D3D12_VIEWPORT viewport = GetCenteredClientViewport();
     const D3D12_RECT scissor = GetCenteredClientScissorRect();
     commandList_->RSSetViewports(1, &viewport);

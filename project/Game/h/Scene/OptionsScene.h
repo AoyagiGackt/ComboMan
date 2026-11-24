@@ -77,8 +77,9 @@ private:
 
     static constexpr int kRowBgmVolume = 0;
     static constexpr int kRowSeVolume = 1;
-    static constexpr int kRowCommandList = 2;
-    static constexpr int kRowBack = 3;
+    static constexpr int kRowVibration = 2;
+    static constexpr int kRowCommandList = 3;
+    static constexpr int kRowBack = 4;
 
     bool finished_ = false;
 };

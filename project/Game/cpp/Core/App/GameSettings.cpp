@@ -6,6 +6,9 @@
 #include "JsonHelper.h"
 
 namespace engine {
+namespace {
+constexpr const char* kVibrationKey = "vibration";
+}
 /** @brief 唯一のGameSettingsManagerインスタンスを取得する（未生成なら生成する） */
 GameSettingsManager* GameSettingsManager::GetInstance() {
     static GameSettingsManager sInstance;
@@ -19,6 +22,7 @@ void GameSettingsManager::Load() {
         settings_.bgmVolume = j.value("bgm_volume", settings_.bgmVolume);
         settings_.seVolume = j.value("se_volume", settings_.seVolume);
         settings_.autoCombo = j.value("auto_combo", settings_.autoCombo);
+        settings_.vibration = j.value(kVibrationKey, settings_.vibration);
         settings_.weaponFusion = j.value("weapon_fusion", settings_.weaponFusion);
     } else {
         // ログ出力やデフォルト維持
@@ -31,6 +35,7 @@ void GameSettingsManager::Save() {
     j["bgm_volume"] = settings_.bgmVolume;
     j["se_volume"] = settings_.seVolume;
     j["auto_combo"] = settings_.autoCombo;
+    j[kVibrationKey] = settings_.vibration;
     j["weapon_fusion"] = settings_.weaponFusion;
     JsonHelper::Save(kFilePath, j);
 }

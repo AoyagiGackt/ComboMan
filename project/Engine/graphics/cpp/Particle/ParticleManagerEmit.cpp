@@ -42,6 +42,8 @@ constexpr float kSlashShardWidth = 0.05f;
 
 // 一斉配置のばらまき範囲
 constexpr float kBurstSpreadXZ = 20.0f;
+// 寿命の見込みに足す余裕（GPU が寿命を判定して枠を返し終えるまで更新を続ける）
+constexpr float kAliveUntilMargin = 0.1f;
 
 // ヒット時の星形: ランダムな向き・長さの細い光片
 constexpr int kHitStarCount = 8;
@@ -122,27 +124,34 @@ Vector3 Uniform(float scale) {
 }
 } // namespace
 
-/** @brief 空きスロットへ1粒書き込む（空きが無ければ何もせず false） */
+/** @brief 出してほしい粒の一覧へ1粒足す（1フレームに頼める数を超えたら何もせず false） */
 bool ParticleManager::SpawnParticle(ParticleGroup& group, const ParticleSpawn& spawn) {
-    const uint32_t slot = AllocateSlot(group);
-    if (slot == UINT32_MAX) {
+    // 枠を取るのは GPU（空き一覧）。CPU はグループの枠の数までしか頼まない
+    if (group.pendingSpawns.size() >= ParticleGroup::kNumMaxInstance) {
         return false;
     }
-    GPUParticleState& p = group.particleUploadData[slot];
+    GPUParticleState p {};
     p.position = spawn.position;
     p.lifeTime = spawn.lifeTime;
     p.velocity = spawn.velocity;
-    p.currentTime = 0.0f;
+    p.currentTime = spawn.currentTime;
     p.color = spawn.color;
     p.scale = spawn.scale;
     p.rotateZ = spawn.rotateZ;
     p.alive = 1;
     p.curveFlag = static_cast<uint32_t>(spawn.motion);
-
-    group.slotExpiry[slot] = group.groupTime + spawn.lifeTime + kSlotExpiryMargin;
-    group.aliveCount++;
-    group.pendingSlots.push_back(slot);
+    group.pendingSpawns.push_back(p);
+    // 描く・更新するかは、最後の粒が消える時刻の見込みで決める（GPU から読み戻さない）
+    group.aliveUntil = (std::max)(group.aliveUntil, group.groupTime + (spawn.lifeTime - spawn.currentTime) + kAliveUntilMargin);
     return true;
+}
+
+/** @brief グループの粒を次の更新ですべて消すように頼む */
+void ParticleManager::RequestReset(ParticleGroup& group) {
+    group.pendingSpawns.clear();
+    group.needsReset = true;
+    group.loop.enabled = 0;
+    group.aliveUntil = group.groupTime;
 }
 
 // ══════════════════════════════════════════════════════
@@ -231,20 +240,6 @@ void ParticleManager::EmitSlash(const std::string& name,
     }
 }
 
-/** @brief 発生し直す前に全スロットを空にし、先頭 activeCount 個以外を空き一覧へ戻す */
-void ParticleManager::ResetSlotsForEmit(ParticleGroup& group, uint32_t activeCount) {
-    // 前の状態を消し、生きている粒を0にする
-    memset(group.particleUploadData, 0, sizeof(GPUParticleState) * ParticleGroup::kNumMaxInstance);
-    group.slotExpiry.fill(0.0f);
-    group.aliveCount = 0;
-    // 使わない後ろのスロットを、番号の大きい順に空き一覧へ積む（取り出す時に小さい番号から使われる）
-    group.freeList.clear();
-    for (uint32_t i = ParticleGroup::kNumMaxInstance; i-- > activeCount;) {
-        group.freeList.push_back(i);
-    }
-    group.pendingSlots.clear();
-}
-
 /** @brief 指定半径・高さにランダム配置し、寿命が尽きると自動再配置するループエフェクトを開始する */
 void ParticleManager::EmitScatterLoop(const std::string& name,
     const Vector3& center, float radius,
@@ -263,36 +258,31 @@ void ParticleManager::EmitScatterLoop(const std::string& name,
     std::uniform_real_distribution<float> velXZDist(-kScatterDriftXZ, kScatterDriftXZ);
     std::uniform_real_distribution<float> velYDist(kScatterRiseMin, kScatterRiseMax);
 
-    // 全スロットを空にしてから、寿命の途中から始まる粒を範囲内にばら撒く
-    ResetSlotsForEmit(group, count);
-
+    // 全部の粒を消してから、寿命の途中から始まる粒を範囲内にばら撒く
+    RequestReset(group);
     for (uint32_t i = 0; i < count; ++i) {
         // 寿命の途中から始めて、最初から全体に行き渡った状態に見せる
-        float lifeTime = lifeDist(sRng);
+        const float lifeTime = lifeDist(sRng);
         std::uniform_real_distribution<float> timeDist(0.0f, lifeTime);
-        float currentTime = timeDist(sRng);
-
-        GPUParticleState& p = group.particleUploadData[i];
-        p.position = { center.x + xzDist(sRng), center.y + yDist(sRng), center.z + xzDist(sRng) };
-        p.lifeTime = lifeTime;
-        p.velocity = { velXZDist(sRng), velYDist(sRng), velXZDist(sRng) };
-        p.currentTime = currentTime;
-        p.color = color;
-        p.scale = Uniform(scale);
-        p.rotateZ = 0.0f;
-        p.alive = 1;
-        p.curveFlag = static_cast<uint32_t>(ParticleMotion::kLinear);
-
-        group.slotExpiry[i] = group.groupTime + (lifeTime - currentTime) + kSlotExpiryMargin;
-        group.aliveCount++;
+        SpawnParticle(group, { .position = { center.x + xzDist(sRng), center.y + yDist(sRng), center.z + xzDist(sRng) },
+            .velocity = { velXZDist(sRng), velYDist(sRng), velXZDist(sRng) }, .color = color, .scale = Uniform(scale),
+            .lifeTime = lifeTime, .currentTime = timeDist(sRng) });
     }
 
-    // 次の描画で全スロットを GPU へ送り直す
-    group.needsInit = true;
-
-    // 寿命が尽きた粒を同じ設定で出し直すよう覚えておく
-    group.autoRespawn = true;
-    group.respawnConfig = { center, radius, lifeTimeMin, lifeTimeMax, color, scale, count };
+    // 寿命が尽きた粒は、GPU が同じ設定でその場に出し直す（CPU は寿命を見ない）
+    ParticleLoopConfig& loop = group.loop;
+    loop.center = center;
+    loop.radius = radius;
+    loop.color = color;
+    loop.lifeTimeMin = lifeTimeMin;
+    loop.lifeTimeMax = lifeTimeMax;
+    loop.scale = scale;
+    loop.height = kScatterHeight;
+    loop.driftXZ = kScatterDriftXZ;
+    loop.riseMin = kScatterRiseMin;
+    loop.riseMax = kScatterRiseMax;
+    loop.seed = static_cast<uint32_t>(sRng());
+    loop.enabled = 1;
 }
 
 /** @brief 指定数のパーティクルをランダム位置に一斉配置する（環境パーティクル等） */
@@ -308,34 +298,18 @@ void ParticleManager::EmitBurst(const std::string& name,
 
     count = (std::min)(count, ParticleGroup::kNumMaxInstance);
 
-    // 全スロットをリセット（re-emit 時に前の状態を消す）
-    ResetSlotsForEmit(group, count);
+    // 前の粒を全部消してから出し直す
+    RequestReset(group);
 
     static std::mt19937 sRng { std::random_device { }() };
     std::uniform_real_distribution<float> distXZ(-kBurstSpreadXZ, kBurstSpreadXZ);
     std::uniform_real_distribution<float> distY(0.0f, kScatterHeight);
+    const ParticleMotion motion = flicker ? ParticleMotion::kFlicker : ParticleMotion::kLinear;
     for (uint32_t i = 0; i < count; ++i) {
-        GPUParticleState& p = group.particleUploadData[i];
         // ランダムにばら撒く（初期化時と同様の範囲）
         const Vector3 randOffset = { distXZ(sRng), distY(sRng), distXZ(sRng) };
-
-        p.position = { position.x + randOffset.x, position.y + randOffset.y, position.z + randOffset.z };
-        p.lifeTime = lifeTime;
-        p.velocity = kStill;
-        p.currentTime = 0.0f;
-        p.color = color;
-        p.scale = Uniform(scale);
-        p.rotateZ = 0.0f;
-        p.alive = 1;
-        p.curveFlag = static_cast<uint32_t>(flicker ? ParticleMotion::kFlicker : ParticleMotion::kLinear);
-        group.slotExpiry[i] = group.groupTime + lifeTime + kSlotExpiryMargin;
-        group.aliveCount++;
-    }
-
-    // 書き込んだスロットを、次の更新で GPU へ送る対象にする
-    group.needsInit = true;
-    for (uint32_t i = 0; i < count; ++i) {
-        group.pendingSlots.push_back(i);
+        SpawnParticle(group, { .position = { position.x + randOffset.x, position.y + randOffset.y, position.z + randOffset.z },
+            .velocity = kStill, .color = color, .scale = Uniform(scale), .lifeTime = lifeTime, .motion = motion });
     }
 }
 
@@ -406,7 +380,5 @@ void ParticleManager::EmitTrail(const std::string& name, const Vector3& position
     SpawnParticle(particleGroups_[name], { .position = position, .velocity = kStill, .color = color, .scale = Uniform(scale),
         .lifeTime = lifeTime, .motion = ParticleMotion::kShrinkFade });
 }
-
-//  Update: CS ディスパッチ（フェーズ分割版）
 
 } // namespace engine::graphics

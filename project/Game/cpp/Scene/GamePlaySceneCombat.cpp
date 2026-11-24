@@ -4,6 +4,7 @@
  * @note GamePlayScene の戦闘の更新だけを GamePlayScene.cpp から分けて置いている（クラスは GamePlayScene のまま）
  */
 #include "GamePlayScene.h"
+#include "EnemyEffectLibrary.h"
 #include "AudioBridge.h"
 #include "CombatTuning.h"
 #include "EnemyTuning.h"
@@ -29,6 +30,7 @@
 #include "StringUtility.h"
 #include "TextureManager.h"
 #include "WeaponManager.h"
+#include "ParticleFieldLibrary.h"
 #include <algorithm>
 #include <array>
 #include <cfloat>
@@ -42,6 +44,7 @@ namespace engine::game {
 
 namespace {
 constexpr float kStageHalfDepth = 0.5f; // 2.5Dステージの奥行き半分
+constexpr const char* kBossEffectKind = "Boss"; // ステージボスのやられの演出の種類（enemy_effects.json の名前）
 constexpr int kTechniqueIdStride = 16; // 近接の技IDは 武器種 * これ + 段（段数がこれを超えない前提）
 constexpr int kSkillTechniqueIdBase = 1000; // 近接段のIDと重ならないよう固有技に割り当てる番号の起点
 constexpr float kMinFatigueRange = 0.01f; // 無料区間を1以上に設定されても0除算しないための下限
@@ -187,12 +190,13 @@ void GamePlayScene::ApplyMeleeComboStyleHit(const AABB& enemyAABB) {
     const bool extraHit = player_->JustComboExtraHit();
     const float knockbackMult = weapon.knockbackMult * player_->GetAwakenedKnockbackMult() * CombatTune().knockbackScale
         * (extraHit ? CombatTune().awakenExtraHitKnockScale : 1.0f);
-    const bool comboFinisher = !extraHit && IsMeleeFinisher(weapon.type, attack);
+    const bool comboFinisher = !extraHit && IsMeleeFinisher(weapon.type, attack, WeaponManager::GetInstance()->IsCurrentFused(), WeaponManager::GetInstance()->IsBossSlotSelected());
     // 固有技の連撃（剣舞など）は武器の疲労の対象外
     const bool skillSequence = player_->IsSkillSequenceActive();
     const int fatigueIndex = skillSequence ? -1 : HeldMeleeFatigueIndex();
     const float fatigueMult = WeaponFatigueDamageMult(fatigueIndex);
     // 疲労ぶん弱めたダメージを与え、使った武器の疲労を溜める
+    RecordBossMeleeHit(weapon.type);
     enemy_->TakeDamageScaled(static_cast<float>(damage) * fatigueMult);
     RegisterFatigueHit(fatigueIndex, CombatTune().weaponFatiguePerHit);
     // ボスはふだん吹き飛ばずのけぞらない（ダメージだけ入れ、たまるとひるむ）。ひるんでいる間だけ普通の敵と同じ反応にする
@@ -283,6 +287,7 @@ void GamePlayScene::ApplyWeaponSkillStyleHit(const AABB& enemyAABB) {
     // ダメージ: 叩きつけか通常の固有技かの固定値（ボス技を奪っていれば上乗せ）
     const int slamBonus = (slam && HasBossSlamTechnique()) ? GameRules::GetInstance()->Get().bossTechniqueBonusDamage : 0;
     const float rawDamage = static_cast<float>((slam ? CombatTune().bossSlamBaseDamage : CombatTune().bossSkillBaseDamage) + slamBonus);
+    RecordBossMeleeHit(wm->GetCurrent().type);
     enemy_->TakeDamage((std::max)(1, static_cast<int>(std::round(rawDamage * CurrentDamageMult() * FusionDamageMult()))));
     if (BossReactsToHits()) {
         enemy_->ApplyHitstun(CombatTune().skillHitstunSeconds, true);
@@ -582,6 +587,7 @@ bool GamePlayScene::TryJustDodge(const Vector3& hitPos) {
     fx.Impact("just_dodge");
     fx.Ring("just_dodge", hitPos);
     fx.Flash("just_dodge");
+    SlowEnemiesAfterJustDodge();
     return true;
 }
 
@@ -628,6 +634,10 @@ void GamePlayScene::UpdateParticles(float dt) {
 
     UpdateLandingAndJumpDustParticles();
     UpdateGhostTrail(dt);
+    // 大剣の投げ回転斬りの渦: 敵と同じように、まわりの粒も渦を巻いて吸い込まれる
+    if (player_->IsGreatswordSpinning()) {
+        ParticleFieldLibrary::Emit(pm_, "greatsword_vortex", player_->GetGreatswordThrowPos());
+    }
     UpdateEnemyAttackOnPlayer(dt);
     // ラスボスは体当たりと叩きつけの代わりに自分の技で攻める
     if (!finalBoss_.IsActive()) {
@@ -643,7 +653,7 @@ void GamePlayScene::UpdateParticles(float dt) {
     UpdateWeaponAcquireBanner(dt);
 
     // 倒した瞬間の演出と、HUD のフィニッシュ!（コンボの締めではなく、倒した時だけ出す）
-    auto emitDefeat = [this](const Vector3& pos) {
+    auto emitDefeat = [this](const Vector3& pos, const std::string& kind) {
         styleRankHud_.RegisterFinisher();
         // 倒した瞬間だけ時間を少しゆっくりにして、とどめの手応えを残す（ラスボスは専用の撃破演出に任せる）
         if (!finalBoss_.IsActive()) {
@@ -656,15 +666,17 @@ void GamePlayScene::UpdateParticles(float dt) {
         fx.Ring("defeat", pos);
         fx.Ring("defeat_orb", pos);
         fx.Sparks("defeat", pos);
+        // 敵の種類ごとの GPU パーティクル（スライムは粘液が飛び散り、骸骨は魂が抜けて昇る など）
+        EnemyEffectLibrary::EmitDefeat({ pm_, &rng_ }, kind, pos);
     };
     if (enemy_ && enemy_->IsDefeated() && !mainEnemyDefeatEffectEmitted_) {
         mainEnemyDefeatEffectEmitted_ = true;
-        emitDefeat(enemy_->GetPosition());
+        emitDefeat(enemy_->GetPosition(), kBossEffectKind);
     }
     for (auto& entry : weaponEnemies_) {
         if (entry.enemy && entry.enemy->IsDefeated() && !entry.defeatEffectEmitted) {
             entry.defeatEffectEmitted = true;
-            emitDefeat(entry.enemy->GetPosition());
+            emitDefeat(entry.enemy->GetPosition(), EnemyEffectLibrary::KindOf(*entry.enemy));
         }
     }
 }

@@ -9,7 +9,9 @@
 // 標準ライブラリ
 #include <array>
 #include <deque>
+#include <map>
 #include <memory>
+#include <optional>
 #include <random>
 #include <string>
 #include <vector>
@@ -393,12 +395,17 @@ private:
     bool TryStartBossExecution();
     /** @brief とどめの演出の間の1フレーム（操作・敵を止め、演出・切り分け・カメラだけを進め、終わったら武器を渡す） */
     void UpdateBossExecution();
+    /** @brief ボスに近接武器を当てた事を覚える（倒した後の当たりは数えない。とどめの型と姿勢をこの武器で決める） */
+    void RecordBossMeleeHit(WeaponType weapon);
     /** @brief ボスの体の中に中心がめり込んでいる、まだ壊れていない爆弾の名前を返す（無ければ空） */
     std::string FindBombInsideBoss();
     /** @brief とどめの演出で、ボスにめり込んだ爆弾を壊して爆発を出す（プレイヤーと敵は巻き込まない） */
     void DetonateExecutionBomb();
-    /** @brief ボスの武器を手に入れ、ボス技を覚える（吸い寄せ・とどめのどちらで奪った時も同じ） */
-    void CompleteBossWeaponSteal();
+    /**
+     * @brief ボスの武器を手に入れ、ボス技を覚える（吸い寄せ・とどめのどちらで奪った時も同じ）
+     * @param keepHeldWeapon true なら手に入れた後も今の武器を持ったままにする（倒した武器のままとどめを刺した時）。false ならボスの武器へ持ち替える
+     */
+    void CompleteBossWeaponSteal(bool keepHeldWeapon = false);
     /** @brief 道中の武器敵の武器（倒して落ちている物も含む）を描かない・描くに切り替える（とどめの演出の画面に映さないため） */
     void SetWeaponEnemyWeaponsHidden(bool hidden);
     /** @brief 敵（ボスと道中の武器敵）の見た目の行列だけを今のカメラで計算し直す */
@@ -507,6 +514,8 @@ private:
     void DrawOffscreenEnemyGuide();
     /** @brief 床を抜けてステージの一番下より落ちたら、最後に立っていた床へ戻す（毎フレーム、当たり判定の後に呼ぶ） */
     void UpdateFallRescue();
+    /** @brief 読み込んだステージに合わせて空の画像を選ぶ（レベルの JSON の sky。書いていないステージは既定の空） */
+    void ApplyStageSky();
 
     // ── 味方のボスと 2人目（GamePlaySceneAlly.cpp） ──
     /** @brief 2P が操作に使っている機器（kNone なら味方のボスは自動で戦う） */
@@ -553,7 +562,6 @@ private:
     /** @brief 味方の頭上の体力バーを描く */
     void DrawAllyHpBar();
     /** @brief 2P が操作している時だけ、画面の右下に 2P の操作の案内を出す */
-    void DrawTwoPlayerHud();
     /** @brief 味方のボスの頭上に、敵と見分ける印を出す（ふだんは 味方、2P が操作している間は 2P） */
     void DrawAllyMark();
     /** @brief 味方の体力バーを作る（シーンの初期化で1回。ゲーム中に作ったり消したりしない） */
@@ -562,6 +570,10 @@ private:
     void ResetAlly();
     AllyBoss ally_; ///< 味方のボス
     AllyDevice allyDevice_ = AllyDevice::kNone; ///< 2P が使っている機器
+    bool allyPutAway_ = false; ///< 1P が分身を引っ込めたか（引っ込めている間は、ボスの武器を持っていても自動で出さない）
+    bool allyAutoSummon_ = false; ///< このステージで分身を自動で出すか（ステージに入った時にボスの武器を持っていた時だけ）
+    /** @brief ボスの武器を持っていれば分身を自動で出し、主軸の武器か合体が変わったら出し直す */
+    void AutoSummonAlly();
     float allyIdleSeconds_ = 0.0f; ///< 2P が操作していない秒数
     std::unique_ptr<Sprite> allyHpBarBg_; ///< 味方の頭上の体力バーの下地
     std::unique_ptr<Sprite> allyHpBarFg_; ///< 味方の頭上の体力バーの残り
@@ -631,6 +643,22 @@ private:
      * @note 1回の回避につき加点・演出は1回だけ。2発目以降は無効化のみ行う
      */
     bool TryJustDodge(const Vector3& hitPos);
+    /** @brief ジャスト回避の後に、プレイヤーの周りの敵だけを遅くする（ボスの台本の技と味方は遅くならない） */
+    void SlowEnemiesAfterJustDodge();
+
+    // ── アクションの手応え（GamePlaySceneActionFeel.cpp、調整は action_feel.json） ──
+    /** @brief アクションの手応え（吹き飛んだ敵どうしの衝突・跳ね返りの演出・部屋の最後の1体）を1フレーム進める */
+    void UpdateActionFeel();
+    /** @brief 吹き飛んで横へ速く飛んでいる敵か（倒れて打ち飛ばされている敵も含む） */
+    bool IsFlyingEnemy(const EnemyEntity& enemy) const;
+    /** @brief 吹き飛んだ敵がほかの敵に当たったら、相手にダメージを与えて同じ向きへ飛ばす（連鎖は決めた深さまで） */
+    void UpdateFlyingEnemyCollisions();
+    /** @brief 壁か床で跳ね返った敵に、跳ね返った所で演出を出す（跳ね返り自体は敵の側で起きる） */
+    void UpdateEnemyBounceEffects();
+    /** @brief 扉の条件が見ている敵グループの最後の1体を倒した瞬間に、スローと寄りで締める（ボスの部屋は除く） */
+    void UpdateRoomClearFinale();
+    /** @brief 部屋の最後の1体を倒した所で、スロー・寄り・閃光・音で締める */
+    void StartRoomClearFinale(const Vector3& position);
     // パーティクルの更新
     void UpdateParticles(float dt);
     /** @brief UpdateParticles()の下請け 着地ほこりとジャンプ煙のパーティクルを更新する */
@@ -827,6 +855,7 @@ private:
         Vector3 to {}; ///< 急降下で狙う位置
         bool struck = false; ///< この急降下でもう当たったか
     };
+    /** @brief 道中の武器を持った敵1体ぶんの登録内容 */
     struct WeaponEnemyEntry {
         /** @brief 登録時の敵の識別番号 */
         uint64_t instanceId = 0;
@@ -960,8 +989,14 @@ private:
     std::vector<BossWave> bossWaves_; ///< 走っている衝撃波
     /** @brief 衝撃波を進め、プレイヤーに当たったらダメージ（毎フレーム呼ぶ） */
     void UpdateBossWaves(float dt);
+    /** @brief 渦で引き寄せている間の1フレーム（土煙を吸い込ませ、プレイヤーも中心へ寄せる） */
+    void UpdateBossVortexPull(float dt, const Vector3& bossPosition, float progress);
+    /** @brief 渦が弾けた瞬間（中心のまわりにダメージを出し、吸い込んだ粒を吹き飛ばす） */
+    void BurstBossVortex(const Vector3& bossPosition);
     /** @brief 跳びかかりの着地の周りにダメージと演出を出す */
     void LandBossLeap(const Vector3& position);
+    /** @brief ボスがふだんの動きで壁にめり込むか足場の外へ出たら、最後に立てていた所へ戻す */
+    void KeepStageBossOnGround();
 
     // ボスの予告円→着弾のAoEスラム攻撃(戦闘演出ギミック)
     // 予告秒数・半径・ダメージはenemy_params.jsonのbossSlam節（EnemyTuning::BossSlam()）、出す時機はボス戦の進行役が決める
@@ -990,11 +1025,30 @@ private:
         Vector3 lastGroundedPosition {}; ///< プレイヤーが最後に床に立っていた位置（床抜けの報告に添える）
         Vector3 lastPlayerPosition {}; ///< 前に調べた時のプレイヤーの位置（高い壁や閉じた扉をすり抜けていないか調べる）
         bool hasLastPlayerPosition = false; ///< lastPlayerPosition が入っているか
+        uint32_t teleportCount = 0; ///< 前に調べた時の、手順がプレイヤーを移した回数（増えていたら前の位置と比べない）
         std::vector<std::string> playerTrail; ///< 直前のプレイヤーの様子（古い順。床抜けの報告に添える）
         std::vector<std::pair<const EnemyEntity*, uint64_t>> defeatedSeen; ///< 倒されたのを見た敵（生き返りを見つける）
+        /** @brief 敵1体の、前に調べた時の様子（理由の分からない大きな移動を見つける） */
+        struct EnemyLastSeen {
+            Vector3 position {}; ///< 位置
+            bool fastMoveExpected = false; ///< 速く動いて当然の状態だったか（ボス・吹き飛び中・台本で動いている）
+        };
+        std::map<uint64_t, EnemyLastSeen> enemyLastPositions; ///< 敵の番号 → 前に調べた時の様子
         std::vector<std::pair<std::string, float>> suspectSeconds; ///< おかしな様子が続いている秒数（一瞬だけのものは数えない）
     };
     BugWatchState bugWatch_; ///< 自動テストプレイの見張りの様子
+    /** @brief 敵グループの全滅を待つ条件1つの、前のフレームまでの様子（部屋の最後の1体を見つける） */
+    struct RoomClearWatch {
+        bool initialized = false; ///< 一度でも様子を見たか（最初に見た時は演出を出さない）
+        bool met = false; ///< 前に見た時に条件が成立していたか
+        std::map<std::string, bool> defeated; ///< 敵の名前 → 前に見た時に倒れていたか
+        bool hasLastDefeated = false; ///< 最後に倒れた敵を覚えているか
+        std::string lastDefeatedName; ///< 最後に倒れた敵の名前
+        Vector3 lastDefeatedPosition {}; ///< 最後に倒れた敵が倒れた位置
+    };
+    std::map<std::string, RoomClearWatch> roomClearWatches_; ///< 条件の名前 → 様子
+    std::map<const EnemyEntity*, std::vector<const EnemyEntity*>> flyerHits_; ///< 吹き飛んでいる敵 → もう当てた敵（同じ相手に2回当てない）
+    std::map<const EnemyEntity*, int> flyerChain_; ///< 吹き飛んでいる敵 → 何段目の連鎖で飛ばされたか
     ThrownWeaponPool thrownWeapons_; ///< 締めで投げた武器（見た目は初期化で作って使い回す）
     bool weaponFinisherPending_ = false; ///< このフレームに締めの動作を出すか（ボスへの通常の当たりの後で出す）
     BossBattleDirector bossDirector_; ///< ステージボス戦の進行役（名乗り・第2段階・武器ごとの技）
@@ -1003,6 +1057,9 @@ private:
     bool bossSlamRequested_ = false; ///< 進行役が叩きつけを頼んだか（予告が始まったら下ろす）
     float bossWarningPulse_ = 0.0f; ///< 身構えの輪を次に出すまでの秒数
     float bossTrailTimer_ = 0.0f; ///< 走っている間の火花を次に出すまでの秒数
+    float bossVortexDebrisTimer_ = 0.0f; ///< 渦のまわりの土煙を次に出すまでの秒数
+    std::optional<Vector3> bossSafePosition_; ///< ボスが最後に立てていた所（追いかけて足場の外へ出た時に戻す）
+    float bossVortexWarningTimer_ = 0.0f; ///< 渦の中心の輪を次に出すまでの秒数
     float ghostSpawnTimer_ = 0.0f;
 
     float auraTimer_ = 0.0f;
@@ -1082,6 +1139,9 @@ private:
     bool requestClear_ = false;
     bool glassShatterDebugTest_ = false; ///< 確認用の再生か（結果は見せるが、進行とセーブに反映しない）
     bool bossFinishedByGun_ = false; ///< ボスを倒した最後の一撃が銃だったか（クリアの決め演出の見せ方を変える）
+    bool bossFinishedByBomb_ = false; ///< ボスへのとどめが爆弾の型だったか（クリアの決め演出を爆発にする）
+    bool bossHitByMelee_ = false; ///< ボスに近接武器（段か固有技）を当てたことがあるか
+    WeaponType bossLastMeleeWeapon_ {}; ///< ボスに最後に当てた近接武器（とどめの型と姿勢をこの武器で決める）
     std::string executionBombName_; ///< とどめの演出で爆発させる、ボスにめり込んだ爆弾の名前（爆弾の型でなければ空）
     ClearFinish clearFinish_; ///< クリアの決め演出（Resources/Config/clear_finish.json）
 

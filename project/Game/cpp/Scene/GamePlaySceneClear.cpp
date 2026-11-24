@@ -23,15 +23,20 @@ constexpr int kNoPickupBonus = 0; // 全回収していない時のボーナス
 bool sNextDebugClearByGun = false;
 }
 
-/** @brief クリアの決め演出を始める（ボスを倒した最後の一撃が銃なら弾痕、それ以外なら斬線） */
+/** @brief クリアの決め演出を始める（爆弾のとどめなら爆発、最後の一撃が銃なら弾痕、それ以外なら斬線） */
 void GamePlayScene::StartClearFinish() {
-    CrashBreadcrumbs::Add("game", std::string("クリアの決め演出を開始（") + (bossFinishedByGun_ ? "銃" : "斬撃") + "）");
+    CrashBreadcrumbs::Add("game", std::string("クリアの決め演出を開始（") + (bossFinishedByBomb_ ? "爆弾" : (bossFinishedByGun_ ? "銃" : "斬撃")) + "）");
     // とどめの途中で確認用ボタンからクリアした時も、演出を閉じて技の姿勢から戻す
     bossExecution_.End();
     SetWeaponEnemyWeaponsHidden(false);
     // ラン中は結果画面を決めた秒数だけ見せ、サンドボックスは割れ落ちたらすぐクリア画面へ
     ClearFinish::Setup setup;
-    setup.style = bossFinishedByGun_ ? ClearFinish::Style::kGun : ClearFinish::Style::kBlade;
+    // 爆弾のとどめは爆発、銃で倒したら弾痕、それ以外は斬線
+    if (bossFinishedByBomb_) {
+        setup.style = ClearFinish::Style::kBomb;
+    } else {
+        setup.style = bossFinishedByGun_ ? ClearFinish::Style::kGun : ClearFinish::Style::kBlade;
+    }
     setup.resultSeconds = IsSandboxClear() ? 0.0f : GameRules::GetInstance()->Get().resultDisplaySeconds;
     clearFinish_.Start(setup, { &glassShatter_, pm_, &cameraShaker_, &rng_ });
     // 結果画面の背景は取ったランクの色で塗る（ラン外のクリアはランクが無いので既定の色）

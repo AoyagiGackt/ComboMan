@@ -6,6 +6,7 @@
 #include <d3d12.h>
 #include <wrl/client.h>
 #include <cstddef>
+#include <mutex>
 #include <vector>
 namespace engine {
 class DirectXCommon;
@@ -60,5 +61,7 @@ private:
     std::vector<std::vector<Page>> frames_;
     /** @brief 今記録しているフレームの番号 */
     UINT frameIndex_ = 0;
+    /** @brief 複数のスレッドから同時に確保された時に、空き位置の決定を順番にする */
+    std::mutex mutex_;
 };
 } // namespace engine

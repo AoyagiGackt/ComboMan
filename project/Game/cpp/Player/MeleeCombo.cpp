@@ -359,6 +359,23 @@ bool engine::game::IsMeleeFinisher(WeaponType type, const MeleeAttackDef* attack
     return isLast(set.ground) || isLast(set.air);
 }
 
+/** @brief 合体しているかとボスの武器かも見て、段がコンボの締めかを返す */
+bool engine::game::IsMeleeFinisher(WeaponType type, const MeleeAttackDef* attack, bool fused, bool bossWeapon) {
+    if (attack == nullptr) {
+        return false;
+    }
+    // 合体中は、増えた素材の締めの段（finisher の印付き）と打ち上げだけを締めにし、土台の最後の段は途中の段として扱う
+    if (fused || attack->launcher || attack->finisher) {
+        return attack->launcher || attack->finisher;
+    }
+    // ボスの武器は専用のコンボの最後の段で見る（技IDで比べる）
+    const MeleeComboSet& set = GetMeleeComboSet(type, bossWeapon);
+    const auto isLast = [attack](const ComboArray<MeleeAttackDef>& combo) {
+        return combo.count > 0 && std::strcmp(combo.data[combo.count - 1].id, attack->id) == 0;
+    };
+    return isLast(set.ground) || isLast(set.air);
+}
+
 /** @brief 武器の固有技の連撃の定義を返す */
 const ComboArray<MeleeAttackDef>& engine::game::GetSkillSequence(WeaponType type) {
     static constexpr ComboArray<MeleeAttackDef> kSwordSequence = MakeComboArray(kBladeDance);
@@ -386,7 +403,7 @@ const ComboArray<MeleeAttackDef>& engine::game::GetSkillSequence(WeaponType type
 /** @brief 現在の状態から次に出すべき段を返す（テーブル末尾は先頭へループ） */
 const MeleeAttackDef* MeleeComboController::NextStep(bool launcherInput, bool airborne,
     int& outIdx, bool& outLauncher) const {
-    const MeleeComboSet& set = GetMeleeComboSet(type_);
+    const MeleeComboSet& set = GetMeleeComboSet(type_, bossWeapon_);
     outLauncher = false;
 
     // 地上での下入力は打ち上げ技（コンボの途中からでも割り込める）
@@ -401,12 +418,34 @@ const MeleeAttackDef* MeleeComboController::NextStep(bool launcherInput, bool ai
     if (count <= 0) {
         return nullptr;
     }
+    // 合体中は、土台の最後の段の後に素材の武器の締めが1段増える
+    const MeleeAttackDef* fusionFinisher = FusionFinisherStep(airborne);
+    const int stepCount = fusionFinisher != nullptr ? count + 1 : count;
 
     // 継続条件  攻撃中か猶予中で、地上/空中モードが同じなら次の段へ（末尾は先頭へ戻る）
     bool continuing = (active_ != nullptr || chainGraceTimer_ > 0.0f)
         && !launcherMode_ && (airMode_ == airborne);
-    outIdx = continuing ? (stepIdx_ + 1) % count : 0;
-    return &table[outIdx];
+    outIdx = continuing ? (stepIdx_ + 1) % stepCount : 0;
+    return outIdx < count ? &table[outIdx] : fusionFinisher;
+}
+
+/** @brief 合体中にコンボの最後へ足す、素材の武器の締めの段を返す（合体していないか、素材に締めが無ければ nullptr） */
+const MeleeAttackDef* MeleeComboController::FusionFinisherStep(bool airborne) const {
+    if (fusionPartnerType_ < 0 || static_cast<size_t>(fusionPartnerType_) >= kWeaponTypeCount) {
+        return nullptr;
+    }
+    const MeleeComboSet& partnerSet = GetMeleeComboSet(static_cast<WeaponType>(fusionPartnerType_), fusionPartnerBoss_);
+    const ComboArray<MeleeAttackDef>& partnerCombo = airborne ? partnerSet.air : partnerSet.ground;
+    if (partnerCombo.count <= 0) {
+        return nullptr;
+    }
+    // 素材の締めを写し、締めの印を付けて出す（技の ID は素材のままなので、動きも素材の締めになる）
+    // 写しは武器の種類と地上か空中かごとに1つずつ持ち、段を出している間も同じ場所を指し続けられるようにする
+    static std::array<std::array<MeleeAttackDef, kWeaponTypeCount>, 2> sCopies {};
+    MeleeAttackDef& copy = sCopies[airborne ? 1 : 0][static_cast<size_t>(fusionPartnerType_)];
+    copy = partnerCombo.data[partnerCombo.count - 1];
+    copy.finisher = true;
+    return &copy;
 }
 
 /** @brief 攻撃入力を受け付ける */
@@ -604,7 +643,7 @@ float MeleeComboController::GetBodyTurnOffset() const {
     return active_->bodyTurns * gameConstants::kTwoPi * t;
 }
 
-/** @brief GetSwingOffset/GetBodyLeanOffset共通: 振りかぶり→振り抜き→構え直しの3相でfrom/toを補間する */
+/** @brief GetBodyLeanOffset用: 振りかぶり→振り抜き→構え直しの3相でfrom/toを補間する */
 Vector3 MeleeComboController::BlendPhase(const Vector3& from, const Vector3& to) const {
     // 振りかぶり → 振り抜き → 構え直し の3相をヒットタイミング基準で組む
     const float windupEnd = active_->hitTime * kWindupEndRatio; // 振りかぶり完了
@@ -630,13 +669,6 @@ Vector3 MeleeComboController::BlendPhase(const Vector3& from, const Vector3& to)
     }
     float t = easing::EaseInOutQuad((std::min)((timer_ - recoverBeg) / (active_->duration - recoverBeg), 1.0f));
     return lerp3(to, neutral, t);
-}
-/** @brief 現在のスイング回転オフセットを返す（振りかぶり→振り抜き→構え直しの補間） */
-Vector3 MeleeComboController::GetSwingOffset() const {
-    if (active_ == nullptr) {
-        return { 0.0f, 0.0f, 0.0f };
-    }
-    return BlendPhase(active_->swingFrom, active_->swingTo);
 }
 /** @brief 現在の体の傾きオフセットを返す（同じ振りかぶり→振り抜き→構え直しのタイミングで補間） */
 Vector3 MeleeComboController::GetBodyLeanOffset() const {

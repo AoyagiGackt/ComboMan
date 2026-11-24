@@ -18,9 +18,12 @@ constexpr Vector2 kMenuPosition = { 440.0f, 300.0f };
 constexpr Vector2 kMenuItemSize = { 400.0f, 70.0f };
 constexpr Vector2 kBgmVolumeTextPosition = { 900.0f, 321.0f };
 constexpr Vector2 kSeVolumeTextPosition = { 900.0f, 391.0f };
+constexpr Vector2 kVibrationTextPosition = { 900.0f, 461.0f };
+constexpr const char* kVibrationLayoutKey = "vibration.pos";
+constexpr const char* kVibrationMenuLabel = "VIBRATION";
 constexpr float kVolumeTextScale = 1.5f;
 constexpr Vector4 kVolumeTextColor = { 1.0f, 1.0f, 1.0f, 1.0f };
-constexpr Vector2 kHelpTextPosition = { 340.0f, 630.0f }; // メニュー4行の下に置く
+constexpr Vector2 kHelpTextPosition = { 340.0f, 670.0f }; // メニュー5行の下に置く
 constexpr float kHelpTextScale = 1.0f;
 constexpr Vector4 kHelpTextColor = { 0.7f, 0.7f, 0.7f, 1.0f };
 }
@@ -43,6 +46,7 @@ void OptionsScene::Initialize(DirectXCommon* dxCommon, Input* input, Audio* audi
     menu_.SetItems({
         { "BGM VOLUME" },
         { "SE VOLUME" },
+        { kVibrationMenuLabel },
         { "COMMAND LIST" },
         { "BACK" },
     });
@@ -119,14 +123,24 @@ void OptionsScene::UpdateSettings() {
     menu_.Update(input_);
 
     if (input_->TriggerMenuLeft()) {
-        AdjustVolumeAtCursor(-sceneShared::kVolumeStep);
+        if (menu_.GetSelectedIndex() == kRowVibration) {
+            sceneShared::ToggleVibration(audio_);
+        } else {
+            AdjustVolumeAtCursor(-sceneShared::kVolumeStep);
+        }
     }
     if (input_->TriggerMenuRight()) {
-        AdjustVolumeAtCursor(sceneShared::kVolumeStep);
+        if (menu_.GetSelectedIndex() == kRowVibration) {
+            sceneShared::ToggleVibration(audio_);
+        } else {
+            AdjustVolumeAtCursor(sceneShared::kVolumeStep);
+        }
     }
 
     if (menu_.ConsumeConfirm(input_)) {
-        if (menu_.GetSelectedIndex() == kRowBack) {
+        if (menu_.GetSelectedIndex() == kRowVibration) {
+            sceneShared::ToggleVibration(audio_);
+        } else if (menu_.GetSelectedIndex() == kRowBack) {
             SceneFlow::GetInstance()->Transition("OPTIONS", "back", "TITLE");
         } else if (menu_.GetSelectedIndex() == kRowCommandList) {
             commandList_.Open();
@@ -163,9 +177,11 @@ void OptionsScene::DrawSettings() {
     const Vector4 volumeColor = layout.Color("volume.color", kVolumeTextColor);
     const Vector2 bgmPosition = layout.Pos("volume.bgm_pos", kBgmVolumeTextPosition);
     const Vector2 sePosition = layout.Pos("volume.se_pos", kSeVolumeTextPosition);
+    const Vector2 vibrationPosition = layout.Pos(kVibrationLayoutKey, kVibrationTextPosition);
     const auto& settings = GameSettingsManager::GetInstance()->Get();
     fontRenderer_.DrawString(sceneShared::VolumeLabel(settings.bgmVolume), bgmPosition.x, bgmPosition.y, volumeScale, volumeColor);
     fontRenderer_.DrawString(sceneShared::VolumeLabel(settings.seVolume), sePosition.x, sePosition.y, volumeScale, volumeColor);
+    fontRenderer_.DrawString(sceneShared::VibrationLabel(), vibrationPosition.x, vibrationPosition.y, volumeScale, volumeColor);
 
     const Vector2 helpPosition = layout.Pos("help.pos", kHelpTextPosition);
     fontRenderer_.DrawString(input_->IsUsingGamepad() ? "Left/Right: adjust   A: confirm   B: back" : "A/D or Left/Right: adjust   Space: confirm   Backspace: back",

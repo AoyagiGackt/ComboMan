@@ -6,8 +6,11 @@
  *       操作は Input::InjectKey で本物のキーと同じ経路から流すので、ゲーム側のコードはテスト用に変えなくてよい。
  *       ゲーム側は遊んでいる間におかしな所を見つけたら ReportIssue で知らせる（止めずに記録だけして先へ進む）。
  *       結果は smoke_test フォルダに書き出す。途中で落ちた場合は CrashHandler の報告に、どの手順の途中だったかが残る
+ *       --bug-hunt の時は、前回の記録（BugHuntChanges）から変えたステージだけを遊び、変えた配置物の近くへ移って試す（--all なら全部遊ぶ）
  */
 #pragma once
+#include "BugHuntChanges.h"
+#include "Vector3.h"
 #include "json.hpp"
 #include <chrono>
 #include <cstdint>
@@ -46,6 +49,10 @@ public:
     static bool IsExpectingProgress() {
         return sExpectProgress;
     }
+    /** @brief 手順がプレイヤーを離れた所へ移した回数（見張りが、移す前と後の位置を比べて壁抜けと間違えないように使う） */
+    static uint32_t TeleportCount() {
+        return sTeleportCount;
+    }
 
     /**
      * @brief 遊んでいる間に見つけたおかしな所を記録する（同じ種類と相手は1件にまとめて回数を数える）
@@ -65,7 +72,7 @@ public:
 private:
     /** @brief 手順1つ（手順の表の steps の1要素を、繰り返しを展開して平らにしたもの） */
     struct Step {
-        std::string action; ///< waitScene / waitSceneChange / waitSettled / pressUntilScene / press / hold / wait / random / changeScene / enterNextStage / enterTutorial / grantBossWeapon / mark
+        std::string action; ///< waitScene / waitSceneChange / waitSettled / pressUntilScene / press / hold / wait / random / changeScene / enterNextStage / enterTutorial / enterFinalBoss / visitChanged / grantBossWeapon / mark
         std::string weapon; ///< grantBossWeapon で渡す武器の種類の名前（空なら、今のボスの枠の主軸とも相棒とも違う種類を選ぶ）
         std::string scene;
         std::vector<uint8_t> keys;
@@ -77,6 +84,13 @@ private:
         float chance = 0.0f; ///< random でそれぞれのキーを押す確率
         bool expectProgress = false; ///< この手順の間は先へ進めるはず（進めなければゲーム側が知らせる）
         bool sameStage = false; ///< 入ったステージの中だけの手順（自分でクリアした・やられてリトライした等で画面が変わったら飛ばす）
+    };
+
+    /** @brief 近くへ移って試す配置物1つ */
+    struct VisitTarget {
+        std::string name; ///< 配置物の名前
+        std::string kind; ///< 配置物の種類
+        Vector3 position {}; ///< ワールドの位置
     };
 
     /** @brief 見つけたおかしな所1件 */
@@ -108,10 +122,26 @@ private:
      * @param weaponName 武器の種類の名前（空なら今のボスの枠と違う種類を選ぶ）
      */
     bool GrantBossWeapon(const std::string& weaponName);
+    /** @brief 前回の記録と比べて、遊ぶステージと近くで試す配置物を決める（--bug-hunt の時だけ） */
+    void PrepareChanges(const std::wstring& commandLine);
+    /** @brief 変えていないステージを遊ばずに、クリアした扱いで進行度だけ進める */
+    void SkipFloor(int floor);
+    /** @brief 最後のステージの後にラスボス戦へ入る（変えていなければ、ここで手順を終える。終わったら true） */
+    bool EnterFinalBoss(const Step& step);
+    /** @brief visitChanged の手順を1フレーム進める（変えた配置物の近くへ1つずつ移り、決めた秒数だけ操作する。終わったら true） */
+    bool UpdateVisit(const Step& step);
+    /** @brief 今のステージで近くへ移って試す配置物を集める */
+    void BuildVisitTargets();
+    /** @brief プレイヤーを配置物の手前へ移す */
+    void TeleportTo(const VisitTarget& target);
+    /** @brief 残りの手順を飛ばし、成功として終える（変えた所を全部回り終えた時） */
+    void FinishEarly(const std::string& reason);
     /** @brief 武器の交換や主軸を選ぶ画面が出ていたら、決まった間隔で決定（交換は1つ目の枠）を押して閉じる（手順が決定を押さない時に止まらないように） */
     void AnswerWeaponChoice();
     /** @brief 前のフレームから実時間でかかりすぎていたら、固まりかけとして記録する */
     void CheckFrameHitch();
+    /** @brief どの段階で時間がかかったかの文（前のフレームの更新・描画と、このフレームの始まりからの時間） */
+    static std::string DescribeFramePhases();
     /** @brief keepPlayerAlive の時、体力が減りすぎたら全快させて最後まで回れるようにする（ダメージ自体は受ける） */
     void KeepPlayerAlive();
     /** @brief 入ったステージから画面が変わっていたら true（sameStage の手順を飛ばす目安） */
@@ -152,6 +182,17 @@ private:
     static inline std::string sContext; ///< 今の手順と画面（記録に添える）
     static inline uint64_t sFrame = 0; ///< 今のフレーム（記録に添える）
     bool finished_ = false;
+    bool bugHunt_ = false; ///< --bug-hunt で起動したか（変えた所だけ遊ぶ仕組みを使う）
+    BugHuntChanges changes_; ///< 前回の記録から変わった所
+    bool skippingStage_ = false; ///< 変えていないステージを飛ばしている途中か（ステージの中の手順と、ステージに入るのを待つ手順を飛ばす）
+    std::vector<VisitTarget> visitTargets_; ///< 今の visitChanged で近くへ移って試す配置物
+    std::string visitLabel_; ///< 今試している配置物（記録に添える）
+    int visitedCount_ = 0; ///< 近くへ移って試した配置物の数（報告に出す）
+    int maxVisitsPerStage_ = 0; ///< 1つのステージで試す配置物の数の上限（手順の表の maxVisitsPerStage）
+    float visitOffset_ = 0.0f; ///< 配置物からどれだけ左に移るか（手順の表の visitOffset）
+    float visitRaise_ = 0.0f; ///< 配置物からどれだけ上に移るか（手順の表の visitRaise）
+    std::vector<std::string> visitSkipKinds_; ///< 近くで試さない種類（手順の表の visitSkipKinds）
+    static inline uint32_t sTeleportCount = 0; ///< プレイヤーを離れた所へ移した回数
 };
 
 } // namespace engine::game

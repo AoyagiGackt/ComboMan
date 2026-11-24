@@ -5,6 +5,7 @@
 #pragma once
 #include "DirectXCommon.h"
 #include "MakeAffine.h"
+#include "Vector4.h"
 #include <cstdint>
 #include <random>
 #include <string>
@@ -24,6 +25,7 @@ class Model;
  */
 class MeshSliceEffect {
 public:
+    /** @brief 描画に使う DirectX の共通部を受け取り、パイプラインを作る */
     void Initialize(engine::DirectXCommon* dxCommon);
 
     /**
@@ -32,8 +34,9 @@ public:
      * @param worldPos 破片群のワールド原点（対象モデルの表示位置）
      * @param scale    対象モデルの表示スケール
      * @param seed     切断面の乱数シード
+     * @param explosive true なら斬られた時の静止とずれを飛ばし、すぐ強く吹き飛ばす（爆発で砕けた見せ方。断面は炎の色に光る）
      */
-    void Start(const Model* model, const Vector3& worldPos, const Vector3& scale, uint32_t seed);
+    void Start(const Model* model, const Vector3& worldPos, const Vector3& scale, uint32_t seed, bool explosive = false);
 
     /**
      * @brief タイムラインと破片の運動を進め、定数バッファを書き込む毎フレーム呼ぶ
@@ -64,6 +67,8 @@ private:
     static constexpr float kHoldTime = 0.20f; ///< 切断済みだが静止している時間
     static constexpr float kSlideTime = 0.45f; ///< 断面が光りながらずれる時間
     static constexpr float kBurstTime = 0.90f; ///< 飛散して消えるまでの時間
+    static constexpr float kExplosionSpeedScale = 1.8f; ///< 爆発で砕けた時に、飛び散る速さと回る速さに掛ける倍率
+    static constexpr Vector4 kExplosionGlowColor = { 1.0f, 0.5f, 0.15f, 1.0f }; ///< 爆発で砕けた時の断面の光の色
 
     static constexpr int kPlaneCount = 5; ///< 切断面の数
     static constexpr int kMaxPieces = 40; ///< 破片数の上限
@@ -151,6 +156,7 @@ private:
     float meshRadius_ = 1.0f;
     float slideDist_ = 0.3f;
     float timer_ = 0.0f;
+    bool explosive_ = false; ///< 爆発で砕けた見せ方か（静止とずれを飛ばし、断面を炎の色にする）
     bool active_ = false;
 };
 

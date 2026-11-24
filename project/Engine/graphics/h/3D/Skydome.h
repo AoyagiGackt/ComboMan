@@ -7,6 +7,7 @@
 #include "Model.h"
 #include "Object3d.h"
 #include <memory>
+#include <string>
 namespace engine::graphics {
 class ModelCommon;
 
@@ -27,6 +28,12 @@ public:
      * @param modelCommon 描画設定
      */
     void InitializeDefault(ModelCommon* modelCommon);
+
+    /**
+     * @brief 既定の空の球のまま、貼る画像だけを差し替える（ステージごとに空を変える時に使う）
+     * @param texturePath 空の画像（正距円筒。空なら既定の画像）
+     */
+    void SetTexture(const std::string& texturePath);
 
     /**
      * @brief カメラの位置を取得し、天球をその場所に移動させる
@@ -54,6 +61,7 @@ public:
 
 private:
     std::unique_ptr<Object3d> object_;
+    ModelCommon* modelCommon_ = nullptr; ///< 画像を差し替える時に模型を読み直すための描画設定
     float rotationOffsetY_ = 0.0f;
 };
 

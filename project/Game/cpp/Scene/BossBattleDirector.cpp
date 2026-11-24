@@ -19,6 +19,7 @@ constexpr const char* kChargeAttack = "charge";
 constexpr const char* kDashAttack = "dash";
 constexpr const char* kWaveAttack = "wave";
 constexpr const char* kLeapAttack = "leap";
+constexpr const char* kVortexAttack = "vortex";
 constexpr const char* kStanceMotion = "stance"; // 技を出していない間の動きの名前
 constexpr const char* kRoarMotion = "roar"; // 咆哮の動きの名前
 constexpr const char* kStaggerMotion = "stagger"; // ひるみの動きの名前
@@ -89,6 +90,16 @@ constexpr JsonField<BossBattleTuning> kBossFields[] = {
     { "leap", "damage", &BossBattleTuning::leapDamage },
     { "leap", "recoverSeconds", &BossBattleTuning::leapRecoverSeconds },
     { "leap", "warningRing", &BossBattleTuning::leapWarningRing },
+    { "vortex", "telegraphSeconds", &BossBattleTuning::vortexTelegraphSeconds },
+    { "vortex", "pullSeconds", &BossBattleTuning::vortexPullSeconds },
+    { "vortex", "pullRadius", &BossBattleTuning::vortexPullRadius },
+    { "vortex", "pullSpeed", &BossBattleTuning::vortexPullSpeed },
+    { "vortex", "height", &BossBattleTuning::vortexHeight },
+    { "vortex", "burstRadius", &BossBattleTuning::vortexBurstRadius },
+    { "vortex", "damage", &BossBattleTuning::vortexDamage },
+    { "vortex", "recoverSeconds", &BossBattleTuning::vortexRecoverSeconds },
+    { "vortex", "warningRing", &BossBattleTuning::vortexWarningRing },
+    { "vortex", "debris", &BossBattleTuning::vortexDebris },
 };
 
 /** @brief JSON の文字列の並びを読む（無ければ既定のまま） */
@@ -188,6 +199,10 @@ void BossBattleDirector::Bind(EnemyEntity* boss, const std::string& weaponName) 
     staggerTimer_ = 0.0f;
     poise_ = 0.0f;
     lastHp_ = boss_ != nullptr ? boss_->GetHp() : 0;
+    // 戦いが始まるまでは持ち場で待つ
+    if (boss_ != nullptr) {
+        boss_->SetChaseUnleashed(false);
+    }
 }
 
 /** @brief 叩きつけの範囲の倍率（第2段階で広がる） */
@@ -250,6 +265,8 @@ void BossBattleDirector::UpdateWaiting(const BossFrameInput& input) {
     }
     // 近づく前に当てた分は数えず、戦い始めからためる
     phase_ = Phase::kFight;
+    // 戦い始めたら持ち場に縛らずに追う（少し離れた所が安全地帯にならないように）
+    boss_->SetChaseUnleashed(true);
     attackTimer_ = tuning.firstAttackDelay;
     poise_ = 0.0f;
 }
@@ -363,6 +380,12 @@ void BossBattleDirector::StartNextAttack(const BossFrameInput& input, BossFrameO
         SetScripted(true, input.playerPosition);
         return;
     }
+    if (attack == kVortexAttack) {
+        // その場で身構えてから渦を作る（引き寄せと弾ける時の演出・当たり判定はシーンが出す）
+        BeginTimedMove(Move::kVortexTelegraph, tuning.vortexTelegraphSeconds);
+        SetScripted(true, input.playerPosition);
+        return;
+    }
     // ほかの名前は投げる技（volleys に書いた名前）
     const auto volley = tuning.volleys.find(attack);
     if (volley != tuning.volleys.end()) {
@@ -410,6 +433,7 @@ BossMotionCue BossBattleDirector::CurrentMotionCue() const {
     case Move::kWaveTelegraph:
     case Move::kLeapTelegraph:
     case Move::kSlamTelegraph:
+    case Move::kVortexTelegraph:
         cue.stage = BossMotionStage::kWindup;
         cue.progress = elapsedOf(moveTimer_, stageSeconds_);
         return cue;
@@ -421,6 +445,9 @@ BossMotionCue BossBattleDirector::CurrentMotionCue() const {
         return cue;
     case Move::kLeaping:
         cue.progress = tuning.leapSeconds > 0.0f ? std::clamp(moveTimer_ / tuning.leapSeconds, 0.0f, 1.0f) : 1.0f;
+        return cue;
+    case Move::kVortexPull:
+        cue.progress = elapsedOf(moveTimer_, stageSeconds_);
         return cue;
     case Move::kRecover:
         cue.stage = BossMotionStage::kRecover;
@@ -478,6 +505,23 @@ bool BossBattleDirector::UpdateRangedMove(float dt, const BossFrameInput& input,
             moveTimer_ = 0.0f;
         }
         return true;
+    case Move::kVortexTelegraph:
+        output.warningRing = tuning.vortexWarningRing;
+        moveTimer_ -= dt;
+        if (moveTimer_ <= 0.0f) {
+            BeginTimedMove(Move::kVortexPull, tuning.vortexPullSeconds);
+        }
+        return true;
+    case Move::kVortexPull:
+        // 引き寄せている間はシーンへ知らせ続け、時間が来たら弾けさせる
+        moveTimer_ -= dt;
+        output.vortexPulling = true;
+        output.vortexProgress = stageSeconds_ > 0.0f ? std::clamp(1.0f - moveTimer_ / stageSeconds_, 0.0f, 1.0f) : 1.0f;
+        if (moveTimer_ <= 0.0f) {
+            output.vortexBurst = true;
+            BeginRecover(tuning.vortexRecoverSeconds);
+        }
+        return true;
     case Move::kLeaping: {
         // 放物線で跳び、着地したら周りへのダメージを頼む
         moveTimer_ += dt;
@@ -526,6 +570,7 @@ void BossBattleDirector::UpdateMove(float dt, const BossFrameInput& input, BossF
         chargeTraveled_ += step;
         output.rushing = !strikeLanded_;
         output.charging = true;
+        output.rushDirX = moveDirX_;
         output.strikeDamage = tuning.chargeDamage;
         break;
     }
@@ -559,6 +604,7 @@ void BossBattleDirector::UpdateMove(float dt, const BossFrameInput& input, BossF
             boss_->SetPosition(next);
         }
         output.rushing = !strikeLanded_;
+        output.rushDirX = dashTo_.x >= dashFrom_.x ? 1.0f : -1.0f;
         output.strikeDamage = tuning.dashDamage;
         if (t >= 1.0f || blocked) {
             --dashLeft_;

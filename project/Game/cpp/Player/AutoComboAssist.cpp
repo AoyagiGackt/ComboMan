@@ -3,6 +3,7 @@
  * @brief 攻撃ボタンだけで技を出し分ける入力アシスト（AutoComboAssist）の実装
  */
 #include "AutoComboAssist.h"
+#include "WeaponManager.h"
 #include "MeleeCombo.h"
 #include "Weapon.h"
 #include <algorithm>
@@ -11,6 +12,11 @@
 
 namespace engine::game {
 namespace {
+/** @brief 今振っているコンボ（ボスの枠の武器を振っていれば、ボスの武器の専用のコンボ）を返す */
+const MeleeComboSet& CurrentComboSet(WeaponType type) {
+    return GetMeleeComboSet(type, WeaponManager::GetInstance()->IsBossSlotSelected());
+}
+
 
 constexpr int kNotUsed = 0; ///< その締め方を使わない
 constexpr int kAfterFullCombo = -1; ///< 地上コンボを最後まで振ってから
@@ -109,7 +115,7 @@ int ResolveStep(int routeStep, int groundCount) {
 bool IsRouteAvailable(const ComboRoute& route, WeaponType type) {
     const bool needsLauncher = route.launchAfterStep != kNotUsed;
     const bool needsSkill = route.skillAfterStep != kNotUsed;
-    return (!needsLauncher || GetMeleeComboSet(type).launcher != nullptr)
+    return (!needsLauncher || CurrentComboSet(type).launcher != nullptr)
         && (!needsSkill || GetSkillSequence(type).count > 0);
 }
 
@@ -135,7 +141,7 @@ int AutoComboAssist::LaunchStep(WeaponType type) const {
     if (!IsRouteAvailable(route, type)) {
         return 0;
     }
-    return ResolveStep(route.launchAfterStep, GetMeleeComboSet(type).ground.count);
+    return ResolveStep(route.launchAfterStep, CurrentComboSet(type).ground.count);
 }
 
 /** @brief 今のルートで固有技に繋ぐ地上コンボの段（1始まり）。固有技を使わないルートなら0 */
@@ -144,7 +150,7 @@ int AutoComboAssist::SkillStep(WeaponType type) const {
     if (!IsRouteAvailable(route, type)) {
         return 0;
     }
-    return ResolveStep(route.skillAfterStep, GetMeleeComboSet(type).ground.count);
+    return ResolveStep(route.skillAfterStep, CurrentComboSet(type).ground.count);
 }
 
 /** @brief その武器のルート表で使えるものの中から、今のルート以外をランダムに選ぶ */
@@ -193,7 +199,7 @@ void AutoComboAssist::OnStepStarted(WeaponType type, const MeleeComboController&
     // （固有技の回は OnStepHit() で固有技を予約した時に1周とみなす）
     const bool launched = active->launcher;
     const bool groundFinished = LaunchStep(type) == 0 && SkillStep(type) == 0
-        && combo.GetStep() >= GetMeleeComboSet(type).ground.count;
+        && combo.GetStep() >= CurrentComboSet(type).ground.count;
     if (launched || groundFinished) {
         routeFinished_ = true;
     }

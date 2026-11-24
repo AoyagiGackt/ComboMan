@@ -3,14 +3,17 @@
  * @brief 武器を持つ敵の、打ち上げ・吹き飛び・被弾硬直と、武器を落とす処理
  */
 #include "EnemyEntity.h"
+#include "ActionFeelTuning.h"
 #include "EnemyTuning.h"
 #include "GameConstants.h"
+#include "GroundSupport.h"
 #include <algorithm>
 #include <cmath>
 
 namespace engine::game {
 namespace {
 constexpr float kWallStopClearance = 0.001f; ///< 壁際で止めた体と壁のすき間（計算の誤差で触れたままにならないように）
+constexpr float kMinTimeSlowScale = 0.05f; ///< 時間を遅くする割合の下限（止まるとヒットストップと区別が付かない）
 } // namespace
 
 /** @brief 倒れた体を真下の床まで重力で落とす（宙で倒れた敵や、乗っていた足場が消えた体が浮いたまま止まらないように） */
@@ -88,6 +91,55 @@ void EnemyEntity::ApplyComboReaction(float knockDirX, float knockY,
         Launch(knockY);
     }
 }
+/** @brief 跳ねて近づく（被弾の吹き飛びとは別なので、壁や高い所で止まっても倒れない） */
+void EnemyEntity::Hop(float dirX, float speedX, float speedY) {
+    if (defeated_ || IsScripted()) {
+        return;
+    }
+    // 横の勢いはコンボの締めと同じ倍率で滑らせ、上は打ち上げと同じ重力で弧を描かせる（吹き飛びの印は立てない）
+    knockVelX_ = dirX * speedX * kFinisherKnockDirXScale;
+    if (speedY <= kLaunchThreshold) {
+        return;
+    }
+    if (!isLaunched_) {
+        launchOriginY_ = pos_.y;
+    }
+    isLaunched_ = true;
+    velY_ = speedY;
+    airComboTimer_ = EnemyTuning::GetInstance()->Basic().airComboHold;
+}
+
+/** @brief 宙にいる間の上下を地形に合わせる（頭が上の箱に当たったら止め、着地する高さを真下の床にする） */
+void EnemyEntity::ResolveAirborneTerrain(const std::vector<engine::AABB>& solids) {
+    // 倒れた体の落下と台本で動かしている間は別の処理が高さを決め、飛ぶ種類は浮いている高さへ戻るので床へは下ろさない
+    if (!isLaunched_ || defeated_ || IsScripted() || archetype_->Hovers()) {
+        return;
+    }
+    const EnemySeparationTuning& separation = EnemyTuning::GetInstance()->Separation();
+    const float halfWidth = WallBodyHalfWidth(separation.bodyHalfWidth);
+    const float height = WallBodyHeight(separation.wallBandTop);
+    const float footOffset = EnemyTuning::GetInstance()->Basic().corpseFootOffset;
+    const auto overlapsBody = [&](const engine::AABB& block) {
+        return pos_.z >= block.min.z && pos_.z <= block.max.z && pos_.x + halfWidth > block.min.x && pos_.x - halfWidth < block.max.x;
+    };
+    // 頭: 上がっている間に、このフレームで上の箱の下面を越えたら、その下で止めて落とし始める
+    if (velY_ > 0.0f) {
+        const float headNow = pos_.y + height;
+        const float headBefore = headNow - velY_;
+        for (const engine::AABB& block : solids) {
+            if (overlapsBody(block) && block.min.y >= headBefore - kHeadHitMargin && block.min.y < headNow) {
+                pos_.y = block.min.y - height - kHeadHitMargin;
+                velY_ = 0.0f;
+                break;
+            }
+        }
+    }
+    // 着地する高さ: 真下で一番高い床（跳ねて高い段に乗った時はその上、段の外へ出た時は下の床）。床が無ければ今のまま
+    if (const auto floor = FindSupportingFloor(pos_, halfWidth, 0.0f, footOffset, solids)) {
+        launchOriginY_ = *floor + footOffset;
+    }
+}
+
 /** @brief 被弾硬直を与える（硬直中は歩かず攻撃も進めず、のけぞった姿勢になる） */
 void EnemyEntity::ApplyHitstun(float seconds, bool interruptAttack) {
     if (defeated_) {
@@ -228,8 +280,90 @@ bool EnemyEntity::StopAtWallsEnteredThisFrame(const std::vector<engine::AABB>& s
     if (!stopX) {
         return false;
     }
+    const float hitSpeed = knockVelX_;
     pos_.x = *stopX;
     knockVelX_ = 0.0f;
+    TryWallBounce(hitSpeed);
+    return true;
+}
+
+/** @brief 持ち場（出てきた位置）へ戻し、吹き飛びの勢いを止める（ステージの外へ出てしまった時に使う） */
+bool EnemyEntity::ReturnHome() {
+    // 勢いを残すと、戻した所からまた同じ向きへ飛んで外へ出てしまう
+    knockVelX_ = 0.0f;
+    velY_ = 0.0f;
+    isLaunched_ = false;
+    blownAway_ = false;
+    SetPosition({ spawnX_, spawnY_, pos_.z });
+    return true;
+}
+
+/** @brief この敵の時間だけを遅くする（歩き・攻撃・吹き飛び・アニメのすべて。台本で動かしている間は遅くしない） */
+void EnemyEntity::ApplyTimeSlow(float seconds, float scale) {
+    timeSlowTimer_ = (std::max)(timeSlowTimer_, seconds);
+    timeSlowScale_ = std::clamp(scale, kMinTimeSlowScale, 1.0f);
+}
+
+/** @brief 時間が遅い間に、このフレームを進めないなら true（進めないフレームは止まった時と同じ見た目の更新だけにする） */
+bool EnemyEntity::SkipFrameForTimeSlow() {
+    if (timeSlowTimer_ <= 0.0f) {
+        return false;
+    }
+    timeSlowTimer_ = (std::max)(timeSlowTimer_ - gameConstants::kFrameDeltaTime, 0.0f);
+    if (timeSlowTimer_ <= 0.0f) {
+        timeSlowAccumulator_ = 0.0f;
+        return false;
+    }
+    // 割合を積み上げて、1を超えたフレームだけ進める（割合 0.35 なら3フレームに1回くらい）
+    timeSlowAccumulator_ += timeSlowScale_;
+    if (timeSlowAccumulator_ >= 1.0f) {
+        timeSlowAccumulator_ -= 1.0f;
+        return false;
+    }
+    return true;
+}
+
+/** @brief 速く落ちてきて床に着いた時に、跳ね返らせる（吹き飛びの途中だけ） */
+bool EnemyEntity::TryFloorBounce(float fallSpeed) {
+    const ActionFeelTuning& feel = ActionFeel();
+    if (!feel.bounceEnabled || !blownAway_ || floorBouncesLeft_ <= 0 || fallSpeed < feel.floorBounceMinFallSpeed) {
+        return false;
+    }
+    --floorBouncesLeft_;
+    velY_ = fallSpeed * feel.floorBounceFactor;
+    MarkBounce(false);
+    return true;
+}
+
+/** @brief 速く壁にぶつかった時に、跳ね返らせる（吹き飛びの途中の、生きている敵だけ） */
+void EnemyEntity::TryWallBounce(float hitSpeed) {
+    const ActionFeelTuning& feel = ActionFeel();
+    if (!feel.bounceEnabled || !blownAway_ || defeated_ || wallBouncesLeft_ <= 0 || std::abs(hitSpeed) < feel.wallBounceMinSpeed) {
+        return;
+    }
+    --wallBouncesLeft_;
+    // 来た向きへ跳ね返し、少し浮かせて戻ってきた所をもう一度殴れるようにする
+    knockVelX_ = -hitSpeed * feel.wallBounceFactor;
+    Launch(feel.wallBounceLift);
+    TakeDamage(feel.wallBounceDamage);
+    MarkBounce(true);
+}
+
+/** @brief 跳ね返ったことをシーンへ知らせる印を付ける */
+void EnemyEntity::MarkBounce(bool onWall) {
+    bouncePending_ = true;
+    bounceOnWall_ = onWall;
+    bouncePosition_ = pos_;
+}
+
+/** @brief このフレームまでに壁か床で跳ね返っていれば、その場所を受け取って知らせを消す */
+bool EnemyEntity::ConsumeBounce(Vector3& position, bool& onWall) {
+    if (!bouncePending_) {
+        return false;
+    }
+    bouncePending_ = false;
+    position = bouncePosition_;
+    onWall = bounceOnWall_;
     return true;
 }
 
@@ -238,6 +372,9 @@ void EnemyEntity::BeginBlownAway() {
     if (!blownAway_) {
         blownAway_ = true;
         blownFromY_ = isLaunched_ ? launchOriginY_ : pos_.y;
+        // 新しい吹き飛びごとに、壁と床で跳ね返れる回数を戻す
+        wallBouncesLeft_ = ActionFeel().wallBounceCount;
+        floorBouncesLeft_ = ActionFeel().floorBounceCount;
     }
     blownSettleTimer_ = 0.0f;
 }

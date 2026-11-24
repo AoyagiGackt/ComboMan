@@ -7,6 +7,7 @@
 #include "JsonHelper.h"
 #include "Model.h"
 #include "ModelCommon.h"
+#include "ModelManager.h"
 #include "Object3d.h"
 #include <memory>
 #include <string>
@@ -19,6 +20,7 @@ namespace engine::game {
  * （ブロック1個=1ワールド単位、Z=0の2.5D平面に並べる）
  */
 struct BorderBlockLayout {
+    std::string palette; ///< 地形の色見本の画像の場所
     float floorY = -0.6f; ///< 床のY座標
     float ceilingY = 13.0f; ///< 天井のY座標
     float leftWallX = 2.0f; ///< 左壁のX座標
@@ -40,7 +42,9 @@ inline BorderBlockLayout LoadBorderBlockLayout(const std::string& jsonPath) {
     if (!j.is_object()) {
         return layout;
     }
+    constexpr const char* kPaletteKey = "palette";
     static constexpr JsonField<BorderBlockLayout> kFields[] = {
+        { nullptr, kPaletteKey, &BorderBlockLayout::palette },
         { nullptr, "floorY", &BorderBlockLayout::floorY },
         { nullptr, "ceilingY", &BorderBlockLayout::ceilingY },
         { nullptr, "leftWallX", &BorderBlockLayout::leftWallX },
@@ -64,26 +68,39 @@ inline void BuildBorderBlocks(engine::graphics::ModelCommon* modelCommon, engine
     const std::string& jsonPath = "Resources/Config/border_layout.json") {
     const BorderBlockLayout layout = LoadBorderBlockLayout(jsonPath);
 
-    auto addBlock = [&](float x, float y, float z) {
+    constexpr const char* kGroundModelPath = "Resources/block/terrain/terrain_ground.obj";
+    constexpr const char* kCeilingModelPath = "Resources/block/terrain/terrain_ceiling.obj";
+    constexpr const char* kWallModelPath = "Resources/block/terrain/terrain_wall.obj";
+    auto* groundModel = modelBlock;
+    auto* ceilingModel = modelBlock;
+    auto* wallModel = modelBlock;
+    if (!layout.palette.empty()) {
+        auto* manager = engine::graphics::ModelManager::GetInstance();
+        groundModel = manager->GetOrLoad(modelCommon, kGroundModelPath, layout.palette);
+        ceilingModel = manager->GetOrLoad(modelCommon, kCeilingModelPath, layout.palette);
+        wallModel = manager->GetOrLoad(modelCommon, kWallModelPath, layout.palette);
+    }
+
+    auto addBlock = [&](engine::graphics::Model* model, float x, float y, float z) {
         auto b = std::make_unique<engine::graphics::Object3d>();
         b->Initialize(modelCommon);
-        b->SetModel(modelBlock);
+        b->SetModel(model);
         b->SetEnableLighting(false);
         b->SetPosition({ x, y, z });
         b->Update();
         borderBlocks.push_back(std::move(b));
     };
     for (int x = layout.wallMinIndex; x <= layout.floorCeilingMaxIndex; ++x) {
-        addBlock(static_cast<float>(x), layout.floorY, layout.blockZ);
+        addBlock(groundModel, static_cast<float>(x), layout.floorY, layout.blockZ);
     }
     for (int x = layout.wallMinIndex; x <= layout.floorCeilingMaxIndex; ++x) {
-        addBlock(static_cast<float>(x), layout.ceilingY, layout.blockZ);
+        addBlock(ceilingModel, static_cast<float>(x), layout.ceilingY, layout.blockZ);
     }
     for (int y = layout.wallMinIndex; y <= layout.wallMaxIndex; ++y) {
-        addBlock(layout.leftWallX, static_cast<float>(y), layout.blockZ);
+        addBlock(wallModel, layout.leftWallX, static_cast<float>(y), layout.blockZ);
     }
     for (int y = layout.wallMinIndex; y <= layout.wallMaxIndex; ++y) {
-        addBlock(layout.rightWallX, static_cast<float>(y), layout.blockZ);
+        addBlock(wallModel, layout.rightWallX, static_cast<float>(y), layout.blockZ);
     }
 }
 

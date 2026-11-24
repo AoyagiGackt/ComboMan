@@ -14,6 +14,7 @@
 #include "EnemyEntity.h"
 #include "EnemyRegistry.h"
 #include "EnemyTuning.h"
+#include "KnightEnemy.h"
 #include "FontRenderer.h"
 #include "GameConstants.h"
 #include "GameFlags.h"
@@ -262,6 +263,12 @@ void StageEditor::SeparateOverlappingEnemies(const std::vector<engine::AABB>& wa
 /** @brief 歩く敵の高さを地形に合わせる（壁を登る・段差に乗る・足場から落ちる。ボスと巡回する敵は配置どおり） */
 void StageEditor::UpdateEnemiesOnTerrain(const std::vector<engine::AABB>& solids) {
     for (auto& entry : objects_) {
+        // ナイトは横の押し出しと足元の床に合わせる高さを自分で解く
+        if (entry.runtimeActive && entry.knight) {
+            entry.knight->ResolveBlockCollision(solids);
+            entry.desc.position = entry.knight->GetPosition();
+            continue;
+        }
         if (!entry.runtimeActive || !entry.enemy) {
             continue;
         }
@@ -279,6 +286,8 @@ void StageEditor::UpdateEnemiesOnTerrain(const std::vector<engine::AABB>& solids
         // 吹き飛び以外の大きな動き（ノックバック・爆風など）でも壁を抜けないよう、入った壁の手前で止める（ボスも同じ）
         const bool stopped = entry.enemy->StopAtWallsEnteredThisFrame(solids);
         if (followsTerrain) {
+            // 宙にいる間（打ち上げ・跳ねる）は、頭を上の箱で止め、着地する高さを真下の床にする
+            entry.enemy->ResolveAirborneTerrain(solids);
             entry.enemy->UpdateTerrain(solids);
         }
         if (followsTerrain || stopped) {

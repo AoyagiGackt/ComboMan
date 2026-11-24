@@ -60,7 +60,7 @@ void MeshSliceEffect::Initialize(DirectXCommon* dxCommon) {
 }
 
 /** @brief モデルを切断して再生を開始する */
-void MeshSliceEffect::Start(const Model* model, const Vector3& worldPos, const Vector3& scale, uint32_t seed) {
+void MeshSliceEffect::Start(const Model* model, const Vector3& worldPos, const Vector3& scale, uint32_t seed, bool explosive) {
     if (model == nullptr || model->GetVertexCount() == 0) {
         return;
     }
@@ -79,7 +79,16 @@ void MeshSliceEffect::Start(const Model* model, const Vector3& worldPos, const V
 
     UploadVertices(vertices);
 
+    // 爆発で砕けた時は、斬られて止まる・ずれる所を飛ばして、強く吹き飛ばす所から始める
+    explosive_ = explosive;
     timer_ = 0.0f;
+    if (explosive_) {
+        for (auto& pc : pieces_) {
+            pc.velocity = pc.velocity * kExplosionSpeedScale;
+            pc.angularVel = pc.angularVel * kExplosionSpeedScale;
+        }
+        timer_ = GraphicsTuning::Float("meshSlice.holdTime", kHoldTime) + GraphicsTuning::Positive("meshSlice.slideTime", kSlideTime);
+    }
     active_ = true;
 }
 
@@ -367,7 +376,7 @@ void MeshSliceEffect::Update(float dt, Camera* camera) {
     const float initialGlow = GraphicsTuning::Float("meshSlice.initialGlow", kInitialGlow);
     const float slideGlow = GraphicsTuning::Float("meshSlice.slideGlowGain", kSlideGlowGain);
     const float tintGain = GraphicsTuning::Float("meshSlice.tintGain", kTintGain);
-    const Vector4 glowColor = GraphicsTuning::Color("meshSlice.glowColor", { kGlowRed, kGlowGreen, 1.0f, 1.0f });
+    const Vector4 glowColor = explosive_ ? kExplosionGlowColor : GraphicsTuning::Color("meshSlice.glowColor", { kGlowRed, kGlowGreen, 1.0f, 1.0f });
     // 経過時間から、ずれと飛び散りの進み具合（0〜1）を求める
     timer_ += dt;
     const float burstStart = holdTime + slideTime;

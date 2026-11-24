@@ -36,6 +36,7 @@
 #include "Player.h"
 #include "SceneShared.h"
 #include "ShadowManager.h"
+#include "Skydome.h"
 #include "SpaceDistortionEffect.h"
 #include "Sprite.h"
 #include "SpriteCommon.h"
@@ -66,6 +67,7 @@ using engine::graphics::Object3d;
 using engine::graphics::Object3dCommon;
 using engine::graphics::ParticleManager;
 using engine::graphics::ShadowManager;
+using engine::graphics::Skydome;
 using engine::graphics::SpaceDistortionEffect;
 using engine::graphics::Sprite;
 using engine::graphics::SpriteCommon;
@@ -312,6 +314,8 @@ private:
     std::unique_ptr<Object3dCommon> objectCommon_;
     std::unique_ptr<ShadowManager> shadowManager_;
     std::unique_ptr<Camera> camera_;
+    /** @brief ステージの空を描く天球 */
+    std::unique_ptr<Skydome> skydome_;
 
     // 境界ブロック（level01.json から読み込む。本番ステージと共通の形状）
     Model* modelBlock_ = nullptr; // 実体はModelManagerが所有・共有する

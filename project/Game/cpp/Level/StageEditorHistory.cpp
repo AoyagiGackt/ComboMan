@@ -88,8 +88,14 @@ void StageEditor::ApplySnapshot(const LevelSnapshot& snap) {
     playerSpawn_ = snap.playerSpawn;
     enemySpawn_ = snap.enemySpawn;
     graphPath_ = snap.graphPath;
+    // 空は変わった時だけ差し替える（同じ画像を読み直さない）
+    if (sky_ != snap.sky) {
+        SetSky(snap.sky);
+    }
     flagGraphs_ = snap.flagGraphs;
+    comment_ = snap.comment;
     strncpy_s(graphPathBuffer_, graphPath_.c_str(), _TRUNCATE);
+    strncpy_s(commentBuffer_, comment_.c_str(), _TRUNCATE);
 
     // 画面UIの位置も戻す
     for (const UIPositionRecord& record : snap.uiPositions) {
@@ -269,6 +275,12 @@ std::vector<std::string> StageEditor::ValidateLevel() const {
         std::error_code fileError;
         if (!std::filesystem::exists(graphPath_, fileError)) {
             issues.push_back("常駐グラフのファイルが見つかりません: " + graphPath_);
+        }
+    }
+    if (!sky_.empty()) {
+        std::error_code fileError;
+        if (!std::filesystem::exists(sky_, fileError)) {
+            issues.push_back("空の画像が見つかりません: " + sky_);
         }
     }
     return issues;

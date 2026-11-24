@@ -1,11 +1,12 @@
 {
-  "_comment": "プレイヤーの調整値。movement=移動 water=水中 dodge=回避 warp=テレポート斬り awaken=覚醒 combo=近接コンボ rampage=覚醒乱舞 skills=武器の固有技",
+  "_comment": "プレイヤーの調整値。movement=移動（walkSpeedRatio=マップを歩く時の速さの走りに対する割合） water=水中 dodge=回避 warp=テレポート斬り awaken=覚醒 combo=近接コンボ rampage=覚醒乱舞 skills=武器の固有技",
   "movement": {
     "groundY": 0.4,
     "ceilingY": 12,
     "gravity": 0.012,
     "jumpPower": 0.4,
     "speed": 0.15,
+    "walkSpeedRatio": 0.45,
     "minEnemyDistanceX": 0.85,
     "minEnemyDistanceY": 0.75,
     "invincibleDuration": 1

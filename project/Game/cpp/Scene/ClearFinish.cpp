@@ -21,6 +21,7 @@ using namespace clearFinishTuning;
 namespace {
 constexpr const char* kHoleTexture = "Resources/Effects/bulletHole.png";
 constexpr const char* kSparkTexture = "Resources/Effects/bulletHitEffect.png";
+constexpr const char* kBlastTexture = "Resources/Effects/circle2.png"; // 爆発の火の玉（ふちがぼけた丸）
 /** @brief 斬線・弾痕が入った瞬間の揺れ・フラッシュ・音を出す（名前が空のものは出さない） */
 void PlayStrikeEffects(const HitEffectPlayer& fx, const std::string& flash, const std::string& impact, const std::string& sound) {
     if (!flash.empty()) {
@@ -170,6 +171,7 @@ public:
         }
         glass.SetCutLines(lines);
         glass.SetImpactPoints({});
+        glass.SetBlast(false);
         finish.impactUV_ = finish.marks_.empty() ? kScreenCenterUV : finish.marks_.back().uv;
     }
 };
@@ -261,6 +263,84 @@ public:
             points.push_back({ mark.uv.x, mark.uv.y });
         }
         glass.SetImpactPoints(points);
+        glass.SetBlast(false);
+        finish.impactUV_ = finish.marks_.empty() ? kScreenCenterUV : finish.marks_.back().uv;
+    }
+};
+
+/** @brief 爆弾: 画面のあちこちで小さな爆発が続き、静止の後に真ん中で大爆発 → 爆発した所からひびが広がって割れる */
+class ClearFinish::BombStyle final : public ClearFinish::IStrikeStyle {
+public:
+    /** @brief 散らばった小さな爆発と、静止の後の大爆発を並べる */
+    std::vector<Mark> BuildMarks(std::mt19937& rng) const override {
+        const FinishTuning& tune = Tune();
+        std::vector<float> delays;
+        const int blastCount = RandomCount(rng, tune.blastCount, tune.blastCountJitter);
+        const float lastBlast = FillScatteredDelays(delays, blastCount, tune.blastInterval, tune.blastIntervalJitter, rng);
+        std::vector<Mark> marks;
+        for (float delay : delays) {
+            Mark mark;
+            mark.uv = { RandomRange(rng, tune.blastMargin, 1.0f - tune.blastMargin),
+                RandomRange(rng, tune.blastMargin, 1.0f - tune.blastMargin) };
+            mark.angle = RandomRange(rng, 0.0f, gameConstants::kTwoPi);
+            mark.delay = delay;
+            marks.push_back(mark);
+        }
+        // 大爆発は静止が明けてから、画面の真ん中で1回
+        const float finaleStart = delays.empty() ? 0.0f : lastBlast + tune.blastSeconds + tune.bombSilenceSeconds;
+        marks.push_back({ kScreenCenterUV, 0.0f, finaleStart, true });
+        return marks;
+    }
+    /** @brief 小さな爆発は軽く、大爆発は強く揺らして光らせる */
+    void PlayHit(const HitEffectPlayer& fx, const Mark& mark) const override {
+        const FinishTuning& tune = Tune();
+        if (mark.finale) {
+            PlayStrikeEffects(fx, tune.finaleFlash, tune.finaleImpact, tune.finaleSound);
+            gameSounds::Play(SoundCue::kExplosion);
+        } else {
+            PlayStrikeEffects(fx, tune.blastFlash, tune.blastImpact, tune.blastSound);
+        }
+    }
+    /** @brief 火の玉を一気にふくらませて薄れさせ、その真ん中に白く熱い芯を重ねる */
+    void Draw(ClearFinish& finish, size_t index, float since) const override {
+        const FinishTuning& tune = Tune();
+        const Mark& mark = finish.marks_[index];
+        const float seconds = mark.finale ? tune.finaleBlastSeconds : tune.blastSeconds;
+        const float progress = easing::Progress(since, seconds);
+        if (progress >= 1.0f) {
+            return;
+        }
+        const float grow = easing::EaseOutCubic(progress);
+        const float fade = 1.0f - progress * progress;
+        const float size = (mark.finale ? tune.finaleBlastSize : tune.blastSize) * grow;
+        const Vector2 center = ToScreen(mark.uv);
+        auto drawBall = [&](Sprite& sprite, float ballSize, Vector4 color) {
+            color.w *= fade;
+            sprite.SetPosition(center);
+            sprite.SetSize({ ballSize, ballSize });
+            sprite.SetRotation(mark.angle);
+            sprite.SetColor(color);
+            sprite.Update();
+            sprite.Draw();
+        };
+        drawBall(*finish.blastGlows_[index], size, tune.blastColor);
+        drawBall(*finish.blastCores_[index], size * tune.blastCoreScale, tune.blastCoreColor);
+    }
+    /** @brief 大爆発が広がり切って、少し待つまで */
+    float TailSeconds() const override {
+        const FinishTuning& tune = Tune();
+        return tune.finaleBlastSeconds + tune.bombHoldSeconds;
+    }
+    /** @brief 爆発したすべての所を起点に、放射状のひびを広げて割る（大爆発の真ん中から崩れる） */
+    void PrepareGlass(ClearFinish& finish, GlassShatterEffect& glass) const override {
+        glass.SetCutLines({});
+        std::vector<GlassShatterEffect::ImpactPoint> points;
+        for (const Mark& mark : finish.marks_) {
+            points.push_back({ mark.uv.x, mark.uv.y });
+        }
+        glass.SetImpactPoints(points);
+        // 爆発で割る（破片が爆発した所から外へ吹き飛び、ひびが炎の色。抜けた所はいつもの暗い色）
+        glass.SetBlast(true);
         finish.impactUV_ = finish.marks_.empty() ? kScreenCenterUV : finish.marks_.back().uv;
     }
 };
@@ -354,7 +434,8 @@ const std::vector<const ClearFinish::IPhase*>& Phases() {
 const ClearFinish::IStrikeStyle& StyleFor(ClearFinish::Style style) {
     static const ClearFinish::BladeStyle kBlade;
     static const ClearFinish::GunStyle kGun;
-    static const ClearFinish::IStrikeStyle* const kStyles[] = { &kBlade, &kGun };
+    static const ClearFinish::BombStyle kBomb;
+    static const ClearFinish::IStrikeStyle* const kStyles[] = { &kBlade, &kGun, &kBomb };
     return *kStyles[static_cast<size_t>(style)];
 }
 } // namespace
@@ -394,6 +475,14 @@ void ClearFinish::Initialize(SpriteCommon* spriteCommon) {
         holes_.back()->SetAnchorPoint({ 0.5f, 0.5f });
         sparks_.push_back(create(kSparkTexture));
         sparks_.back()->SetAnchorPoint({ 0.5f, 0.5f });
+    }
+    // 爆発は小さな爆発の数と大爆発の1つぶん（中心を基準に置く）
+    const size_t blastCount = static_cast<size_t>(config.tuning.blastCount) + 1;
+    for (size_t i = 0; i < blastCount; ++i) {
+        blastGlows_.push_back(create(kBlastTexture));
+        blastGlows_.back()->SetAnchorPoint({ 0.5f, 0.5f });
+        blastCores_.push_back(create(kBlastTexture));
+        blastCores_.back()->SetAnchorPoint({ 0.5f, 0.5f });
     }
 }
 

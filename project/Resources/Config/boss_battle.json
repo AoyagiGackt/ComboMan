@@ -1,5 +1,5 @@
 {
-  "_comment": "ステージボス戦。engage=プレイヤーがrangeより近づいたら戦い始める（登場の演出は無し） stagger=ひるみ値（ふだんは攻撃を当てても吹き飛ばずのけぞらない。最大体力のhpRatio（第2段階はrageHpRatio）ぶんのダメージがたまるとseconds秒ひるみ、その間だけ普通の敵と同じく吹き飛ばせる。impact/ring=ひるんだ瞬間の揺れと輪） rage=体力がhpRatioを切った時の第2段階（seconds=咆哮して止まる長さ color=体の色 intervalMult=技の間隔の倍率 radiusMult=叩きつけの範囲の倍率） attack=戦い始めやひるみ・咆哮の後の最初の技までの秒数と、技と技の間隔 charge=突進（身構える長さ・速さ・最大距離・隙・ダメージ・身構えの輪・足元の火花） dash=プレイヤーの向こう側へ回り込むダッシュ（回数・1回の身構え・移動の長さ・回り込む距離・隙・ダメージ・輪・火花） wave=地面を叩いて左右へ走らせる衝撃波（身構える長さ・速さ・最大距離・当たる高さ・横幅の半分・ダメージ・隙・身構えの輪・走る所の土煙。ジャンプでかわせる） leap=プレイヤーの所への跳びかかり（身構える長さ・跳んでいる長さ・高さ・着地の周りでダメージを受ける半径・ダメージ・隙・身構えの輪） volleys=投げる技の名前ごとの中身（count=数 spreadDegrees=扇の角度 speed=速さ riseSpeed/gravity=山なりの上向きの速さと落ちる加速度、gravity=0ならまっすぐ狙う lifetime=飛ぶ秒数 launchHeight=投げる高さ damage recoverSeconds=隙 warningRing=身構えの輪） bosses=武器種別名ごとのボス（体力バーの上の名前は ボス。attacks=ふだんの技 rageAttacks=第2段階の技。技は slam=叩きつけ charge=突進 dash=ダッシュ wave=衝撃波 leap=跳びかかり と volleys に書いた名前 を順に回す）。叩きつけの予告の長さ・範囲・ダメージは enemy_params.json の bossSlam",
+  "_comment": "ステージボス戦。engage=プレイヤーがrangeより近づいたら戦い始める（登場の演出は無し） stagger=ひるみ値（ふだんは攻撃を当てても吹き飛ばずのけぞらない。最大体力のhpRatio（第2段階はrageHpRatio）ぶんのダメージがたまるとseconds秒ひるみ、その間だけ普通の敵と同じく吹き飛ばせる。impact/ring=ひるんだ瞬間の揺れと輪） rage=体力がhpRatioを切った時の第2段階（seconds=咆哮して止まる長さ color=体の色 intervalMult=技の間隔の倍率 radiusMult=叩きつけの範囲の倍率） attack=戦い始めやひるみ・咆哮の後の最初の技までの秒数と、技と技の間隔 charge=突進（身構える長さ・速さ・最大距離・隙・ダメージ・身構えの輪・足元の火花） dash=プレイヤーの向こう側へ回り込むダッシュ（回数・1回の身構え・移動の長さ・回り込む距離・隙・ダメージ・輪・火花） wave=地面を叩いて左右へ走らせる衝撃波（身構える長さ・速さ・最大距離・当たる高さ・横幅の半分・ダメージ・隙・身構えの輪・走る所の土煙。ジャンプでかわせる） leap=プレイヤーの所への跳びかかり（身構える長さ・跳んでいる長さ・高さ・着地の周りでダメージを受ける半径・ダメージ・隙・身構えの輪） vortex=渦（身構える長さ・引き寄せる長さ・引き寄せる半径と速さ・中心の高さ・弾けた時にダメージを受ける半径・ダメージ・隙・身構えの輪・まわりから吸い込ませる土煙。引き寄せる間に歩いて離れるか、弾ける瞬間にかわす。粒の渦は particle_fields.json の boss_vortex） volleys=投げる技の名前ごとの中身（count=数 spreadDegrees=扇の角度 speed=速さ riseSpeed/gravity=山なりの上向きの速さと落ちる加速度、gravity=0ならまっすぐ狙う lifetime=飛ぶ秒数 launchHeight=投げる高さ damage recoverSeconds=隙 warningRing=身構えの輪） bosses=武器種別名ごとのボス（体力バーの上の名前は ボス。attacks=ふだんの技 rageAttacks=第2段階の技。技は slam=叩きつけ charge=突進 dash=ダッシュ wave=衝撃波 leap=跳びかかり vortex=渦 と volleys に書いた名前 を順に回す）。叩きつけの予告の長さ・範囲・ダメージは enemy_params.json の bossSlam",
   "engage": {
     "range": 9
   },
@@ -86,12 +86,14 @@
     "Greatsword": {
       "attacks": [
         "leap",
-        "wave"
+        "wave",
+        "vortex"
       ],
       "rageAttacks": [
+        "vortex",
         "leap",
         "wave",
-        "leap"
+        "vortex"
       ]
     },
     "Scythe": {
@@ -149,6 +151,18 @@
     "damage": 3,
     "recoverSeconds": 0.8,
     "warningRing": "boss_dash_warning"
+  },
+  "vortex": {
+    "telegraphSeconds": 0.8,
+    "pullSeconds": 1.8,
+    "pullRadius": 7.0,
+    "pullSpeed": 3.2,
+    "height": 0.8,
+    "burstRadius": 2.0,
+    "damage": 3,
+    "recoverSeconds": 1.0,
+    "warningRing": "boss_dash_warning",
+    "debris": "gate_dust"
   },
   "volleys": {
     "spears": {

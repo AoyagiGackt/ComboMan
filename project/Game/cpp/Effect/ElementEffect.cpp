@@ -418,6 +418,9 @@ ParticleMotion MotionFromName(const std::string& name) {
         { "ember", ParticleMotion::kEmber },
         { "mist", ParticleMotion::kMist },
         { "crackle", ParticleMotion::kCrackle },
+        { "soul", ParticleMotion::kSoul },
+        { "goo", ParticleMotion::kGoo },
+        { "flutter", ParticleMotion::kFlutter },
     };
     const auto it = kMotions.find(name);
     if (it == kMotions.end()) {
@@ -557,6 +560,23 @@ const std::unordered_map<std::string, LayerFactory>& LayerFactories() {
     return kFactories;
 }
 
+/** @brief JSONの層の一覧を読み、種類ごとの層を生成して追加する（未対応の種類は警告して飛ばす） */
+void ReadLayerList(const std::string& owner, const nlohmann::json& list, std::vector<std::unique_ptr<IElementLayer>>& out) {
+    if (!list.is_array()) {
+        return;
+    }
+    const auto& factories = LayerFactories();
+    for (const nlohmann::json& layerJson : list) {
+        const std::string type = layerJson.value("type", "");
+        const auto factory = factories.find(type);
+        if (factory == factories.end()) {
+            Logger::LogWarning("ElementEffect: " + owner + " の層の種類 '" + type + "' は未対応です");
+            continue;
+        }
+        out.push_back(factory->second(layerJson));
+    }
+}
+
 /** @brief JSONに書かれた層を重ねて出す属性演出 */
 class LayeredElementEffect final : public IElementEffect {
 public:
@@ -619,16 +639,7 @@ private:
     /** @brief JSONの層の一覧を読み、種類ごとの層を生成して追加する */
     static void ReadLayers(const std::string& element, const nlohmann::json& list,
         std::vector<std::unique_ptr<IElementLayer>>& out) {
-        for (const nlohmann::json& layerJson : list) {
-            const std::string type = layerJson.value("type", "");
-            const auto& factories = LayerFactories();
-            const auto factory = factories.find(type);
-            if (factory == factories.end()) {
-                Logger::LogWarning("ElementEffect: " + element + " の層の種類 '" + type + "' は未対応です");
-                continue;
-            }
-            out.push_back(factory->second(layerJson));
-        }
+        ReadLayerList(element, list, out);
     }
 
     std::vector<std::unique_ptr<IElementLayer>> hitLayers_;
@@ -663,6 +674,47 @@ const IElementEffect* IElementEffect::Find(const std::string& element) {
     static const auto kRegistry = BuildRegistry();
     const auto it = kRegistry.find(element);
     return it != kRegistry.end() ? it->second.get() : nullptr;
+}
+
+/** @brief 層の実体 */
+struct ParticleLayerList::Impl {
+    std::vector<std::unique_ptr<IElementLayer>> layers; ///< 上から順に出す層
+};
+
+/** @brief 層の無い並びを作る */
+ParticleLayerList::ParticleLayerList()
+    : impl_(std::make_unique<Impl>()) {
+}
+
+/** @brief 層を破棄する（Impl の定義が見える所で破棄する） */
+ParticleLayerList::~ParticleLayerList() = default;
+
+/** @brief 層を移す */
+ParticleLayerList::ParticleLayerList(ParticleLayerList&& other) noexcept = default;
+
+/** @brief 層を移す */
+ParticleLayerList& ParticleLayerList::operator=(ParticleLayerList&& other) noexcept = default;
+
+/** @brief JSON の層の一覧から作る */
+ParticleLayerList ParticleLayerList::FromJson(const nlohmann::json& list, const std::string& owner) {
+    ParticleLayerList result;
+    ReadLayerList(owner, list, result.impl_->layers);
+    return result;
+}
+
+/** @brief 層をすべて出す */
+void ParticleLayerList::Emit(const ElementEffectContext& ctx, const Vector3& pos, const Vector4& color, float scale) const {
+    if (!impl_) {
+        return;
+    }
+    for (const auto& layer : impl_->layers) {
+        layer->Emit(ctx, pos, color, scale);
+    }
+}
+
+/** @brief 層が1つも無いか */
+bool ParticleLayerList::Empty() const {
+    return !impl_ || impl_->layers.empty();
 }
 
 } // namespace engine::game

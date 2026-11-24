@@ -456,7 +456,8 @@ uint32_t TextureManager::GetTextureIndexByFilePath(const std::string& filePath) 
 /** @brief 指定したテクスチャのGPUハンドルを取得する */
 D3D12_GPU_DESCRIPTOR_HANDLE TextureManager::GetSrvHandleGPU(const std::string& filePath) {
     ENGINE_ASSERT(textureDatas_.contains(filePath));
-    return SrvManager::GetInstance()->GetGPUDescriptorHandle(textureDatas_[filePath].srvIndex);
+    // 描画を複数のスレッドで記録する時にも呼ばれるので、表を書き換えない引き方（at）にする
+    return SrvManager::GetInstance()->GetGPUDescriptorHandle(textureDatas_.at(filePath).srvIndex);
 }
 
 /** @brief 指定したテクスチャのメタデータ（幅、高さ、形式など）を取得する */

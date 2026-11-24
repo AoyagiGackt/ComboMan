@@ -1,7 +1,8 @@
 /**
  * @file BossExecution.h
  * @brief 膝をついたボスへ歩み寄り、突き立てた武器を抜き取って、その武器でとどめを刺す演出を拍ごとに進めるクラス
- * @note 流れは Resources/Config/boss_execution.json の intro（共通の歩み寄り）と styles（ステージごとの型）で決める。
+ * @note 流れは Resources/Config/boss_execution.json の intro（共通の歩み寄り）と styles（型）で決める。
+ *       近接武器で倒した時は weaponIntro と、倒した武器に割り当てた型を、倒した武器のまま行う（ボスの武器は抜き取らず、崩す時にいっしょに消える）。
  *       銃で倒した時は gunIntro と銃の型を使い、銃で撃ち抜いてから残った武器を抜き取る。
  *       ボスを切り分ける・武器を隠す・武器を渡すのはシーンの部品なので、シーンが Consume～ で受け取って行う
  */
@@ -23,9 +24,11 @@ class ParticleManager;
 namespace engine::game {
 
 class CameraShaker;
+class ComboFeelDirector;
 class Player;
 struct GunShotDef;
 struct MeleeAttackDef;
+struct MeleeComboSet;
 
 /** @brief ボスへのとどめの演出 */
 class BossExecution {
@@ -39,6 +42,8 @@ public:
         WeaponType weapon {}; ///< 抜き取るボスの武器（この武器の技の姿勢でとどめを刺す）
         bool byGun = false; ///< 銃で倒したか（歩み寄りを gunIntro にする。style には銃の型を渡す）
         bool byBomb = false; ///< 爆弾がめり込んだまま倒したか（歩み寄りを bombIntro にする。style には爆弾の型を渡す）
+        bool byOwnWeapon = false; ///< 倒した近接武器のままとどめを刺すか（歩み寄りを weaponIntro にする。ボスの武器は抜き取らない）
+        WeaponType ownWeapon {}; ///< 倒した近接武器（byOwnWeapon の時、抜き取るまではこの武器の技の姿勢）
         GunType gun {}; ///< 持っている銃（射撃の段の姿勢と弾数に使う）
         Vector4 gunColor = { 1.0f, 1.0f, 1.0f, 1.0f }; ///< 弾の色
         Vector3 bossPosition {}; ///< ボスの足元
@@ -52,6 +57,7 @@ public:
         CameraShaker* shaker = nullptr;
         std::mt19937* rng = nullptr;
         const engine::graphics::Camera* camera = nullptr;
+        const ComboFeelDirector* comboFeel = nullptr; ///< 刃の根元と先端の位置を引く（武器を床へめり込ませないため。無ければ起こさない）
     };
 
     /** @brief 演出を最初から始める（プレイヤーは今いる側からボスへ歩み寄る） */
@@ -83,6 +89,10 @@ public:
     /** @brief 爆弾がめり込んだまま倒した隠しの流れか（シーンは崩す時に刃を放たず、突き立った武器を残す） */
     bool IsByBomb() const {
         return byBomb_;
+    }
+    /** @brief 倒した近接武器のままとどめを刺す流れか（シーンはボスの武器を手に入れても持ち替えさせない） */
+    bool IsByOwnWeapon() const {
+        return byOwnWeapon_;
     }
     /** @brief めり込んだ爆弾を爆発させる拍の最初の1回だけ true（シーンは爆弾を壊して爆発を出す） */
     bool ConsumeBomb();
@@ -120,8 +130,20 @@ private:
     void UpdateMove(float dt);
     /** @brief プレイヤーの位置・向き・姿勢を反映する */
     void ApplyPlayerPose();
+    /** @brief プレイヤーの位置・向き・姿勢を反映する（ApplyPlayerPose の下請け。武器の床の補正は掛けない） */
+    void PosePlayer(float facing);
+    /** @brief 手に持つ武器の刃が床より下へ行くなら、握りを中心に起こして床の上に収める */
+    void KeepWeaponAboveFloor(float facing);
     /** @brief カメラの見る位置と引きを目標へ寄せる */
     void UpdateCamera();
+    /** @brief 今の技の姿勢に使う武器（倒した武器のままの流れなら抜き取るまで倒した武器、それ以外は抜き取るボスの武器） */
+    WeaponType PoseWeapon() const;
+    /** @brief プレイヤーが床から浮いているか（跳びのいている最中など。宙にいる姿にする） */
+    bool IsAirborne() const;
+    /** @brief 今持っている武器のまま技の姿勢を取るか（倒した武器が持っている武器で、まだボスの武器を抜き取っていない時。合体の見た目もそのまま） */
+    bool UsesEquippedWeapon() const;
+    /** @brief 今の技の姿勢に使うコンボ一式（持っているボスの枠の武器のままなら、その専用の技） */
+    const MeleeComboSet& PoseComboSet() const;
     /** @brief 姿勢の名前から技の段を引く（無ければ nullptr） */
     const MeleeAttackDef* ResolvePose(const std::string& name) const;
     /** @brief 姿勢の名前から射撃の段を引く（射撃の名前でなければ nullptr） */
@@ -139,6 +161,8 @@ private:
     WeaponType weapon_ {};
     bool byGun_ = false; ///< 銃で撃ち抜く流れか
     bool byBomb_ = false; ///< めり込んだ爆弾で吹き飛ばす流れか
+    bool byOwnWeapon_ = false; ///< 倒した近接武器のままとどめを刺す流れか
+    WeaponType ownWeapon_ {}; ///< 倒した近接武器
     GunType gun_ {}; ///< 持っている銃
     Vector4 gunColor_ = { 1.0f, 1.0f, 1.0f, 1.0f }; ///< 弾の色
     Vector3 bossPos_ {};

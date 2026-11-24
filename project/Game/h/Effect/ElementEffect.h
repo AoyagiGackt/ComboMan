@@ -5,6 +5,8 @@
 #pragma once
 #include "Vector3.h"
 #include "Vector4.h"
+#include "json.hpp"
+#include <memory>
 #include <random>
 #include <string>
 namespace engine::graphics {
@@ -93,6 +95,45 @@ public:
      * @return 対応する属性が無ければ nullptr
      */
     static const IElementEffect* Find(const std::string& element);
+};
+
+/**
+ * @brief 層を上から順に重ねて出す粒の演出（element_effects.json の hit などと同じ書き方の層の並び）
+ * @note 属性以外の演出（敵の攻撃・やられなど）でも、同じ層の種類と動き方を使えるように切り出したもの
+ */
+class ParticleLayerList {
+public:
+    /** @brief 層の無い（何も出さない）並びを作る */
+    ParticleLayerList();
+    /** @brief 層を破棄する */
+    ~ParticleLayerList();
+    /** @brief 層の持ち主を移す */
+    ParticleLayerList(ParticleLayerList&& other) noexcept;
+    ParticleLayerList& operator=(ParticleLayerList&& other) noexcept;
+    /** @brief 層を二重に持たないようにコピーを禁じる */
+    ParticleLayerList(const ParticleLayerList&) = delete;
+    ParticleLayerList& operator=(const ParticleLayerList&) = delete;
+
+    /**
+     * @brief JSON の層の一覧から作る
+     * @param list  層の配列（配列でなければ空の並び）
+     * @param owner 警告に出す持ち主の名前
+     */
+    static ParticleLayerList FromJson(const nlohmann::json& list, const std::string& owner);
+    /**
+     * @brief 層をすべて出す
+     * @param ctx   粒子の発生先と乱数
+     * @param pos   出す位置
+     * @param color 層の color が weapon の時に使う色
+     * @param scale 拡大率
+     */
+    void Emit(const ElementEffectContext& ctx, const Vector3& pos, const Vector4& color, float scale) const;
+    /** @brief 層が1つも無いか */
+    bool Empty() const;
+
+private:
+    struct Impl; ///< 層の実体（ElementEffect.cpp の中だけで定義する）
+    std::unique_ptr<Impl> impl_;
 };
 
 } // namespace engine::game

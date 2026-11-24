@@ -4,6 +4,7 @@
  */
 #include "StageEditor.h"
 #include "GimmickMotion.h"
+#include "ObjectKind.h"
 #include "Camera.h"
 #include "DirectXCommon.h"
 #include "EnemyEntity.h"
@@ -18,11 +19,13 @@
 #include "ModelCommon.h"
 #include "ModelManager.h"
 #include "Object3d.h"
+#include "ParallelBundleRecorder.h"
 #include "ParticleManager.h"
 #include "Player.h"
 #include "PlayerBridge.h"
 #include "SceneShared.h"
 #include "ScreenFlash.h"
+#include "SrvManager.h"
 #include "StringUtility.h"
 #include "TimeManager.h"
 #include "WinApp.h"
@@ -302,6 +305,10 @@ void StageEditor::VisitDrawableEntries(const std::function<void(ObjectEntry&)>& 
 /** @brief 配置物の見た目モデルをシャドウマップへ描く */
 void StageEditor::DrawObjectShadows() {
     VisitDrawableEntries([](ObjectEntry& entry) {
+        // 背景は遠くて大きいので、光の向きによってはステージ全体を影にしてしまう。影を落とす物に入れない
+        if (entry.desc.kind == objectKindName::kBackground) {
+            return;
+        }
         for (auto& obj : entry.instances) {
             obj->DrawShadow();
         }
@@ -325,11 +332,15 @@ void StageEditor::DrawObjects() {
     // 平行光源、ポイントライト、シャドウマップを配置物の描画前に再設定する
     Object3d::RebindCommonLighting(modelCommon_->GetDxCommon()->GetCommandList());
 
-    // 見た目のモデルと、敵の本体を描く
-    VisitDrawableEntries([](ObjectEntry& entry) {
+    // 見た目のモデルを先にまとめて描き、敵の本体はその後にメインのスレッドで描く
+    staticDrawList_.clear();
+    VisitDrawableEntries([this](ObjectEntry& entry) {
         for (auto& obj : entry.instances) {
-            obj->Draw();
+            staticDrawList_.push_back(obj.get());
         }
+    });
+    DrawStaticObjects();
+    VisitDrawableEntries([](ObjectEntry& entry) {
         if (entry.knight) {
             entry.knight->Draw();
         }
@@ -337,6 +348,37 @@ void StageEditor::DrawObjects() {
             entry.enemy->Draw();
         }
     });
+}
+
+/** @brief 配置物の見た目を描く。数が多ければ何本かに分けて、別々のスレッドでバンドルへ記録する */
+void StageEditor::DrawStaticObjects() {
+    // 1本のバンドルに入れる最少の数（少ないと分ける手間の方が大きい）
+    constexpr size_t kMinObjectsPerBundle = 32;
+    constexpr int kMinBundles = 2;
+    const size_t count = staticDrawList_.size();
+    const int bundles = static_cast<int>((std::min)(static_cast<size_t>(ParallelBundleRecorder::GetParallelism()), count / kMinObjectsPerBundle));
+    if (!ParallelBundleRecorder::IsEnabled() || bundles < kMinBundles) {
+        for (Object3d* obj : staticDrawList_) {
+            obj->Draw();
+        }
+        return;
+    }
+    DirectXCommon* dxCommon = modelCommon_->GetDxCommon();
+    dxCommon->GetBundleRecorder().RecordAndExecute(dxCommon->GetMainCommandList(), bundles, [this, dxCommon, count, bundles](int index) {
+        // バンドルは呼び出したリストのヒープ・ルートシグネチャ・PSO・ライトの設定を受け継がないので、自分で設定する
+        // （描画先・ビューポート・シザーは呼び出したリストのものを使う）
+        SrvManager::GetInstance()->PreDraw();
+        modelCommon_->CommonDrawSettings();
+        Object3d::RebindCommonLighting(dxCommon->GetCommandList());
+        const size_t begin = count * static_cast<size_t>(index) / static_cast<size_t>(bundles);
+        const size_t end = count * static_cast<size_t>(index + 1) / static_cast<size_t>(bundles);
+        for (size_t i = begin; i < end; ++i) {
+            staticDrawList_[i]->Draw();
+        }
+    });
+    // バンドルで変わった設定を、続けて描く敵のためにメインのリストへ戻す
+    modelCommon_->CommonDrawSettings();
+    Object3d::RebindCommonLighting(dxCommon->GetCommandList());
 }
 
 /** @brief kind=="ui_text"の配置物をFontRendererへ描画コマンドとして積む */
@@ -518,6 +560,16 @@ bool StageEditor::IsDescendantOf(const std::string& candidateName, const std::st
         cur = FindDescByName(cur->parent);
     }
     return false;
+}
+
+/** @brief 配置物ごとに、配置の情報とワールドの位置を渡して fn を呼ぶ（画面に固定する文章などは除く） */
+void StageEditor::ForEachWorldObject(const std::function<void(const ObjectDesc&, const Vector3&)>& fn) const {
+    for (const ObjectEntry& entry : objects_) {
+        if (ObjectKind::Of(entry.desc.kind).IsScreenSpace(entry.desc)) {
+            continue;
+        }
+        fn(entry.desc, WorldPositionOf(entry.desc));
+    }
 }
 
 } // namespace engine::game

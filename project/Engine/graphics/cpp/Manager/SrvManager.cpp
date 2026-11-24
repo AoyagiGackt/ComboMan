@@ -36,22 +36,30 @@ void SrvManager::Initialize(DirectXCommon* dxCommon) {
     useIndex_ = 0;
 }
 
-/** @brief フレームの数を1つ進め、待ち時間を過ぎた解放済みインデックスを再利用できるようにする */
+/** @brief GPU が使い終えた（付けたフェンスの値まで進んだ）解放済みインデックスを再利用できるようにする */
 void SrvManager::BeginFrame() {
-    ++frameCount_;
-
-    // 解放から十分なフレーム数が経過した（＝GPUが使い終わったはずの）インデックスを
-    // フリーリストへ移し、以後のAllocate()で再利用できるようにする
+    // フレーム数で決め打ちせず、GPU が実際にどこまで終えたかをフェンスで確かめる
+    const uint64_t completed = dxCommon_->GetFence()->GetCompletedValue();
     pendingFree_.erase(
         std::remove_if(pendingFree_.begin(), pendingFree_.end(),
-            [this](const std::pair<uint64_t, uint32_t>& p) {
-                if (p.first + kFreeDelayFrames > frameCount_) {
+            [this, completed](const std::pair<uint64_t, uint32_t>& p) {
+                if (p.first > completed) {
                     return false;
                 }
                 freeList_.push_back(p.second);
                 return true;
             }),
         pendingFree_.end());
+}
+
+/** @brief このフレームに解放したインデックスへ、フレームの終わりに積んだフェンスの値を付ける（PostDraw の後に呼ぶ） */
+void SrvManager::EndFrame() {
+    // このフレームの描画（解放前に記録した命令を含む）が終わったら、この値までフェンスが進む
+    const uint64_t signaled = dxCommon_->GetFenceValue();
+    for (uint32_t index : freedThisFrame_) {
+        pendingFree_.push_back({ signaled, index });
+    }
+    freedThisFrame_.clear();
 }
 
 /** @brief 描画前準備コマンドリストにデスクリプタヒープをセットする（1フレームに何度呼んでもよい） */
@@ -76,7 +84,8 @@ uint32_t SrvManager::Allocate() {
 
 /** @brief 使い終わったデスクリプタインデックスを解放し、以後のAllocate()で再利用可能にする */
 void SrvManager::Free(uint32_t srvIndex) {
-    pendingFree_.push_back({ frameCount_, srvIndex });
+    // 今のフレームの命令がまだこの番号を使っているかもしれないので、フレームの終わり（EndFrame）でフェンスの値を付けてから待たせる
+    freedThisFrame_.push_back(srvIndex);
 }
 
 /** @brief 指定したインデックスの場所に、テクスチャ2D用のSRVを生成する */

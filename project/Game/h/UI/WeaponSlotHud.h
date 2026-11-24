@@ -29,6 +29,8 @@ private:
         std::unique_ptr<engine::graphics::Sprite> durabilityBack; ///< 合体の耐久のバーの下地
         std::unique_ptr<engine::graphics::Sprite> durabilityFill; ///< 合体の耐久のバーの残り
         bool fused = false; ///< このフレームに合体しているか（バーを描くか）
+        int modelIcon = -1; ///< このフレームに出すモデルアイコンの武器の番号（モデルで出さない時は -1）
+        int partnerIcon = -1; ///< 合体の素材のモデルアイコンの番号（出さない時は -1）
         Vector2 position = {};
     };
     /**
@@ -46,15 +48,18 @@ private:
     void InitializeFrames();
     /** @brief UILayoutから枠の位置・間隔を読み、枠とアイコンを並べ直す（エディタで動かした結果を毎フレーム反映する） */
     void ApplyLayout();
-    bool HasModelIcon(int weaponIndex) const;
+    /** @brief その枠でその武器を3Dモデルのアイコンで出せるか */
+    bool HasModelIcon(int slotIndex, int weaponIndex) const;
 
     /** @brief 1枠ぶんのアイコンを描き分けるのに使う、そのフレームの状態 */
     struct SlotIconState {
+        int slotIndex = 0; ///< 枠の番号（ボスの枠を含む）
         int weaponIndex = -1;
         bool active = false; ///< 選択中の枠か
         bool unlocked = false; ///< 武器を手に入れているか
         float pulse = 0.0f; ///< 選択中の明滅
         float flash = 0.0f; ///< 武器を手に入れた直後の光り（0〜1）
+        int partnerIndex = -1; ///< 合体している素材の武器の番号（合体していなければ -1）
         Vector3 cameraPosition {};
     };
     /** @brief 武器の3Dモデルを枠の位置に浮かべる */
@@ -68,7 +73,9 @@ private:
     engine::DirectXCommon* graphics_ = nullptr;
     WeaponManager* weapons_ = nullptr;
     std::array<Slot, kSlotCount + 1> slots_;
-    std::vector<ModelIcon> modelIcons_;
+    // 枠ごとに武器の数だけモデルのアイコンを持つ（ふつうの枠とボスの枠に同じ種類が入っても、それぞれの位置に出せるように）
+    std::array<std::vector<ModelIcon>, kSlotCount + 1> modelIcons_;
+    std::array<std::vector<ModelIcon>, kSlotCount + 1> partnerIcons_; ///< 合体の素材として土台のアイコンに付けるモデル（土台と同じ種類でも描けるよう別に持つ）
     std::unique_ptr<engine::graphics::Sprite> gunFrame_;
     std::unique_ptr<engine::graphics::Sprite> gunIcon_;
     Vector2 gunPosition_ = {};

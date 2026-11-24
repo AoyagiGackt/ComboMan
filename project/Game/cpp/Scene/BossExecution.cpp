@@ -5,14 +5,18 @@
 #include "BossExecution.h"
 #include "Camera.h"
 #include "CameraShaker.h"
+#include "ComboFeelDirector.h"
+#include "Matrix4x4.h"
 #include "GameConstants.h"
 #include "GameSounds.h"
 #include "GunCombo.h"
 #include "HitEffectLibrary.h"
 #include "MeleeCombo.h"
+#include "ParticleFieldLibrary.h"
 #include "Player.h"
 #include "SceneShared.h"
 #include "TimeManager.h"
+#include "WeaponManager.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
@@ -38,6 +42,49 @@ constexpr float kPlayerBodyHalfWidth = 0.5f; ///< プレイヤーの当たり判
 constexpr float kPlayerBodyHalfHeight = 0.5f; ///< プレイヤーの当たり判定の高さの半分
 constexpr float kWallRoomMargin = 0.05f; ///< 回り込んだプレイヤーと壁の間に空けるすき間
 constexpr float kFloorClearance = 0.1f; ///< 回り込む広さを調べる時に体の下端を上げる幅（立っている床を壁と数えない）
+constexpr float kAirborneHeight = 0.05f; ///< 床からこれより高い所にいる間は、宙にいる姿（跳びのく時など）にする
+
+constexpr float kWeaponFloorMargin = 0.05f; ///< 起こした武器の刃と床の間に空ける高さ
+constexpr float kMinBladeLength = 0.01f; ///< これより握りに近い点は起こさない（向きが決まらない）
+constexpr float kStraightDownRatio = 0.1f; ///< 横のずれが長さのこの割合より小さければ真下を向いているとみなし、向いている方へ起こす
+constexpr float kTwoPi = gameConstants::kPi * 2.0f;
+
+/** @brief 角度を -π〜π に収める */
+float WrapAngle(float radians) {
+    while (radians > gameConstants::kPi) {
+        radians -= kTwoPi;
+    }
+    while (radians < -gameConstants::kPi) {
+        radians += kTwoPi;
+    }
+    return radians;
+}
+
+/**
+ * @brief 握りを中心に Z 軸回りに回して、点を床の高さまで上げる角度を返す（床より上なら 0）
+ * @param facing 向いている方（+1 で +X）。真下を向いている時はこちらへ起こす
+ */
+float LiftAngle(const Vector3& grip, const Vector3& point, float floorY, float facing) {
+    if (point.y >= floorY) {
+        return 0.0f;
+    }
+    const float dx = point.x - grip.x;
+    const float dy = point.y - grip.y;
+    const float length = std::sqrt(dx * dx + dy * dy);
+    if (length <= kMinBladeLength) {
+        return 0.0f;
+    }
+    // 床の高さに届く向きは前へ向ける角と後ろへ向ける角の2つ。近い方へ回す
+    const float lifted = std::asin(std::clamp((floorY - grip.y) / length, -1.0f, 1.0f));
+    const float current = std::atan2(dy, dx);
+    const float toFront = WrapAngle(lifted - current);
+    const float toBack = WrapAngle(gameConstants::kPi - lifted - current);
+    // 真下を向いている時は2つがほぼ同じで毎フレーム入れ替わるので、向いている方へ起こす
+    if (std::abs(dx) < length * kStraightDownRatio) {
+        return facing >= 0.0f ? toFront : toBack;
+    }
+    return std::abs(toFront) <= std::abs(toBack) ? toFront : toBack;
+}
 
 /** @brief 決まった効果音の名前と場面の対応 */
 struct CueEntry {
@@ -89,7 +136,17 @@ void BossExecution::Start(const Setup& setup, const Services& services) {
     byBomb_ = setup.byBomb;
     gun_ = setup.gun;
     gunColor_ = setup.gunColor;
-    beats_ = byBomb_ ? tuning.bombIntro : (byGun_ ? tuning.gunIntro : tuning.intro);
+    byOwnWeapon_ = setup.byOwnWeapon && !byGun_ && !byBomb_;
+    ownWeapon_ = setup.ownWeapon;
+    if (byBomb_) {
+        beats_ = tuning.bombIntro;
+    } else if (byGun_) {
+        beats_ = tuning.gunIntro;
+    } else if (byOwnWeapon_) {
+        beats_ = tuning.weaponIntro;
+    } else {
+        beats_ = tuning.intro;
+    }
     endHold_ = 0.0f;
     if (setup.style != nullptr) {
         beats_.insert(beats_.end(), setup.style->beats.begin(), setup.style->beats.end());
@@ -176,6 +233,8 @@ void BossExecution::End() {
         return;
     }
     active_ = false;
+    // 武器を起こした補正を外してから、構えを解いて付け直す
+    services_.player->ClearHeldWeaponWorldCorrection();
     services_.player->EndMeleePreview();
 }
 
@@ -286,6 +345,9 @@ void BossExecution::FireEffects(const ExecutionBeat& beat) {
     const Vector3 center = BossCenter();
     fx.SparksIfNamed(beat.sparks, center);
     fx.RingIfNamed(beat.ring, center);
+    if (!beat.field.empty()) {
+        ParticleFieldLibrary::Emit(services_.particles, beat.field, bossPos_);
+    }
     if (!beat.flash.empty() && library->Has("flashes", beat.flash)) {
         fx.Flash(beat.flash);
     }
@@ -384,11 +446,19 @@ void BossExecution::UpdateMove(float dt) {
 
 /** @brief プレイヤーの位置・向き・姿勢を反映する */
 void BossExecution::ApplyPlayerPose() {
-    Player* player = services_.player;
-    player->SetPosition(playerPos_);
     // ボスの方か、ボスに背を向ける方へ向かせる
     const float toBoss = bossPos_.x >= playerPos_.x ? 1.0f : -1.0f;
     const float facing = faceAway_ ? -toBoss : toBoss;
+    // 床へのめり込みは補正なしの姿勢から測るので、先に補正を外してから姿勢を取らせる
+    services_.player->ClearHeldWeaponWorldCorrection();
+    PosePlayer(facing);
+    KeepWeaponAboveFloor(facing);
+}
+
+/** @brief プレイヤーの位置・向き・姿勢を反映する（武器の床の補正は掛けない） */
+void BossExecution::PosePlayer(float facing) {
+    Player* player = services_.player;
+    player->SetPosition(playerPos_);
     player->FaceTarget({ playerPos_.x + facing, playerPos_.y, playerPos_.z });
     // 射撃の段を取っている間は銃を構えた姿勢
     if (poseShot_ != nullptr) {
@@ -401,17 +471,76 @@ void BossExecution::ApplyPlayerPose() {
         player->EndMeleePreview();
         gunPosed_ = false;
     }
-    // 武器を抜き取るまでは素の姿（歩く・立つ）、抜き取った後はその武器の技の姿勢
-    if (!grabbed_) {
-        player->UpdateCinematicPose(false, {}, walking_);
+    // 武器を抜き取るまでは素の姿（歩く・立つ）、抜き取った後はその武器の技の姿勢。
+    // 倒した武器のままの流れでは、抜き取る前でも技の姿勢を取っている間はその武器を構える
+    const bool armed = grabbed_ || (byOwnWeapon_ && poseAttack_ != nullptr);
+    if (!armed) {
+        player->UpdateCinematicPose(IsAirborne(), {}, walking_);
         return;
     }
-    const MeleeAttackDef* attack = poseAttack_ != nullptr ? poseAttack_ : StepAt(GetMeleeComboSet(weapon_).ground, 0);
+    const MeleeAttackDef* attack = poseAttack_ != nullptr ? poseAttack_ : StepAt(PoseComboSet().ground, 0);
     if (attack == nullptr) {
-        player->UpdateCinematicPose(false, {}, walking_);
+        player->UpdateCinematicPose(IsAirborne(), {}, walking_);
         return;
     }
-    player->PreviewMeleePose(attack, poseAttack_ != nullptr ? PoseProgress() : 0.0f, weapon_);
+    const float progress = poseAttack_ != nullptr ? PoseProgress() : 0.0f;
+    // 持っている武器のままなら、持たせ替えずに装備のまま見せる（合体した相棒の武器も付いたまま）
+    if (UsesEquippedWeapon()) {
+        player->PreviewMeleePose(attack, progress);
+        return;
+    }
+    player->PreviewMeleePose(attack, progress, PoseWeapon());
+}
+
+/** @brief 手に持つ武器の刃が床より下へ行くなら、握りを中心に起こして床の上に収める */
+void BossExecution::KeepWeaponAboveFloor(float facing) {
+    if (services_.comboFeel == nullptr) {
+        return;
+    }
+    Player* player = services_.player;
+    Vector3 base {};
+    Vector3 tip {};
+    WeaponType type {};
+    Matrix4x4 weaponMatrix {};
+    if (!services_.comboFeel->GetBladeWorld(*player, base, tip) || !player->GetHeldWeaponTransform(type, weaponMatrix)) {
+        return;
+    }
+    // 画面の奥行きの向き（Z 軸）回りに握りを中心として回し、刃先（届かなければ刃の根元）を床の少し上まで上げる
+    const Vector3 grip = TransformPoint({}, weaponMatrix);
+    const float floorY = groundY_ - kPlayerBodyHalfHeight + kWeaponFloorMargin;
+    float angle = LiftAngle(grip, tip, floorY, facing);
+    if (angle == 0.0f) {
+        angle = LiftAngle(grip, base, floorY, facing);
+    }
+    if (angle == 0.0f) {
+        return;
+    }
+    const Vector3 toOrigin = { -grip.x, -grip.y, -grip.z };
+    const Matrix4x4 correction = Multiply(Multiply(MakeTranslateMatrix(toOrigin), MakeRotateZMatrix(angle)), MakeTranslateMatrix(grip));
+    player->SetHeldWeaponWorldCorrection(correction);
+}
+
+/** @brief プレイヤーが床から浮いているか（跳びのいている最中など） */
+bool BossExecution::IsAirborne() const {
+    return playerPos_.y > groundY_ + kAirborneHeight;
+}
+
+/** @brief 今の技の姿勢に使う武器 */
+WeaponType BossExecution::PoseWeapon() const {
+    return byOwnWeapon_ && !grabbed_ ? ownWeapon_ : weapon_;
+}
+
+/** @brief 今持っている武器のまま技の姿勢を取るか */
+bool BossExecution::UsesEquippedWeapon() const {
+    const WeaponManager* wm = WeaponManager::GetInstance();
+    return byOwnWeapon_ && !grabbed_ && wm->HasEquippedWeapon() && wm->GetCurrent().type == ownWeapon_;
+}
+
+/** @brief 今の技の姿勢に使うコンボ一式 */
+const MeleeComboSet& BossExecution::PoseComboSet() const {
+    // 持っているボスの枠の武器のままなら、ふだん振っているのと同じボスの武器の専用の技
+    const bool bossSlot = UsesEquippedWeapon() && WeaponManager::GetInstance()->IsBossSlotSelected();
+    return GetMeleeComboSet(PoseWeapon(), bossSlot);
 }
 
 /** @brief カメラの見る位置と引きを目標へ寄せる */
@@ -427,7 +556,7 @@ void BossExecution::UpdateCamera() {
 
 /** @brief 姿勢の名前から技の段を引く */
 const MeleeAttackDef* BossExecution::ResolvePose(const std::string& name) const {
-    const MeleeComboSet& set = GetMeleeComboSet(weapon_);
+    const MeleeComboSet& set = PoseComboSet();
     if (name == kGroundLast) {
         return StepAt(set.ground, set.ground.count - 1);
     }

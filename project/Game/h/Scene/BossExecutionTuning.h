@@ -68,6 +68,7 @@ struct ExecutionBeat {
     float zoom = 0.0f; ///< カメラの寄り（0 より大きければこの値へ寄せる。1 が通常、小さいほど寄る）
     bool slice = false; ///< ボスを切り分けて崩す
     bool bomb = false; ///< ボスにめり込んだ爆弾をここで爆発させる（爆弾のとどめの型で使う）
+    std::string field; ///< ボスの足元に置く粒の場（particle_fields.json の名前。爆風で粒を吹き飛ばす など）
 };
 
 /** @brief とどめの型1つ（拍を順に進め、最後の拍から endHold 秒で終わる） */
@@ -93,12 +94,16 @@ struct BossExecutionTuning {
     std::unordered_map<std::string, std::string> gunStages; ///< 銃で倒した時の、ステージのファイル名（拡張子なし）→ 型の名前
     std::string bombStyle; ///< ボスに爆弾がめり込んだまま倒した時の隠しの型（空か見つからなければ使わない）
     std::vector<ExecutionBeat> bombIntro; ///< 爆弾の型で最初に行う拍（武器は抜き取らずに歩み寄る）
+    std::vector<ExecutionBeat> weaponIntro; ///< 近接武器で倒した時に最初に行う拍（ボスの武器は抜かず、倒した武器のまま歩み寄る）
+    std::unordered_map<std::string, std::string> weapons; ///< 倒した近接武器の種別名（weapons.json の type と同じ）→ 型の名前
     std::unordered_map<std::string, ExecutionStyle> styles; ///< 型の名前 → 型
 
     /** @brief ステージのレベルのパスに割り当てた型を返す（無ければ既定の型、それも無ければ nullptr） */
     const ExecutionStyle* FindStyle(const std::string& levelPath) const;
     /** @brief 銃で倒した時の型を返す（ステージの割り当てが無ければ銃の既定の型、それも無ければ nullptr） */
     const ExecutionStyle* FindGunStyle(const std::string& levelPath) const;
+    /** @brief 倒した近接武器の種別名に割り当てた型を返す（割り当てが無ければ nullptr。その時はステージの型を使う） */
+    const ExecutionStyle* FindWeaponStyle(const std::string& weaponName) const;
     /** @brief ボスに爆弾がめり込んだまま倒した時の型を返す（無ければ nullptr） */
     const ExecutionStyle* FindBombStyle() const;
 };

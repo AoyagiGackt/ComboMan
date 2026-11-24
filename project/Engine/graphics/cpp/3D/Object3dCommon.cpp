@@ -31,13 +31,8 @@ using namespace Microsoft::WRL;
 /** @brief 平行光源とポイントライトの定数バッファを作り、既定値を書き込んで初期化する */
 void Object3dCommon::Initialize(DirectXCommon* dxCommon) {
     dxCommon_ = dxCommon;
-    ID3D12Device* device = dxCommon_->GetDevice();
-
-    // ライト定数バッファの作成
-    lightResource_ = pipelineHelper::CreateUploadBuffer(device, kConstantBufferAlignment);
-
-    // Map したまま保持（毎フレーム UpdateLight() で書き換える）
-    lightResource_->Map(0, nullptr, reinterpret_cast<void**>(&lightData_));
+    // ライトの値は CPU 側に持つ（GPU へは束縛するたびにこのフレーム用の領域へ写す）
+    lightData_ = &light_;
 
     // 固定ライト（白昼光）
     lightData_->color = { 1.0f, 1.0f, 1.0f, 1.0f };
@@ -46,11 +41,8 @@ void Object3dCommon::Initialize(DirectXCommon* dxCommon) {
     lightData_->ambientColor = { 1.0f, 1.0f, 1.0f };
     lightData_->ambientIntensity = kDefaultAmbientIntensity;
 
-    // ポイントライト定数バッファ
-    // CBV は 256 バイトアライン必須なので切り上げる
-    pointLightResource_ = pipelineHelper::CreateUploadBuffer(
-        device, AlignConstantBufferSize(sizeof(PointLightBuffer)));
-    pointLightResource_->Map(0, nullptr, reinterpret_cast<void**>(&pointLightData_));
+    // ポイントライト群も同じく CPU 側に持つ
+    pointLightData_ = &pointLights_;
     // ライト数 0 で初期化（シェーダーはループしない）
     pointLightData_->count = 0;
     pointLightData_->pad[0] = pointLightData_->pad[1] = pointLightData_->pad[2] = 0.0f;
@@ -152,7 +144,8 @@ Vector3 Object3dCommon::GetLightDirection() const {
 /** @brief 平行光源とポイントライト群をモデル用のルートスロットへセットする */
 void Object3dCommon::SetDefaultLight(ID3D12GraphicsCommandList* commandList) {
     // スロット 3: 平行光源（DirectionalLight）
-    commandList->SetGraphicsRootConstantBufferView(pipelineHelper::modelRootSlot::kDirectionalLight, lightResource_->GetGPUVirtualAddress());
+    commandList->SetGraphicsRootConstantBufferView(pipelineHelper::modelRootSlot::kDirectionalLight,
+        dxCommon_->GetFrameUploadAllocator().Allocate(lightData_, sizeof(DirectionalLight)));
     // スロット 6: ポイントライト群（ModelCommon パイプライン用）
     // SkinCommon パイプラインではスロット 6 がスキニングパレットになるため、
     // SkinnedObject3d::Draw 内で SetPointLights(cmd, pipelineHelper::SkinnedRootSlot::kPointLights) を別途呼び直す
@@ -164,9 +157,9 @@ void Object3dCommon::SetPointLights(ID3D12GraphicsCommandList* commandList, UINT
     if (!pointLightData_) {
         return;
     }
-    pointLightData_->count = pointLightCount_;
+    // 数は ClearPointLights / AddPointLight で書いてあるので、ここでは今の値をこのフレーム用の領域へ写して束縛するだけ
     commandList->SetGraphicsRootConstantBufferView(rootParamSlot,
-        pointLightResource_->GetGPUVirtualAddress());
+        dxCommon_->GetFrameUploadAllocator().Allocate(pointLightData_, sizeof(PointLightBuffer)));
 }
 
 } // namespace engine::graphics

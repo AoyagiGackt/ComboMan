@@ -45,15 +45,8 @@ void BladeFlashEffect::Initialize(DirectXCommon* dxCommon) {
     ENGINE_ASSERT(dxCommon);
     dxCommon_ = dxCommon;
 
-    sceneCB_ = dxCommon_->CreateBufferResource(sizeof(SceneCB));
-    sceneCB_->Map(0, nullptr, reinterpret_cast<void**>(&sceneCBData_));
-    sceneCBData_->viewProj = MakeIdentity4x4();
-
-    vertexBuffer_ = dxCommon_->CreateBufferResource(sizeof(BladeVertex) * kMaxBlades * kVertsPerBlade);
-    vertexBuffer_->Map(0, nullptr, reinterpret_cast<void**>(&vertexData_));
-    vbv_.BufferLocation = vertexBuffer_->GetGPUVirtualAddress();
-    vbv_.SizeInBytes = static_cast<UINT>(sizeof(BladeVertex) * kMaxBlades * kVertsPerBlade);
-    vbv_.StrideInBytes = sizeof(BladeVertex);
+    sceneCB_.viewProj = MakeIdentity4x4();
+    vertices_.resize(static_cast<size_t>(kMaxBlades) * kVertsPerBlade);
 
     CreatePipeline();
 }
@@ -121,7 +114,7 @@ void BladeFlashEffect::Update(float dt, Camera* camera) {
     const float fadeInRate = GraphicsTuning::Float("bladeFlash.fadeInRate", kFadeInRate);
     const float initialOpacity = GraphicsTuning::Float("bladeFlash.initialOpacity", kInitialOpacity, 0.0f, 1.0f);
     if (camera != nullptr) {
-        sceneCBData_->viewProj = Multiply(camera->GetViewMatrix(), camera->GetProjectionMatrix());
+        sceneCB_.viewProj = Multiply(camera->GetViewMatrix(), camera->GetProjectionMatrix());
     }
 
     // 刃を流し、寿命を過ぎたものを消す
@@ -163,9 +156,9 @@ void BladeFlashEffect::Update(float dt, Camera* camera) {
         auto pushTri = [this](const Vector3& p0, const Vector4& c0,
                            const Vector3& p1, const Vector4& c1,
                            const Vector3& p2, const Vector4& c2) {
-            vertexData_[vertexCount_ + 0] = { { p0.x, p0.y, p0.z, 1.0f }, c0 };
-            vertexData_[vertexCount_ + 1] = { { p1.x, p1.y, p1.z, 1.0f }, c1 };
-            vertexData_[vertexCount_ + 2] = { { p2.x, p2.y, p2.z, 1.0f }, c2 };
+            vertices_[vertexCount_ + 0] = { { p0.x, p0.y, p0.z, 1.0f }, c0 };
+            vertices_[vertexCount_ + 1] = { { p1.x, p1.y, p1.z, 1.0f }, c1 };
+            vertices_[vertexCount_ + 2] = { { p2.x, p2.y, p2.z, 1.0f }, c2 };
             vertexCount_ += kTriangleVertexCount;
         };
         // 中心から4枚の三角形で菱形を作る
@@ -182,8 +175,15 @@ void BladeFlashEffect::Draw() {
         return;
     }
 
+    // このフレーム用の領域へ頂点と定数を写して、その場所から描く
+    FrameUploadAllocator& upload = dxCommon_->GetFrameUploadAllocator();
+    const UINT bytes = static_cast<UINT>(sizeof(BladeVertex) * vertexCount_);
+    D3D12_VERTEX_BUFFER_VIEW vbv { };
+    vbv.BufferLocation = upload.Allocate(vertices_.data(), bytes);
+    vbv.SizeInBytes = bytes;
+    vbv.StrideInBytes = sizeof(BladeVertex);
     pipelineHelper::DrawVertexColorEffect(dxCommon_->GetCommandList(), rootSignature_.Get(), pipelineState_.Get(),
-        vbv_, sceneCB_->GetGPUVirtualAddress(), vertexCount_);
+        vbv, upload.Allocate(&sceneCB_, sizeof(SceneCB)), vertexCount_);
 }
 
 /** @brief 刃描画用のルートシグネチャ・PSOを生成する */

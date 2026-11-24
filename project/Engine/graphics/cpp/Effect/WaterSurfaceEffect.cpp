@@ -67,6 +67,7 @@ void WaterSurfaceEffect::BeginBackground(bool targetsBackBuffer) {
     // 背景と後続の役者で同じ深度バッファを共有する。
     const auto dsv = dxCommon_->GetDsvHandle();
     cmd->OMSetRenderTargets(kOne, &backgroundRtv_, FALSE, &dsv);
+    dxCommon_->SetActiveDepthTarget(engine::DirectXCommon::DepthTarget::kScene);
     cmd->ClearRenderTargetView(backgroundRtv_, pipelineHelper::kOffscreenClearColor, kFirst, nullptr);
 }
 

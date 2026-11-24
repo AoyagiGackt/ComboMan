@@ -86,13 +86,11 @@ private:
     Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> pipelineState_;
 
-    Microsoft::WRL::ComPtr<ID3D12Resource> vertexBuffer_;
-    D3D12_VERTEX_BUFFER_VIEW vbv_ { };
-    BladeVertex* vertexData_ = nullptr;
+    // 頂点と定数は CPU 側で組み、描く時にこのフレーム用のアップロード領域へ写す
+    // （Map したままの1本を毎フレーム書き換えると、GPU が前のフレームを読んでいる間に上書きする恐れがあるため）
+    std::vector<BladeVertex> vertices_; ///< 組み立てた頂点（先頭から vertexCount_ 個が有効）
     uint32_t vertexCount_ = 0;
-
-    Microsoft::WRL::ComPtr<ID3D12Resource> sceneCB_;
-    SceneCB* sceneCBData_ = nullptr;
+    SceneCB sceneCB_ { }; ///< ビュー射影行列
 
     std::vector<Blade> blades_;
     std::mt19937 rng_ { std::random_device { }() };

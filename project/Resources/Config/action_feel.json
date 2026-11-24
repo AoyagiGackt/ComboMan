@@ -1,0 +1,41 @@
+{
+  "_comment": "アクションの手応えの調整値。速さと距離は1フレームの距離、時間は秒。collide=吹き飛んだ敵がほかの敵に当たる（minSpeed より速く横へ飛んでいる敵が当たると、相手に damage を与えて同じ向きへ吹き飛ばし knockY で浮かせる。当てられた敵もさらに maxChain 段まで別の敵へ当たれる。飛んでいた敵は flyerSpeedKeep の割合まで遅くなる）。bounce=壁と床で跳ね返る（wallMinSpeed より速く壁にぶつかった生きている敵は wallFactor の速さで跳ね返って wallLift で浮き wallDamage を受ける。floorMinFallSpeed より速く落ちてきた敵は floorFactor で跳ねる。どちらも1回の吹き飛びで count 回まで）。roomClear=扉の条件が見ている敵グループの最後の1体を倒した瞬間のスロー（ボスの部屋は除く）。dodgeSlow=ジャスト回避の後に、radius の中の敵だけを seconds 秒 scale の割合で遅くする（ボスの台本の技と味方は遅くならない）。rumble=パッドの振動。hit_effects.json の impacts に rumbleLow・rumbleHigh・rumbleSeconds が無い演出は、画面の揺れ shakeAmount に perShake を掛けた強さで、shakeSeconds（minSeconds より短ければ minSeconds）だけ震わせる。highRatio は高い揺れのモーターの割合、scale は全体の倍率。振動の入切はタイトルの OPTIONS の VIBRATION",
+  "collide": {
+    "enabled": true,
+    "minSpeed": 0.12,
+    "damage": 2,
+    "knockY": 0.18,
+    "maxChain": 2,
+    "flyerSpeedKeep": 0.7,
+    "styleGain": 0.04
+  },
+  "bounce": {
+    "enabled": true,
+    "wallMinSpeed": 0.12,
+    "wallFactor": 0.55,
+    "wallLift": 0.2,
+    "wallCount": 1,
+    "wallDamage": 1,
+    "floorMinFallSpeed": 0.4,
+    "floorFactor": 0.45,
+    "floorCount": 1,
+    "styleGain": 0.03
+  },
+  "roomClear": {
+    "enabled": true,
+    "slowSeconds": 0.7,
+    "slowScale": 0.3
+  },
+  "dodgeSlow": {
+    "enabled": true,
+    "seconds": 1.5,
+    "scale": 0.35,
+    "radius": 12
+  },
+  "rumble": {
+    "perShake": 2.5,
+    "highRatio": 0.6,
+    "minSeconds": 0.08,
+    "scale": 1.0
+  }
+}

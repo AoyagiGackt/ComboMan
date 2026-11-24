@@ -4,6 +4,8 @@
  */
 #pragma once
 #include "BaseScene.h"
+#include "EngineConstants.h"
+#include "FixedStepClock.h"
 #include "Framework.h"
 #include "SceneFactory.h"
 #include "SmokeTestRunner.h"
@@ -61,6 +63,8 @@ private:
     bool showSoundAssignEditor_ = false;
     /** @brief 自動テストプレイ（--smoke-test で起動した時だけ動く） */
     engine::game::SmokeTestRunner smokeTest_;
+    /** @brief 描画が遅れた時に、遅れた分だけ更新を回すための時計 */
+    engine::FixedStepClock frameClock_ { engine::engineConstants::kFrameDeltaTime };
 };
 
 } // namespace engine

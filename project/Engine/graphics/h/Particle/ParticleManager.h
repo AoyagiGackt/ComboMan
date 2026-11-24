@@ -1,6 +1,8 @@
 /**
  * @file ParticleManager.h
- * @brief Compute Shader でパーティクルを GPU 完結シミュレーションし、インスタンシング描画するファイル
+ * @brief GPU パーティクル（粒の生き死にと空き枠の管理まで GPU で完結）をインスタンシング描画するファイル
+ * @note CPU はどこに何粒出してほしいかの一覧だけをフレームごとに送る。
+ *       空き枠は GPU 上の空き一覧（InterlockedAdd で取り出し・返却）で管理し、寿命の判定も GPU が行う
  */
 #pragma once
 #include "Camera.h"
@@ -29,10 +31,14 @@ enum class ParticleMotion : uint32_t {
     kEmber = 6, ///< 小さく揺れながら昇り、瞬きながら縮む
     kMist = 7, ///< 速さが抜けながら膨らみ、ふわっと現れて消える
     kCrackle = 8, ///< その場で小刻みに跳ねて明滅する（放電）
+    kSoul = 9, ///< 加速しながら揺れて昇り、白く抜け出してふわっと消える（倒れた敵から抜ける魂）
+    kGoo = 10, ///< 重く落ち、飛ぶ向きへ伸びて細る（粘液のしぶき）
+    kFlutter = 11, ///< ゆっくり落ちながら左右に揺れ、くるくる裏返る（羽や骨のかけら）
 };
 
 /**
- * @brief GPU 側で保持するパーティクル 1 粒のシミュレーションデータ (CS が読み書き)
+ * @brief GPU 側で保持するパーティクル 1 粒のシミュレーションデータ（ParticleCompute.hlsli と同じ並び）
+ * @note 出してほしい粒の頼みも同じ形で送る
  */
 struct GPUParticleState {
     Vector3 position; // 12
@@ -59,19 +65,20 @@ struct ParticleForGPU {
 };
 
 /**
- * @brief CS に渡す定数バッファの内容
+ * @brief 更新の CS に渡す定数（全グループ共通）
  */
 struct CSConstants {
     Matrix4x4 billboard; // 64
     Matrix4x4 viewProj; // 64
     float deltaTime; //  4
     uint32_t maxParticles; //  4
-    float pad[2]; //  8 -> 144
+    uint32_t frame; //  4  フレームの通し番号（生まれ変わりの乱数の種）
+    float pad; //  4 -> 144
 };
 
 /**
- * @brief EmitParticle.CS に渡すエミッター定数バッファ（UPLOAD heap 256 bytes に格納）
- *        CPU 側で frequencyTime / emit を毎フレーム更新する
+ * @brief EmitParticle.CS に渡すエミッターの定数
+ *        CPU 側で frequencyTime / emit を毎フレーム更新し、出す時だけ GPU へ送る
  */
 struct Emitter {
     Vector3 translate; // 12
@@ -88,66 +95,99 @@ struct Emitter {
 };
 
 /**
+ * @brief 寿命が尽きた粒を同じ範囲に GPU で出し直すグループの設定（ParticleUpdate.CS.hlsl の LoopConstants と同じ並び）
+ */
+struct ParticleLoopConfig {
+    Vector3 center {}; ///< 中心
+    float radius = 0.0f; ///< 横と奥行きに広がる半径
+    Vector4 color = { 1.0f, 1.0f, 1.0f, 1.0f }; ///< 色
+    float lifeTimeMin = 1.0f; ///< 寿命の幅
+    float lifeTimeMax = 1.0f;
+    float scale = 1.0f; ///< 大きさ
+    uint32_t enabled = 0; ///< 1 なら出し直す
+    float height = 0.0f; ///< 中心から上へ広がる高さ
+    float driftXZ = 0.0f; ///< 横に流れる速さの幅
+    float riseMin = 0.0f; ///< 昇る速さの幅
+    float riseMax = 0.0f;
+    uint32_t seed = 0; ///< グループごとの乱数の種
+    float fieldScale = 1.0f; ///< 場（ParticleField）の効き方の倍率（0 で効かない。斬撃の線や武器の軌跡は 0 にする）
+    float pad[2] = {};
+};
+
+/** @brief 場の種類（ParticleUpdate.CS.hlsl と同じ番号） */
+enum class ParticleFieldType : uint32_t {
+    kRadial = 0, ///< 中心から押し広げる・引き寄せる（strength が正で押す、負で引く。swirl で渦を巻かせる）
+    kDirectional = 1, ///< 決まった向きへ流す（風・引きずり）
+};
+
+/**
+ * @brief 範囲の中の粒に力を掛ける場（ParticleUpdate.CS.hlsl の ParticleField と同じ並び。48 バイト）
+ * @note 中心から離れるほど弱まり、半径の外では効かない
+ */
+struct ParticleField {
+    Vector3 center {}; ///< 中心
+    float radius = 1.0f; ///< 効く半径
+    Vector3 direction = { 1.0f, 0.0f, 0.0f }; ///< kDirectional の流す向き（長さ1）
+    float strength = 0.0f; ///< 加速度（kRadial は正で押し広げ、負で引き寄せる）
+    float swirl = 0.0f; ///< 中心のまわりを回す加速度（画面の奥行きの軸まわり。正で反時計回り）
+    float drag = 0.0f; ///< 範囲の中で速さを抜く強さ（引き寄せた粒が中心を行き過ぎないように）
+    ParticleFieldType type = ParticleFieldType::kRadial;
+    float pad = 0.0f;
+};
+
+/**
+ * @brief ソフトパーティクルの定数（Particle.PS.hlsl の SoftParticleConstants と同じ並び）
+ */
+struct SoftParticleConstants {
+    float depthA = 0.0f; ///< 射影行列の m[2][2]
+    float depthB = 0.0f; ///< 射影行列の m[3][2]
+    float softRange = 1.0f; ///< 後ろの物にこの奥行きまで近づくと薄くなり始める
+    uint32_t enabled = 0; ///< 1 ならソフトパーティクルにする
+};
+
+// シェーダーと同じ並び・大きさであることを確かめる（HLSL 側を変えたら一緒に変える）
+static_assert(sizeof(GPUParticleState) == 80, "GPUParticleState は ParticleCompute.hlsli と同じ 80 バイト");
+static_assert(sizeof(ParticleForGPU) == 176, "ParticleForGPU は ParticleCompute.hlsli と Particle.VS.hlsl と同じ 176 バイト");
+static_assert(sizeof(CSConstants) == 144, "CSConstants は ParticleUpdate.CS.hlsl の UpdateConstants と同じ 144 バイト");
+static_assert(sizeof(Emitter) == 64, "Emitter は EmitParticle.CS.hlsl の CBEmitter と同じ 64 バイト");
+static_assert(sizeof(ParticleLoopConfig) == 80, "ParticleLoopConfig は ParticleUpdate.CS.hlsl の LoopConstants と同じ 80 バイト");
+static_assert(sizeof(ParticleField) == 48, "ParticleField は ParticleUpdate.CS.hlsl の ParticleField と同じ 48 バイト");
+static_assert(sizeof(SoftParticleConstants) == 16, "SoftParticleConstants は Particle.PS.hlsl と同じ 16 バイト");
+
+/**
  * @brief 同じテクスチャを共有するパーティクルの集まり（グループ）
  */
 struct ParticleGroup {
     std::string textureFilePath;
 
-    // GPU シミュレーションステートバッファ (DEFAULT heap, UAV)
-    Microsoft::WRL::ComPtr<ID3D12Resource> particleStateBuffer;
+    static constexpr uint32_t kNumMaxInstance = 8192;
 
-    // CPU→GPU コピー用ステージングバッファ (UPLOAD heap, 常時マップ済み)
-    Microsoft::WRL::ComPtr<ID3D12Resource> particleUploadBuffer;
-    GPUParticleState* particleUploadData = nullptr;
+    // GPU 上の粒の状態・空き一覧・空きの数（DEFAULT heap, UAV）
+    Microsoft::WRL::ComPtr<ID3D12Resource> particleStateBuffer;
+    Microsoft::WRL::ComPtr<ID3D12Resource> freeListBuffer;
+    Microsoft::WRL::ComPtr<ID3D12Resource> counterBuffer;
 
     // インスタンシング描画バッファ (DEFAULT heap, CS が UAV として書き、VS が SRV として読む)
     uint32_t srvIndex = 0;
     Microsoft::WRL::ComPtr<ID3D12Resource> instancingResource;
 
-    static constexpr uint32_t kNumMaxInstance = 1024;
-
-    // CPU 側スロット管理 (GPU readback 不要)
-    std::array<float, kNumMaxInstance> slotExpiry = { };
     float groupTime = 0.0f;
+    // CPU が知っている、最後の粒が消える時刻の見込み（GPU から読み戻さずに、描く・更新するかを決める）
+    float aliveUntil = 0.0f;
 
-    // 現在生存中のスロット数（Draw の hasAlive スキャンを O(1) にする）
-    uint32_t aliveCount = 0;
+    // このフレームに出してほしい粒の一覧（次の Update で GPU へ送る）
+    std::vector<GPUParticleState> pendingSpawns;
 
-    // 空きスロットのスタック（O(1) Allocate）
-    std::vector<uint32_t> freeList;
-
-    // このフレームに新規発生したスロット一覧 (次の Update で GPU にコピーする)
-    std::vector<uint32_t> pendingSlots;
-
-    // instancingResource の現在状態
     bool instancingInSRV = false; // false=UAV  true=NON_PIXEL_SHADER_RESOURCE
-    bool needsInit = true; // 初回 Update で全スロットをゼロ初期化する
-    bool particleStateFresh = true; // particleStateBuffer が作成直後の COMMON 状態か
-                                    // 最初の UAV→X バリアで false にセット
+    bool needsReset = true; // 次の Update で全部の粒を消し、空き一覧を詰め直す
+    bool buffersFresh = true; // 作成直後の COMMON 状態か（最初の更新で UAV へ移す）
     bool additiveBlend = true; // false = alpha blend (SRC_ALPHA / INV_SRC_ALPHA)
 
-    // デフォルト寿命（EmitBurst で設定される）
-    float defaultLifeTime = 1.0f;
-
     // GPU エミッター (EmitParticle.CS)
-    Microsoft::WRL::ComPtr<ID3D12Resource> emitterBuffer;
-    Emitter* emitterData = nullptr;
+    Emitter emitter {};
 
-    // CPU 自動再配置（EmitScatterLoop 用）
-    /**
-     * @brief EmitScatterLoop で指定した再配置条件（中心・半径・寿命範囲・色・スケール・数）を保持する
-     */
-    struct RespawnConfig {
-        Vector3 center = { };
-        float radius = 0.0f;
-        float lifeTimeMin = 1.0f;
-        float lifeTimeMax = 1.0f;
-        Vector4 color = { 1.0f, 1.0f, 1.0f, 1.0f };
-        float scale = 1.0f;
-        uint32_t count = 0;
-    };
-    bool autoRespawn = false;
-    RespawnConfig respawnConfig;
+    // 寿命が尽きた粒を GPU で出し直す設定（EmitScatterLoop 用）
+    ParticleLoopConfig loop {};
 };
 
 /**
@@ -175,7 +215,7 @@ public:
 
     /**
      * @brief 生存中のパーティクルをインスタンシング描画する
-     * @param camera 使用カメラ（現在は未使用、将来の視錐台カリング用に保持）
+     * @param camera ソフトパーティクルで深度から奥行きへ戻すのに使うカメラ（nullptr ならソフトにしない）
      */
     void Draw(Camera* camera);
 
@@ -225,7 +265,7 @@ public:
     void EmitHitStar(const std::string& name, const Vector3& position, const Vector4& color);
 
     /**
-     * @brief 指定数のパーティクルをランダム位置に一斉配置する（環境パーティクル等）
+     * @brief グループを空にしてから、指定数のパーティクルをランダム位置に一斉配置する（環境パーティクル等）
      * @param count    放出数（最大 kNumMaxInstance）
      * @param lifeTime 各パーティクルの寿命（デフォルトは実質無限）
      */
@@ -234,7 +274,7 @@ public:
         float lifeTime = kDefaultBurstLifetime, float scale = 1.0f, bool flicker = false);
 
     /**
-     * @brief 指定半径・高さにランダム配置し、寿命が尽きると自動再配置するループエフェクトを開始する
+     * @brief 指定半径・高さにランダム配置し、寿命が尽きると GPU で再配置するループエフェクトを開始する
      */
     void EmitScatterLoop(const std::string& name, const Vector3& center, float radius,
         uint32_t count, const Vector4& color,
@@ -286,7 +326,7 @@ public:
     void SetAdditiveBlend(const std::string& name, bool additive);
 
     /**
-     * @brief 指定グループに生存中のパーティクルが1粒以上存在するかを返す
+     * @brief 指定グループに生存中のパーティクルが残っていそうかを返す（GPU から読み戻さず、CPU の見込みで答える）
      * @return true=生存あり / false=全滅
      */
     bool IsGroupAlive(const std::string& name) const;
@@ -297,9 +337,43 @@ public:
      */
     Emitter* GetEmitter(const std::string& name);
 
+    /** @brief ソフトパーティクルにするか（既定は有効） */
+    void SetSoftParticlesEnabled(bool enabled) {
+        softParticlesEnabled_ = enabled;
+    }
+
+    /** @brief 1フレームに効かせられる場の数 */
+    static constexpr uint32_t kMaxFields = 16;
+    /**
+     * @brief 粒に力を掛ける場を置く（全グループの粒に効く。グループごとの効き方は SetFieldScale で変える）
+     * @param field   場
+     * @param seconds 0 ならこのフレームだけ（続けて効かせる時は毎フレーム置く）。正ならその秒数だけ残り、だんだん弱まる
+     */
+    void AddField(const ParticleField& field, float seconds = 0.0f);
+    /** @brief グループの粒への場の効き方の倍率を決める（0 で効かない） */
+    void SetFieldScale(const std::string& name, float scale);
+    /** @brief 置いてある場をすべて消す（シーンを抜ける時） */
+    void ClearFields() {
+        timedFields_.clear();
+        frameFields_.clear();
+    }
+
 private:
-    /** @brief 粒子の状態バッファをコピー先へ遷移し、初回の印を下ろす */
-    void PrepareParticleCopy(ParticleGroup& group, ID3D12GraphicsCommandList* cmd);
+    /** @brief 更新の CS に渡す場の一覧（ParticleUpdate.CS.hlsl の FieldConstants と同じ並び） */
+    struct FieldConstants {
+        uint32_t count = 0;
+        float pad[3] = {};
+        std::array<ParticleField, kMaxFields> fields {};
+    };
+    static_assert(sizeof(FieldConstants) == 16 + 48 * kMaxFields, "FieldConstants は ParticleUpdate.CS.hlsl の FieldConstants と同じ並び");
+    /** @brief 秒数を決めて置いた場 */
+    struct TimedField {
+        ParticleField field;
+        float remaining = 0.0f; ///< 残りの秒数
+        float total = 0.0f; ///< 置いた時の秒数（弱まり方に使う）
+    };
+    /** @brief このフレームに効かせる場を集めて今のフレームの領域へ書き、秒数を決めた場の時間を進める */
+    D3D12_GPU_VIRTUAL_ADDRESS UploadFields(float dt);
 
     // 放出APIの既定値
     static constexpr float kDefaultBurstLifetime = 100000.0f;
@@ -314,24 +388,21 @@ private:
     ParticleManager() = default;
     /** @brief 所有する資源はメンバのデストラクタで解放する */
     ~ParticleManager() = default;
+    /** @brief GPU 資源を二重に持たないようにコピーを禁じる */
     ParticleManager(const ParticleManager&) = delete;
     ParticleManager& operator=(const ParticleManager&) = delete;
 
     // パイプライン構築
+    /** @brief 描画と計算用シェーダーのルートシグネチャを作る */
     void CreateRootSignature();
+    /** @brief 粒を描くパイプラインを作る */
     void CreatePipelineState();
-    void CreateCSRootSignature();
-    void CreateCSPipelineState();
-    void CreateCSEmitRootSignature();
-    void CreateCSEmitPipelineState();
+    /** @brief 初期化・出現・発射・更新の計算用パイプラインを作る */
+    void CreateComputePipelines();
+    /** @brief 粒1枚ぶんの四角形の頂点を作る */
     void CreateQuadGeometry();
 
-    // 空きスロットを返すなければ UINT32_MAX
-    uint32_t AllocateSlot(ParticleGroup& group);
-
-    // 寿命が尽きてからスロットを空けるまでの余裕（GPU側の消滅処理を待つ）
-    static constexpr float kSlotExpiryMargin = 0.1f;
-    // 環境のばらまきループ（EmitScatterLoop と自動再配置で共通）の配置範囲と漂い方
+    // 環境のばらまきループ（EmitScatterLoop と GPU での出し直しで共通）の配置範囲と漂い方
     static constexpr float kScatterHeight = 12.0f;
     static constexpr float kScatterDriftXZ = 0.3f;
     static constexpr float kScatterRiseMin = 0.1f;
@@ -346,35 +417,68 @@ private:
         float lifeTime = 0.0f;
         float rotateZ = 0.0f;
         ParticleMotion motion = ParticleMotion::kLinear;
+        float currentTime = 0.0f; ///< 寿命の途中から始める時の経過時間（ふつうは 0）
     };
-    /** @brief 空きスロットへ1粒書き込む（空きが無ければ何もせず false） */
-    bool SpawnParticle(ParticleGroup& group, const ParticleSpawn& spawn);
+    /** @brief 出してほしい粒の一覧へ1粒足す（1フレームに頼める数を超えたら何もせず false） */
+    static bool SpawnParticle(ParticleGroup& group, const ParticleSpawn& spawn);
+    /** @brief グループの粒を次の更新ですべて消すように頼む（まだ送っていない頼みも捨てる） */
+    static void RequestReset(ParticleGroup& group);
 
     // CreateParticleGroup のフェーズ分割ヘルパー
-    void CreateParticleStateBuffers(ParticleGroup& group);
+    /** @brief 粒の状態・空き一覧・空きの数のバッファを作る */
+    void CreateParticleBuffers(ParticleGroup& group);
+    /** @brief 描画で読むインスタンスのバッファと SRV・UAV を作る */
     void CreateParticleInstancingResource(ParticleGroup& group);
-    void InitParticleGroupState(ParticleGroup& group);
+
+    /** @brief グループを更新する必要があるか（生きている粒・頼み・エミッター・出し直しのどれかがある） */
+    static bool NeedsUpdate(const ParticleGroup& group);
+    /** @brief グループの粒を描く必要があるか */
+    static bool NeedsDraw(const ParticleGroup& group);
 
     // Update のフェーズ分割ヘルパー
-    void UpdateCSConstants(Camera* camera, float dt);
+    /** @brief 更新の CS の定数を作り、今のフレームの領域へ書いてアドレスを返す */
+    D3D12_GPU_VIRTUAL_ADDRESS UploadCSConstants(Camera* camera, float dt);
+    /** @brief 描画で読んでいたバッファを CS が書ける状態へ戻す */
     void TransitionInstancingToUAV(ParticleGroup& group, ID3D12GraphicsCommandList* cmd);
-    void ExpireAndRespawnSlots(ParticleGroup& group);
+    /** @brief 作成直後のバッファを UAV の状態へ移す */
+    static void TransitionBuffersToUAV(ParticleGroup& group, ID3D12GraphicsCommandList* cmd);
+    /** @brief 全部の粒を消し、空き一覧に全部の枠を積む */
+    void DispatchInitCS(ParticleGroup& group, ID3D12GraphicsCommandList* cmd);
+    /** @brief 出してほしい粒の一覧を送り、空き一覧から枠を取って書き込む */
+    void DispatchSpawnCS(ParticleGroup& group, ID3D12GraphicsCommandList* cmd);
     /**
-     * @brief 発生し直す前に全スロットを空にし、先頭 activeCount 個以外を空き一覧へ戻す
+     * @brief 発生頻度に応じて発射タイミングを判定し、来ていれば発射用コンピュートシェーダを
+     *        ディスパッチして空き一覧から枠を取って新規パーティクルを生成する（発射タイミングでなければ何もしない）
      * @param group 対象パーティクルグループ
-     * @param activeCount これから使うスロット数（先頭から）
-     */
-    static void ResetSlotsForEmit(ParticleGroup& group, uint32_t activeCount);
-    void FlushPendingSlotsToGPU(ParticleGroup& group, ID3D12GraphicsCommandList* cmd);
-    /**
-     * @brief 発生頻度(frequency)に応じて発射タイミングを判定し、来ていればスロットの有効期限を延長した上で
-     *        発射用コンピュートシェーダをディスパッチして新規パーティクルを生成する（発射タイミングでなければ何もしない）
-     * @param group 対象パーティクルグループ（GPU側のエミッタ・状態バッファを保持）
      * @param cmd   ディスパッチを積むコマンドリスト
      * @param dt    経過時間（発生間隔タイマーの加算に使う）
      */
     void DispatchEmitCS(ParticleGroup& group, ID3D12GraphicsCommandList* cmd, float dt);
-    void DispatchUpdateCS(ParticleGroup& group, ID3D12GraphicsCommandList* cmd);
+    /** @brief 生きている粒を動かし、寿命の尽きた粒の枠を空き一覧へ返す */
+    void DispatchUpdateCS(ParticleGroup& group, ID3D12GraphicsCommandList* cmd, D3D12_GPU_VIRTUAL_ADDRESS constants, D3D12_GPU_VIRTUAL_ADDRESS fields);
+    /** @brief 粒の状態・空き一覧・空きの数の書き込みが終わるのを待つ（次の CS が読む前に挟む） */
+    static void UavBarrier(ID3D12GraphicsCommandList* cmd);
+    /** @brief 今のフレームの領域へ書いてアドレスを返す */
+    D3D12_GPU_VIRTUAL_ADDRESS UploadFrameData(const void* data, size_t size);
+
+    // ソフトパーティクル
+    /** @brief 写し取った深度1枚（写し取る元の深度バッファごとに持つ） */
+    struct SceneDepthCopy {
+        ID3D12Resource* source = nullptr; ///< 写し取る元（所有しない）
+        UINT64 width = 0; ///< 作った時の元の大きさ（変わったら作り直す）
+        UINT height = 0;
+        Microsoft::WRL::ComPtr<ID3D12Resource> texture; ///< 写し先
+        uint32_t srvIndex = UINT32_MAX; ///< 写し先を読む SRV
+        bool readable = false; ///< 写し先が読める状態か（false ならコピー先の状態）
+    };
+    static constexpr size_t kSceneDepthCopyCount = 2; ///< バックバッファの深度とオフスクリーンの深度
+    /**
+     * @brief 今描画先にしている深度を写し取り、その SRV を返す（写し取れなければ nullptr）
+     * @note 描画先の深度はそのまま深度テストに使い続けるので、読むのは写しの方
+     */
+    const SceneDepthCopy* CopySceneDepth(ID3D12GraphicsCommandList* cmd);
+    /** @brief 元の深度バッファに合う写し先を用意する（大きさが変わっていたら作り直す） */
+    SceneDepthCopy* PrepareSceneDepthCopy(ID3D12Resource* source);
 
 private:
     engine::DirectXCommon* dxCommon_ = nullptr;
@@ -390,19 +494,24 @@ private:
     Microsoft::WRL::ComPtr<ID3D12PipelineState> graphicsPipelineState_; // additive blend
     Microsoft::WRL::ComPtr<ID3D12PipelineState> graphicsPipelineStateAlpha_; // alpha blend
 
-    // Compute パイプライン (Update)
-    Microsoft::WRL::ComPtr<ID3D12RootSignature> csRootSignature_;
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> csPipelineState_;
-
-    // Compute パイプライン (Emit)
-    Microsoft::WRL::ComPtr<ID3D12RootSignature> csEmitRootSignature_;
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> csEmitPipelineState_;
-
-    // フレームごとの CS 定数バッファ (UPLOAD heap, 常時マップ済み)
-    Microsoft::WRL::ComPtr<ID3D12Resource> csConstantsBuffer_;
-    CSConstants* csConstantsData_ = nullptr;
+    /** @brief 計算用シェーダー1つ分のルートシグネチャとパイプライン */
+    struct ComputePass {
+        Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature;
+        Microsoft::WRL::ComPtr<ID3D12PipelineState> pipeline;
+    };
+    ComputePass initPass_; ///< ParticleInit.CS（グループを空にする）
+    ComputePass spawnPass_; ///< ParticleSpawn.CS（頼まれた粒を出す）
+    ComputePass emitPass_; ///< EmitParticle.CS（エミッター）
+    ComputePass updatePass_; ///< ParticleUpdate.CS（動かす・寿命の判定・空き一覧へ返す）
 
     std::unordered_map<std::string, ParticleGroup> particleGroups_;
+    uint32_t frameCounter_ = 0; ///< 更新の通し番号（GPU での出し直しの乱数の種）
+
+    std::array<SceneDepthCopy, kSceneDepthCopyCount> sceneDepthCopies_ {};
+    bool softParticlesEnabled_ = true;
+
+    std::vector<TimedField> timedFields_; ///< 秒数を決めて置いた場
+    std::vector<ParticleField> frameFields_; ///< このフレームだけ効かせる場
 };
 
 } // namespace engine::graphics

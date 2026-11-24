@@ -27,6 +27,7 @@
 #include "Player.h"
 #include "SceneShared.h"
 #include "ShadowManager.h"
+#include "Skydome.h"
 #include "Sprite.h"
 #include "SpriteCommon.h"
 #include "SrvManager.h"
@@ -47,6 +48,7 @@ using engine::graphics::ModelCommon;
 using engine::graphics::Object3d;
 using engine::graphics::Object3dCommon;
 using engine::graphics::ShadowManager;
+using engine::graphics::Skydome;
 using engine::graphics::Sprite;
 using engine::graphics::SpriteCommon;
 using engine::graphics::SrvManager;
@@ -129,6 +131,8 @@ private:
     std::unique_ptr<Object3dCommon> objectCommon_;
     std::unique_ptr<ShadowManager> shadowManager_;
     std::unique_ptr<Camera> camera_;
+    /** @brief ステージの空を描く天球 */
+    std::unique_ptr<Skydome> skydome_;
 
     // 境界ブロック
     Model* modelBlock_ = nullptr; // 実体はModelManagerが所有・共有する
