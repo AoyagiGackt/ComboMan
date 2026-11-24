@@ -6,6 +6,7 @@
 #include "SceneVisualTuning.h"
 #include "CombatTuning.h"
 #include "CharacterVisuals.h"
+#include "Easing.h"
 #include "GameConstants.h"
 #include "GravityBody.h"
 #include "Input.h"
@@ -36,6 +37,12 @@ constexpr float kMinModelHeight = 0.001f;
 constexpr float kStanceFadeInPerSecond = 6.0f; // 技を振り終えてから武器の構えへ戻る速さ（1秒あたりの効き具合）
 constexpr float kStanceFadeOutPerSecond = 20.0f; // 技や回避を始めた時に武器の構えを薄める速さ
 constexpr const char* kStanceClipPrefix = "stance_"; // combo_motion.json の構えのクリップ名（stance_<武器種別名>）
+
+// フィニッシャーの溜め: 地上の最後の段の振りかぶりをゆっくり取り、前へ少し倒して震わせる
+constexpr float kFinisherWindupHold = 0.85f; // 溜めきった時に振りかぶる所（段の当たる瞬間までの割合。1 で当たる直前）
+constexpr float kFinisherChargeLean = 0.1f; // 溜めきった時に前へ倒す角度（ラジアン）
+constexpr float kFinisherTrembleSpeed = 45.0f; // 溜めの震えの速さ（ラジアン毎秒）
+constexpr float kFinisherTrembleAmount = 0.012f; // 溜めきった時の震えの幅（ラジアン）
 
 // 状態ごとの本体の色
 constexpr Vector4 kWhite = { 1.0f, 1.0f, 1.0f, 1.0f };
@@ -129,7 +136,7 @@ void Player::UpdateAnimationState(bool isMoving, bool airborne) {
     bool hasGunBone = skel.HasJoint(rig_->gunBoneName);
     auto* weaponManager = WeaponManager::GetInstance();
     // やられ演出で武器を手放した後は構えない
-    bool hold = !weaponsDropped_
+    bool hold = !weaponsDropped_ && !explorationMode_
         && ((weaponManager->HasEquippedWeapon() && UsesHoldPose(weaponManager->GetCurrent().type)) || hasGunBone);
     if (newState == animState_ && hold == animHold_) {
         return;
@@ -149,11 +156,15 @@ public:
         player.rig_->object->SetAnimation(hold ? player.rig_->idleHoldAnim : player.rig_->idleAnim);
     }
 };
-/** @brief 装備の有無に応じた走行アニメーションを開始する状態 */
+/** @brief 装備の有無に応じた走行アニメーションを開始する状態（歩くだけの状態では歩き） */
 class Player::RunAnimState : public IAnimState {
 public:
     /** @brief この状態へ入る際の初期設定を適用する */
     void Enter(Player& player, bool hold, bool) const override {
+        if (player.explorationMode_) {
+            player.rig_->object->SetAnimation(player.rig_->walkAnim);
+            return;
+        }
         player.rig_->object->SetAnimation(hold ? player.rig_->runHoldAnim : player.rig_->runAnim);
     }
 };
@@ -215,9 +226,9 @@ void Player::UpdateAttachedWeapons() {
     // 本体の更新を終えてから装備の位置と行列を確定する
     AttachActiveWeapons();
 
-    for (auto& slot : heldWeapons_) {
-        slot.object->Update();
-    }
+    ForEachMeleeWeaponObject([](Object3d& object) {
+        object.Update();
+    });
     for (auto& slot : guns_) {
         slot.object->Update();
     }
@@ -266,9 +277,9 @@ void Player::SetPortalAppearance(float scale, float alpha) {
     rig_->object->SetScale({ size, size, size });
     const Vector4 color = { 1.0f, 1.0f, 1.0f, portalAlpha_ };
     rig_->object->SetColor(color);
-    for (auto& slot : heldWeapons_) {
-        slot.object->SetColor(color);
-    }
+    ForEachMeleeWeaponObject([&color](Object3d& object) {
+        object.SetColor(color);
+    });
     for (auto& slot : guns_) {
         slot.object->SetColor(color);
     }
@@ -344,9 +355,9 @@ void Player::UpdateVisualState(Input* input) {
         ? kRimIntensity + (1.0f - finisherChargeTimer_ / CombatTune().FinisherChargeDuration()) * kFinisherRimBoost
         : kRimIntensity;
     rig_->object->SetRimIntensity(rimIntensity);
-    for (auto& slot : heldWeapons_) {
-        slot.object->SetRimIntensity(rimIntensity);
-    }
+    ForEachMeleeWeaponObject([rimIntensity](Object3d& object) {
+        object.SetRimIntensity(rimIntensity);
+    });
     for (auto& slot : guns_) {
         slot.object->SetRimIntensity(rimIntensity);
     }
@@ -355,6 +366,12 @@ void Player::UpdateVisualState(Input* input) {
     // 両者は排他（旋回はBall選択中のみ、攻撃レンはコンボ中のみ）なので単純加算でよい
     // 射撃の骨姿勢に近接の全身回転や傾きを重ねない
     Vector3 bodyLean = gunCombo_.GetActive() != nullptr ? Vector3{} : meleeCombo_.GetBodyLeanOffset();
+    // フィニッシャーの溜め: 溜まるほど前へ倒し、力をこめて小刻みに震える
+    if (finisherCharging_) {
+        const float charge = FinisherChargeProgress();
+        bodyLean.x += kFinisherChargeLean * easing::EaseOutCubic(charge)
+            + std::sin(finisherChargeTimer_ * kFinisherTrembleSpeed) * kFinisherTrembleAmount * charge;
+    }
     rig_->object->SetPosition(modelPos);
     // 回転斬りの段では体ごとその場で回る（向きに足すので、武器もボーン追従でいっしょに回る）
     rig_->object->SetRotation({ bodyLean.x + backDodgeLean, yaw + (gunCombo_.GetActive() != nullptr ? float{} : meleeCombo_.GetBodyTurnOffset()), spinAngle_ * gameConstants::kDegToRad + bodyLean.z });
@@ -364,6 +381,16 @@ void Player::UpdateVisualState(Input* input) {
 
 /** @brief 今の段と経過割合を加算モーションのレイヤーへ渡す（リグを評価する直前に呼ぶ） */
 void Player::SyncMotionLayer() {
+    // フィニッシャーの溜めの間は、地上の最後の段を振りかぶった所まで、溜めに合わせてゆっくり構える
+    if (finisherCharging_) {
+        SyncStanceLayer(true);
+        const MeleeAttackDef* pose = FinisherChargePose();
+        const ComboMotionLibrary* library = ComboMotionLibrary::GetInstance();
+        const MotionClip* clip = (pose != nullptr && library->IsEnabled()) ? library->Find(rig_->motionRigId, pose->id) : nullptr;
+        const float windup = (pose != nullptr && pose->duration > 0.0f) ? pose->hitTime / pose->duration * kFinisherWindupHold : 0.0f;
+        motionLayer_.SetClip(clip, windup * easing::EaseOutCubic(FinisherChargeProgress()));
+        return;
+    }
     // コンボの段タイマーを唯一の時計にして、加算キーを段の経過割合で評価する
     // 同時入力では銃のクリップだけを選び、同じ骨への二重加算を防ぐ
     const GunShotDef* shot = gunCombo_.GetActive();
@@ -382,12 +409,28 @@ void Player::SyncMotionLayer() {
     motionLayer_.SetClip(clip, meleeCombo_.GetProgress());
 }
 
+/** @brief フィニッシャーの溜めで取る構え（持っている武器の地上の最後の段。武器が無ければ nullptr） */
+const MeleeAttackDef* Player::FinisherChargePose() const {
+    const auto* wm = WeaponManager::GetInstance();
+    if (!wm->HasEquippedWeapon()) {
+        return nullptr;
+    }
+    const MeleeComboSet& set = GetMeleeComboSet(wm->GetCurrent().type, wm->IsBossSlotSelected());
+    return set.ground.count > 0 ? &set.ground[set.ground.count - 1] : nullptr;
+}
+
+/** @brief フィニッシャーの溜めの進み具合（0 で溜め始め、1 で溜めきった） */
+float Player::FinisherChargeProgress() const {
+    const float duration = CombatTune().FinisherChargeDuration();
+    return duration > 0.0f ? std::clamp(1.0f - finisherChargeTimer_ / duration, 0.0f, 1.0f) : 1.0f;
+}
+
 /** @brief 持っている武器の構えを、技を振っていない間だけ重ねる（技の間は素早く薄める） */
 void Player::SyncStanceLayer(bool attacking) {
     const auto* wm = WeaponManager::GetInstance();
     const ComboMotionLibrary* library = ComboMotionLibrary::GetInstance();
     // 武器を持ち、立ち回りの最中（技・回避・ワープ・水中・やられ中でない）だけ構える
-    const bool canHoldStance = wm->HasEquippedWeapon() && library->IsEnabled() && !weaponsDropped_ && !inWater_;
+    const bool canHoldStance = wm->HasEquippedWeapon() && library->IsEnabled() && !weaponsDropped_ && !inWater_ && !explorationMode_;
     const bool wantsStance = canHoldStance && !attacking && !dodgeActive_ && !warpActive_;
     const float rate = wantsStance ? kStanceFadeInPerSecond : kStanceFadeOutPerSecond;
     const float target = wantsStance ? 1.0f : 0.0f;
@@ -495,9 +538,9 @@ void Player::AttachActiveWeapons() {
     auto* wm = WeaponManager::GetInstance();
 
     // ── 現在のスタイルに対応する武器を右手ボーンに追従 ──────────────
-    // 攻撃中は段ごとのスイング回転（振りかぶり→振り抜き）をグリップ回転へ加算し、
-    // 共通の腕モーションでも武器ごとに違う軌道に見せる
+    // 刃の向きは段ごとの加算モーションが手の骨を回して付けるので、ここでは握りの回転を足さない
     activeHeldIndex_ = -1;
+    fusedPartnerIndex_ = -1;
     if (previewWeaponActive_ || wm->HasEquippedWeapon()) {
         // 見本のプレビュー中は、装備に関係なく見本の武器を持たせる
         const WeaponType meleeType = previewWeaponActive_ ? previewWeapon_ : wm->GetCurrent().type;
@@ -507,6 +550,14 @@ void Player::AttachActiveWeapons() {
                 break;
             }
         }
+    }
+    // 歩くだけの状態では、近接武器も銃も持たない
+    if (explorationMode_) {
+        activeHeldIndex_ = -1;
+        fusedPartnerIndex_ = -1;
+        thrownWeaponIndex_ = -1;
+        gunVisible_ = false;
+        return;
     }
     // やられ演出で手放した後は、近接武器を演出が決めた位置へ置き、銃は隠す
     if (weaponsDropped_) {
@@ -519,8 +570,13 @@ void Player::AttachActiveWeapons() {
     }
     if (activeHeldIndex_ >= 0 && !BehaviorFor(heldWeapons_[activeHeldIndex_].type).IsDisarmed()) {
         auto& slot = heldWeapons_[activeHeldIndex_];
-        Vector3 rot = slot.gripRotate + heldGripOffset_ + meleeCombo_.GetSwingOffset();
+        Vector3 rot = slot.gripRotate + heldGripOffset_;
         AttachHeldWeapon(slot.object.get(), rig_->meleeBoneName, slot.gripScale, rot, slot.gripTranslate);
+        ApplyHeldWeaponCorrection(*slot.object);
+        // 技の見本では装備に関係ない武器を持たせるので、合体の見た目は付けない
+        if (!previewWeaponActive_) {
+            AttachFusedPartner();
+        }
     }
 
     // 投げた武器は、途中で他の武器に持ち替えてもactiveHeldIndex_とは別に
@@ -532,6 +588,10 @@ void Player::AttachActiveWeapons() {
         if (BehaviorFor(heldWeapons_[i].type).GetThrownPose(thrownPos, thrownSpinZ)) {
             thrownWeaponIndex_ = i;
             PlaceThrownWeapon(heldWeapons_[i], thrownPos, thrownSpinZ);
+            // 今の武器を投げている間は手元に何も無いので、素材の武器も出さない
+            if (i == activeHeldIndex_) {
+                fusedPartnerIndex_ = -1;
+            }
             break;
         }
     }
@@ -574,6 +634,47 @@ void Player::AttachHeldWeapon(Object3d* obj, const char* boneName,
     const Vector3& gripScale, const Vector3& gripRotate, const Vector3& gripTranslate) {
     AttachToBone(obj, rig_->object->GetSkeleton(), rig_->object->GetWorldMatrix(),
         boneName, gripScale, gripRotate, gripTranslate);
+}
+
+/** @brief 選んでいる枠の武器が合体していれば、素材の武器を土台の柄頭から逆向きに付ける */
+void Player::AttachFusedPartner() {
+    const WeaponData* partner = WeaponManager::GetInstance()->GetCurrentFusionPartner();
+    if (partner == nullptr) {
+        return;
+    }
+    for (int i = 0; i < static_cast<int>(fusedPartnerWeapons_.size()); ++i) {
+        HeldWeaponSlot& slot = fusedPartnerWeapons_[i];
+        if (slot.type != partner->type) {
+            continue;
+        }
+        // X軸で半回転して刃を手の下側へ向ける。握りのずれも同じ向きに裏返し、土台の柄頭より先へずらす
+        const PlayerVisualSettings& tune = SceneVisualTuning::Player();
+        const float scale = tune.fusionPartnerScale;
+        const Vector3 gripScale = { slot.gripScale.x * scale, slot.gripScale.y * scale, slot.gripScale.z * scale };
+        const Vector3 gripRotate = { slot.gripRotate.x + gameConstants::kPi, slot.gripRotate.y, slot.gripRotate.z };
+        const Vector3 gripTranslate = { slot.gripTranslate.x * scale, -slot.gripTranslate.y * scale - tune.fusionPartnerGap, -slot.gripTranslate.z * scale };
+        AttachHeldWeapon(slot.object.get(), rig_->meleeBoneName, gripScale, gripRotate + heldGripOffset_, gripTranslate);
+        ApplyHeldWeaponCorrection(*slot.object);
+        fusedPartnerIndex_ = i;
+        return;
+    }
+}
+
+/** @brief 手に持つ近接武器の補正を決め、すぐ付け直す */
+void Player::SetHeldWeaponWorldCorrection(const Matrix4x4& correction) {
+    heldWeaponCorrection_ = correction;
+    hasHeldWeaponCorrection_ = true;
+    UpdateAttachedWeapons();
+}
+
+/** @brief 手に付けた近接武器へ、決めてある補正を掛ける */
+void Player::ApplyHeldWeaponCorrection(Object3d& object) const {
+    if (!hasHeldWeaponCorrection_) {
+        return;
+    }
+    // 行ベクトルの行列なので、手に付けた後のワールド行列の右から掛けるとワールド座標での補正になる
+    object.SetLocalMatrix(Multiply(object.GetLocalMatrix(), heldWeaponCorrection_));
+    object.Update();
 }
 
 /** @brief 現在表示中の近接武器の手元ワールド座標を返す（武器トレイル演出用） */
@@ -636,6 +737,9 @@ void Player::DrawBodyAndWeapons() {
         if (activeHeldIndex_ >= 0) {
             heldWeapons_[activeHeldIndex_].object->DrawOutline(outline);
         }
+        if (fusedPartnerIndex_ >= 0) {
+            fusedPartnerWeapons_[fusedPartnerIndex_].object->DrawOutline(outline);
+        }
         if (thrownWeaponIndex_ >= 0 && thrownWeaponIndex_ != activeHeldIndex_) {
             heldWeapons_[thrownWeaponIndex_].object->DrawOutline(outline);
         }
@@ -648,6 +752,9 @@ void Player::DrawBodyAndWeapons() {
     // 通常描画
     if (activeHeldIndex_ >= 0) {
         heldWeapons_[activeHeldIndex_].object->Draw();
+    }
+    if (fusedPartnerIndex_ >= 0) {
+        fusedPartnerWeapons_[fusedPartnerIndex_].object->Draw();
     }
     if (thrownWeaponIndex_ >= 0 && thrownWeaponIndex_ != activeHeldIndex_) {
         heldWeapons_[thrownWeaponIndex_].object->Draw();
@@ -668,9 +775,9 @@ void Player::GetStaticModelPlacement(Vector3& outPosition, float& outScale) cons
 void Player::SetAppearanceTint(const Vector4& color, const Vector3& rimColor) {
     rig_->object->SetColor(color);
     rig_->object->SetRimColor(rimColor);
-    for (auto& slot : heldWeapons_) {
-        slot.object->SetRimColor(rimColor);
-    }
+    ForEachMeleeWeaponObject([&rimColor](Object3d& object) {
+        object.SetRimColor(rimColor);
+    });
 }
 
 } // namespace engine::game

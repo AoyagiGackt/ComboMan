@@ -22,6 +22,7 @@ struct PlayerTuning {
     float gravity = 0.012f;
     float jumpPower = 0.4f;
     float speed = 0.15f; ///< 1フレームあたりの横移動量
+    float walkSpeedRatio = 0.45f; ///< 歩くだけの状態（マップを移動する時）の速さの、走りに対する割合
     float minEnemyDistanceX = 0.85f; ///< 敵とめり込まないための最小X距離（接触ダメージの重なりしろは残す。敵側の separation.playerMinDistanceX より大きくする）
     float minEnemyDistanceY = 0.75f; ///< 上記のY版（頭上を飛び越えている間は押し出さない）
     float invincibleDuration = 1.0f; ///< 被弾後の無敵秒数

@@ -1,4 +1,5 @@
 {
+    "palette": "Resources/block/terrain/terrain_palette_factory.png",
     "floorY": -0.6,
     "ceilingY": 13.0,
     "leftWallX": 2.0,

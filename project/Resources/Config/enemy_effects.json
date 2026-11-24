@@ -1,0 +1,83 @@
+{
+  "_comment": "敵の種類ごとの攻撃（attack=近接攻撃を振った・火を吐いた・骨を投げた・急降下した・跳ねた瞬間）とやられ（defeat=倒れた瞬間）の GPU パーティクル。種類は enemy_params.json の visuals の名前（モンスター）か Knight（騎士）か Boss（ステージボス）。無い種類は default。層の書き方は element_effects.json と同じ（type: burst=動き方を選んでばらまく ring=リング scatter=左右へばらまく など。motion: gravity=落ちる flame=炎 ember=火の粉 mist=もや flicker=明滅 soul=揺れながら昇って消える魂 goo=重く落ちて伸びる粘液 flutter=ゆっくり舞い落ちて裏返るかけら）。color=層の color が weapon の時の色。attackField / defeatField=その瞬間に置く場（particle_fields.json の名前）。facingSpeed は攻撃の向きへ足す速さ",
+  "default": {
+    "color": [1.0, 1.0, 1.0, 1.0],
+    "attack": [],
+    "defeat": [
+      { "type": "burst", "particle": "hit_spark", "motion": "gravity", "count": 14, "spread": 0.2, "speedMin": 2.5, "speedMax": 5.5, "riseMin": 2.0, "riseMax": 4.0, "lifetime": 0.6, "lifetimeJitter": 0.3, "size": 0.1, "sizeJitter": 0.4, "color": "weapon" }
+    ],
+    "defeatField": "enemy_defeat"
+  },
+  "Knight": {
+    "color": [0.85, 0.88, 0.98, 1.0],
+    "attack": [
+      { "type": "burst", "particle": "hit_spark", "motion": "gravity", "count": 8, "spread": 0.1, "speedMin": 1.0, "speedMax": 3.0, "riseMin": 1.0, "riseMax": 2.5, "facingSpeed": 3.5, "lifetime": 0.35, "lifetimeJitter": 0.3, "size": 0.05, "color": [1.0, 0.85, 0.5, 1.0] }
+    ],
+    "defeat": [
+      { "type": "burst", "particle": "hit_spark", "motion": "gravity", "count": 18, "spread": 0.25, "speedMin": 3.0, "speedMax": 7.0, "riseMin": 2.0, "riseMax": 4.5, "lifetime": 0.7, "lifetimeJitter": 0.3, "size": 0.12, "sizeJitter": 0.5, "randomRotate": true, "color": "weapon" },
+      { "type": "burst", "particle": "hit_spark", "motion": "linear", "count": 10, "spread": 0.05, "speedMin": 4.0, "speedMax": 8.0, "lifetime": 0.25, "size": 0.05, "color": [1.0, 0.9, 0.6, 1.0] },
+      { "type": "burst", "particle": "elem_smoke", "motion": "mist", "count": 5, "spread": 0.35, "speedMin": 0.3, "speedMax": 1.0, "riseMin": 0.4, "riseMax": 1.0, "lifetime": 0.9, "size": 0.7, "sizeJitter": 0.3, "randomRotate": true, "color": [0.45, 0.45, 0.5, 0.55] }
+    ],
+    "defeatField": "enemy_defeat"
+  },
+  "Slime": {
+    "color": [0.45, 1.0, 0.5, 0.95],
+    "attack": [
+      { "type": "burst", "particle": "hit_spark", "motion": "goo", "count": 10, "spread": 0.15, "speedMin": 1.5, "speedMax": 3.5, "riseMin": 2.5, "riseMax": 4.5, "facingSpeed": 2.0, "lifetime": 0.7, "lifetimeJitter": 0.2, "size": 0.12, "sizeJitter": 0.4, "color": "weapon" }
+    ],
+    "defeat": [
+      { "type": "burst", "particle": "hit_spark", "motion": "goo", "count": 28, "spread": 0.25, "speedMin": 2.5, "speedMax": 6.0, "riseMin": 3.0, "riseMax": 6.5, "lifetime": 0.9, "lifetimeJitter": 0.25, "size": 0.18, "sizeJitter": 0.5, "color": "weapon" },
+      { "type": "burst", "particle": "hit_spark", "motion": "goo", "count": 10, "spread": 0.2, "speedMin": 0.5, "speedMax": 1.5, "riseMin": 5.0, "riseMax": 8.0, "lifetime": 1.0, "size": 0.26, "color": [0.75, 1.0, 0.75, 0.95] },
+      { "type": "burst", "particle": "elem_smoke", "motion": "mist", "count": 4, "spread": 0.3, "speedMin": 0.2, "speedMax": 0.6, "riseMin": 0.2, "riseMax": 0.6, "lifetime": 0.7, "size": 0.6, "randomRotate": true, "color": [0.4, 0.85, 0.45, 0.45] }
+    ],
+    "attackField": "",
+    "defeatField": "enemy_defeat"
+  },
+  "Bat": {
+    "color": [0.42, 0.25, 0.55, 1.0],
+    "attack": [
+      { "type": "burst", "particle": "hit_spark", "motion": "flicker", "count": 8, "spread": 0.2, "speedMin": 0.5, "speedMax": 1.5, "facingSpeed": 2.5, "lifetime": 0.4, "size": 0.07, "color": [0.8, 0.5, 1.0, 1.0] },
+      { "type": "burst", "particle": "elem_smoke", "motion": "mist", "count": 2, "spread": 0.2, "speedMin": 0.2, "speedMax": 0.5, "lifetime": 0.5, "size": 0.45, "randomRotate": true, "color": [0.3, 0.15, 0.4, 0.5] }
+    ],
+    "defeat": [
+      { "type": "burst", "particle": "hit_spark", "motion": "flutter", "count": 14, "spread": 0.25, "speedMin": 1.5, "speedMax": 3.5, "riseMin": 1.5, "riseMax": 3.0, "lifetime": 1.4, "lifetimeJitter": 0.3, "size": 0.16, "sizeJitter": 0.4, "randomRotate": true, "color": "weapon" },
+      { "type": "burst", "particle": "hit_spark", "motion": "soul", "count": 3, "spread": 0.15, "speedMin": 0.2, "speedMax": 0.5, "riseMin": 0.3, "riseMax": 0.8, "lifetime": 1.3, "size": 0.28, "color": [0.75, 0.5, 1.0, 0.85] }
+    ],
+    "defeatField": "enemy_defeat"
+  },
+  "Dragon": {
+    "color": [1.0, 0.5, 0.15, 1.0],
+    "attack": [
+      { "type": "burst", "particle": "elem_flame", "motion": "flame", "count": 8, "spread": 0.15, "speedMin": 0.3, "speedMax": 1.0, "facingSpeed": 4.0, "lifetime": 0.55, "lifetimeJitter": 0.3, "size": 0.45, "sizeJitter": 0.3, "color": "weapon" },
+      { "type": "burst", "particle": "elem_ember", "motion": "ember", "count": 10, "spread": 0.15, "speedMin": 0.5, "speedMax": 2.0, "riseMin": 0.5, "riseMax": 1.5, "facingSpeed": 3.0, "lifetime": 0.8, "size": 0.06, "color": [1.0, 0.7, 0.25, 1.0] }
+    ],
+    "defeat": [
+      { "type": "burst", "particle": "elem_flame", "motion": "flame", "count": 14, "spread": 0.35, "speedMin": 0.5, "speedMax": 2.5, "riseMin": 0.5, "riseMax": 1.5, "lifetime": 0.8, "lifetimeJitter": 0.3, "size": 0.6, "sizeJitter": 0.3, "randomRotate": true, "color": "weapon" },
+      { "type": "burst", "particle": "elem_ember", "motion": "ember", "count": 22, "spread": 0.3, "speedMin": 1.5, "speedMax": 4.5, "riseMin": 1.0, "riseMax": 3.0, "lifetime": 1.2, "lifetimeJitter": 0.3, "size": 0.07, "color": [1.0, 0.75, 0.3, 1.0] },
+      { "type": "burst", "particle": "elem_smoke", "motion": "mist", "count": 6, "spread": 0.4, "speedMin": 0.3, "speedMax": 1.0, "riseMin": 0.6, "riseMax": 1.4, "lifetime": 1.2, "size": 0.8, "sizeJitter": 0.3, "randomRotate": true, "color": [0.25, 0.2, 0.2, 0.6] }
+    ],
+    "defeatField": "enemy_defeat"
+  },
+  "Skeleton": {
+    "color": [0.95, 0.92, 0.8, 1.0],
+    "attack": [
+      { "type": "burst", "particle": "hit_spark", "motion": "gravity", "count": 6, "spread": 0.15, "speedMin": 0.5, "speedMax": 1.5, "riseMin": 1.0, "riseMax": 2.0, "facingSpeed": 1.5, "lifetime": 0.45, "size": 0.06, "color": "weapon" },
+      { "type": "burst", "particle": "elem_smoke", "motion": "mist", "count": 2, "spread": 0.2, "speedMin": 0.2, "speedMax": 0.5, "lifetime": 0.5, "size": 0.4, "randomRotate": true, "color": [0.8, 0.78, 0.7, 0.4] }
+    ],
+    "defeat": [
+      { "type": "burst", "particle": "hit_spark", "motion": "flutter", "count": 12, "spread": 0.3, "speedMin": 2.0, "speedMax": 4.0, "riseMin": 2.0, "riseMax": 4.0, "lifetime": 1.1, "lifetimeJitter": 0.3, "size": 0.14, "sizeJitter": 0.4, "randomRotate": true, "color": "weapon" },
+      { "type": "burst", "particle": "hit_spark", "motion": "soul", "count": 5, "spread": 0.25, "speedMin": 0.2, "speedMax": 0.6, "riseMin": 0.4, "riseMax": 1.0, "lifetime": 1.8, "lifetimeJitter": 0.2, "size": 0.34, "color": [0.55, 0.85, 1.0, 0.9] },
+      { "type": "burst", "particle": "elem_smoke", "motion": "mist", "count": 4, "spread": 0.3, "speedMin": 0.2, "speedMax": 0.7, "riseMin": 0.2, "riseMax": 0.6, "lifetime": 0.9, "size": 0.6, "randomRotate": true, "color": [0.85, 0.82, 0.75, 0.45] }
+    ],
+    "defeatField": "enemy_defeat"
+  },
+  "Boss": {
+    "color": [1.0, 0.95, 0.85, 1.0],
+    "attack": [],
+    "defeat": [
+      { "type": "burst", "particle": "hit_spark", "motion": "soul", "count": 10, "spread": 0.4, "speedMin": 0.3, "speedMax": 0.9, "riseMin": 0.5, "riseMax": 1.2, "lifetime": 2.0, "lifetimeJitter": 0.2, "size": 0.4, "sizeJitter": 0.3, "color": [1.0, 0.85, 0.55, 0.9] },
+      { "type": "burst", "particle": "hit_spark", "motion": "gravity", "count": 24, "spread": 0.3, "speedMin": 3.0, "speedMax": 8.0, "riseMin": 3.0, "riseMax": 6.0, "lifetime": 0.9, "lifetimeJitter": 0.3, "size": 0.12, "sizeJitter": 0.5, "randomRotate": true, "color": "weapon" }
+    ],
+    "defeatField": "boss_slam"
+  }
+}

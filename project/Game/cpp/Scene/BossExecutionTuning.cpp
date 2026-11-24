@@ -78,6 +78,7 @@ constexpr JsonField<ExecutionBeat> kBeatFields[] = {
     { nullptr, "zoom", &ExecutionBeat::zoom },
     { nullptr, "slice", &ExecutionBeat::slice },
     { nullptr, "bomb", &ExecutionBeat::bomb },
+    { nullptr, "field", &ExecutionBeat::field },
 };
 
 /** @brief 拍の配列を読む（配列でなければ空のまま） */
@@ -142,6 +143,13 @@ BossExecutionTuning LoadTuning() {
     if (bombIntro != root.end()) {
         tuning.bombIntro = ReadBeats(*bombIntro);
     }
+    // 近接武器で倒した時に最初に行う拍
+    const auto weaponIntro = root.find("weaponIntro");
+    if (weaponIntro != root.end()) {
+        tuning.weaponIntro = ReadBeats(*weaponIntro);
+    }
+    // 倒した近接武器ごとの割り当て
+    tuning.weapons = ReadStageTable(root, "weapons");
     // ステージごとの割り当て（斬る型と、銃で倒した時の型）
     tuning.stages = ReadStageTable(root, "stages");
     tuning.gunStages = ReadStageTable(root, "gunStages");
@@ -196,6 +204,16 @@ const ExecutionStyle* BossExecutionTuning::FindStyle(const std::string& levelPat
 /** @brief 銃で倒した時の型を返す（ステージの割り当てが無ければ銃の既定の型、それも無ければ nullptr） */
 const ExecutionStyle* BossExecutionTuning::FindGunStyle(const std::string& levelPath) const {
     return LookupStyle(styles, gunStages, gunDefaultStyle, levelPath);
+}
+
+/** @brief 倒した近接武器の種別名に割り当てた型を返す（割り当てが無ければ nullptr） */
+const ExecutionStyle* BossExecutionTuning::FindWeaponStyle(const std::string& weaponName) const {
+    const auto entry = weapons.find(weaponName);
+    if (entry == weapons.end()) {
+        return nullptr;
+    }
+    const auto style = styles.find(entry->second);
+    return style != styles.end() ? &style->second : nullptr;
 }
 
 /** @brief ボスに爆弾がめり込んだまま倒した時の型を返す（無ければ nullptr） */

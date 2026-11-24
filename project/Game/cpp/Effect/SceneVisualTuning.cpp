@@ -153,6 +153,8 @@ const PlayerVisualSettings& SceneVisualTuning::Player() {
             { nullptr, "awakenRed", &PlayerVisualSettings::awakenRed },
             { nullptr, "awakenGreen", &PlayerVisualSettings::awakenGreen },
             { nullptr, "showGunModel", &PlayerVisualSettings::showGunModel },
+            { nullptr, "fusionPartnerScale", &PlayerVisualSettings::fusionPartnerScale },
+            { nullptr, "fusionPartnerGap", &PlayerVisualSettings::fusionPartnerGap },
         };
         auto settings = ReadSettings("playerVisuals", kFields);
 

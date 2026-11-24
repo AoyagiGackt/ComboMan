@@ -48,6 +48,15 @@ public:
         return rootSignature_.Get();
     }
 
+    /**
+     * @brief テクスチャをバインドレスで渡すか（ルート定数の番号でシェーダーがヒープから直接引く）
+     * @note GPU がシェーダーモデル 6.6 とリソースバインディングの段階3に対応している時だけ true。
+     *       false の時は今までどおり記述子テーブルで渡す
+     */
+    bool IsBindless() const {
+        return bindless_;
+    }
+
     /** @brief 2D用のパイプラインステートオブジェクトを取得する */
     ID3D12PipelineState* GetPipelineState() const {
         return graphicsPipelineState_.Get();
@@ -62,6 +71,9 @@ private:
 
     /** @brief 2D描画用のグラフィックスパイプラインステート（PSO） */
     Microsoft::WRL::ComPtr<ID3D12PipelineState> graphicsPipelineState_;
+
+    /** @brief テクスチャをバインドレスで渡すか */
+    bool bindless_ = false;
 };
 
 } // namespace engine::graphics

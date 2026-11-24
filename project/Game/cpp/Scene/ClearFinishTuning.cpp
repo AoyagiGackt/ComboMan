@@ -67,6 +67,26 @@ constexpr JsonField<FinishTuning> kFinishFields[] = {
     { "gun", "flash", &FinishTuning::shotFlash },
     { "gun", "impact", &FinishTuning::shotImpact },
     { "gun", "sound", &FinishTuning::shotSound },
+    { "blasts", "count", &FinishTuning::blastCount },
+    { "blasts", "countJitter", &FinishTuning::blastCountJitter },
+    { "blasts", "interval", &FinishTuning::blastInterval },
+    { "blasts", "intervalJitter", &FinishTuning::blastIntervalJitter },
+    { "blasts", "margin", &FinishTuning::blastMargin },
+    { "blasts", "size", &FinishTuning::blastSize },
+    { "blasts", "seconds", &FinishTuning::blastSeconds },
+    { "blasts", "coreScale", &FinishTuning::blastCoreScale },
+    { "blasts", "color", &FinishTuning::blastColor },
+    { "blasts", "coreColor", &FinishTuning::blastCoreColor },
+    { "blasts", "flash", &FinishTuning::blastFlash },
+    { "blasts", "impact", &FinishTuning::blastImpact },
+    { "blasts", "sound", &FinishTuning::blastSound },
+    { "bomb", "silenceSeconds", &FinishTuning::bombSilenceSeconds },
+    { "bomb", "size", &FinishTuning::finaleBlastSize },
+    { "bomb", "seconds", &FinishTuning::finaleBlastSeconds },
+    { "bomb", "holdSeconds", &FinishTuning::bombHoldSeconds },
+    { "bomb", "flash", &FinishTuning::finaleFlash },
+    { "bomb", "impact", &FinishTuning::finaleImpact },
+    { "bomb", "sound", &FinishTuning::finaleSound },
     { "shatter", "seconds", &FinishTuning::shatterSeconds },
     { "shatter", "crackWidth", &FinishTuning::crackWidth },
     { "shatter", "shardSpeed", &FinishTuning::shardSpeed },
@@ -119,9 +139,11 @@ FinishConfig LoadConfig() {
     // 本数は負にしない（スプライトを最初にこの数だけ作る）
     config.tuning.cutCount = (std::max)(config.tuning.cutCount, 0);
     config.tuning.sprayCount = (std::max)(config.tuning.sprayCount, 0);
+    config.tuning.blastCount = (std::max)(config.tuning.blastCount, 0);
     // 減らす数は 0〜本数 の範囲に収める
     config.tuning.cutCountJitter = std::clamp(config.tuning.cutCountJitter, 0, config.tuning.cutCount);
     config.tuning.sprayCountJitter = std::clamp(config.tuning.sprayCountJitter, 0, config.tuning.sprayCount);
+    config.tuning.blastCountJitter = std::clamp(config.tuning.blastCountJitter, 0, config.tuning.blastCount);
     return config;
 }
 } // namespace

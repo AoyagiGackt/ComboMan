@@ -10,6 +10,7 @@
 #include "EnemyTuning.h"
 #include "GamePlayScene.h"
 #include "GameRules.h"
+#include "SceneShared.h"
 #include "LevelLoader.h"
 #include "Logger.h"
 #include "PlayerBridge.h"
@@ -58,6 +59,11 @@ void GamePlaySceneInitializer::InitializeStageActors(GamePlayScene& scene) {
     // （OnEditorLevelLoaded()参照）。Initialize()の時点ではまだレベルJSONが未読み込みのためここでは生成しない。
 }
 
+/** @brief 読み込んだステージに合わせて空の画像を選ぶ（レベルの JSON の sky。書いていないステージは既定の空） */
+void GamePlayScene::ApplyStageSky() {
+    sceneShared::ApplyStageSky(skydome_.get(), GetEditorLevelPath());
+}
+
 /** @brief StageEditorへ配置済みの敵（武器持ち雑魚・ボス）をenemy_/weaponEnemies_へ結び付ける */
 void GamePlayScene::OnEditorLevelLoaded() {
     enemy_ = nullptr;
@@ -72,7 +78,12 @@ void GamePlayScene::OnEditorLevelLoaded() {
     acquireBannerTimer_ = 0.0f;
     hasSafeGround_ = false;
     ResetAlly();
+    ApplyStageSky();
     bugWatch_.playerTrail.clear();
+    bugWatch_.enemyLastPositions.clear();
+    roomClearWatches_.clear();
+    flyerHits_.clear();
+    flyerChain_.clear();
     lockedEnemy_ = nullptr;
 
     bossInstanceId_ = 0;

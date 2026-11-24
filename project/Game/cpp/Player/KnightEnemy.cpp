@@ -5,6 +5,7 @@
 #include "KnightEnemy.h"
 #include "EnemyTuning.h"
 #include "GameConstants.h"
+#include "GroundSupport.h"
 #include "ModelCommon.h"
 #include "ModelManager.h"
 #include <algorithm>
@@ -47,7 +48,12 @@ const KnightEnemyTuning& Tuning() {
     return EnemyTuning::GetInstance()->Knight();
 }
 
-constexpr float kGroundY = 0.4f; // Dummy等と同じ地面の高さ
+// 床の上面から体の位置までの高さ（バトルテストの床の上面 -0.5 に、今までの決まった高さ 0.4 で立っていた差）
+constexpr float kStandHeight = 0.9f;
+// 出てきた時とエディタで動かした直後は、体の位置からこれだけ上の床まで探す（少し床に埋めて置いても上に立たせる）
+constexpr float kSpawnFloorSearchHeight = 1.0f;
+// 床から浮いているとみなす高さ（これより上なら落ち始める）
+constexpr float kFloorSnapTolerance = 0.01f;
 
 constexpr float kAbsorbDuration = 0.5f;
 
@@ -104,7 +110,8 @@ KnightEnemy::KnightEnemy()
 void KnightEnemy::Initialize(ModelCommon* modelCommon, const Vector3& spawnPos) {
     // 地面に立たせ、予備動作の状態から始める
     pos_ = spawnPos;
-    pos_.y = kGroundY;
+    groundY_ = spawnPos.y;
+    needsFloorSearch_ = true;
     state_ = &StateOf<TelegraphState>();
     // 初回更新から攻撃の予備動作へ移り、生成直後の棒立ちをなくす
     stateTimer_ = Tuning().telegraphDuration;
@@ -218,6 +225,33 @@ void KnightEnemy::ResolveBlockCollision(const std::vector<AABB>& blocks) {
         pos_.x += (std::abs(pushLeft) < std::abs(pushRight)) ? pushLeft : pushRight;
         self = GetAABB(); // 押し出し後の位置で以降のブロックも判定する
     }
+    FollowFloor(blocks);
+}
+
+/** @brief 足元の床に合わせて立つ高さを決める（段差の端から出たら落ち始め、低い段には上がる） */
+void KnightEnemy::FollowFloor(const std::vector<AABB>& blocks) {
+    // 出てきた時とエディタで動かした直後は、少し上の床まで探して埋まらないようにする
+    const float searchRaise = needsFloorSearch_ ? kSpawnFloorSearchHeight : 0.0f;
+    needsFloorSearch_ = false;
+    const Vector3 searchFrom = { pos_.x, pos_.y + searchRaise, pos_.z };
+    const std::optional<float> floorTop = FindSupportingFloor(searchFrom, kHitBoxHalfWidth, 0.0f, kStandHeight, blocks);
+    if (!floorTop) {
+        return; // 足元に床が無い間は、最後に立っていた高さを地面のままにする
+    }
+    groundY_ = *floorTop + kStandHeight;
+    if (searchRaise > 0.0f) {
+        pos_.y = groundY_; // 置いた所の床へそのまま立たせる
+        return;
+    }
+    // 吹き飛んでいる間の着地は Update が groundY_ で行う
+    if (knockVelX_ != 0.0f || knockVelY_ != 0.0f) {
+        return;
+    }
+    if (pos_.y > groundY_ + kFloorSnapTolerance) {
+        knockVelY_ = -kKnockbackGravity; // 足場の端から出たので落ち始める
+    } else {
+        pos_.y = groundY_;
+    }
 }
 
 /** @brief AI（Idle/Telegraph/Dash/Recover）または吸収演出を1フレーム進める */
@@ -239,8 +273,8 @@ void KnightEnemy::Update(ParticleManager* pm, const Vector3& playerPos) {
         pos_.y += knockVelY_;
         knockVelX_ *= Tuning().knockbackDecay;
         knockVelY_ -= kKnockbackGravity; // 重力っぽく落ちる
-        if (pos_.y <= kGroundY) {
-            pos_.y = kGroundY;
+        if (pos_.y <= groundY_) {
+            pos_.y = groundY_;
             knockVelY_ = 0.0f;
         }
         if (std::abs(knockVelX_) < kKnockbackStopSpeed) {

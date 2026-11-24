@@ -51,11 +51,18 @@ D3D12_GPU_VIRTUAL_ADDRESS FrameUploadAllocator::Allocate(const void* data, size_
     constexpr size_t kAlignment = D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT;
     const size_t alignedSize = (size + kAlignment - 1) & ~(kAlignment - 1);
 
-    // 空いている位置へコピーし、使用量を進める
-    Page& page = FindOrAddPage(alignedSize);
-    const D3D12_GPU_VIRTUAL_ADDRESS address = page.resource->GetGPUVirtualAddress() + page.used;
-    std::memcpy(page.data + page.used, data, size);
-    page.used += alignedSize;
+    // 空いている位置を決めて使用量を進めるところだけを、ほかのスレッドと順番にする（描画を複数のスレッドで記録するため）
+    D3D12_GPU_VIRTUAL_ADDRESS address = 0;
+    std::byte* destination = nullptr;
+    {
+        std::scoped_lock lock(mutex_);
+        Page& page = FindOrAddPage(alignedSize);
+        address = page.resource->GetGPUVirtualAddress() + page.used;
+        destination = page.data + page.used;
+        page.used += alignedSize;
+    }
+    // 書き込み先は自分だけの場所なので、コピーは順番待ちの外で行う（ページの一覧が増えても Map 先の場所は変わらない）
+    std::memcpy(destination, data, size);
     return address;
 }
 

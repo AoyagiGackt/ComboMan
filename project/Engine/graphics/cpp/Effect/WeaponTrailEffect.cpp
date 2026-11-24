@@ -54,15 +54,8 @@ void WeaponTrailEffect::Initialize(DirectXCommon* dxCommon) {
     style_.lifetime = GraphicsTuning::Float("weaponTrail.lifetime", style_.lifetime, kMinLifetime);
     style_.subdivisions = GraphicsTuning::Int("weaponTrail.subdivisions", style_.subdivisions, 1, kMaxSubdivisions);
 
-    sceneCB_ = dxCommon_->CreateBufferResource(sizeof(SceneCB));
-    sceneCB_->Map(0, nullptr, reinterpret_cast<void**>(&sceneCBData_));
-    sceneCBData_->viewProj = MakeIdentity4x4();
-
-    vertexBuffer_ = dxCommon_->CreateBufferResource(sizeof(TrailVertex) * kMaxVertices);
-    vertexBuffer_->Map(0, nullptr, reinterpret_cast<void**>(&vertexData_));
-    vbv_.BufferLocation = vertexBuffer_->GetGPUVirtualAddress();
-    vbv_.SizeInBytes = static_cast<UINT>(sizeof(TrailVertex) * kMaxVertices);
-    vbv_.StrideInBytes = sizeof(TrailVertex);
+    sceneCB_.viewProj = MakeIdentity4x4();
+    vertices_.resize(kMaxVertices);
 
     CreatePipeline();
 }
@@ -78,7 +71,7 @@ void WeaponTrailEffect::AddSample(const Vector3& base, const Vector3& tip) {
 /** @brief 寿命を進めて頂点バッファを組み直す */
 void WeaponTrailEffect::Update(float dt, Camera* camera) {
     if (camera != nullptr) {
-        sceneCBData_->viewProj = Multiply(camera->GetViewMatrix(), camera->GetProjectionMatrix());
+        sceneCB_.viewProj = Multiply(camera->GetViewMatrix(), camera->GetProjectionMatrix());
     }
 
     for (auto& s : samples_) {
@@ -108,7 +101,7 @@ void WeaponTrailEffect::RebuildVertices() {
     const int subdiv = std::clamp(style_.subdivisions, 1, kMaxSubdivisions);
 
     auto pushVertex = [this](const Vector3& p, const Vector4& c) {
-        vertexData_[vertexCount_++] = { { p.x, p.y, p.z, 1.0f }, c };
+        vertices_[vertexCount_++] = { { p.x, p.y, p.z, 1.0f }, c };
     };
 
     // 隣り合う2つの記録点の間を、同じ振りの中だけ帯でつなぐ
@@ -180,8 +173,15 @@ void WeaponTrailEffect::Draw() {
         return;
     }
 
+    // このフレーム用の領域へ頂点と定数を写して、その場所から描く
+    FrameUploadAllocator& upload = dxCommon_->GetFrameUploadAllocator();
+    const UINT bytes = static_cast<UINT>(sizeof(TrailVertex) * vertexCount_);
+    D3D12_VERTEX_BUFFER_VIEW vbv { };
+    vbv.BufferLocation = upload.Allocate(vertices_.data(), bytes);
+    vbv.SizeInBytes = bytes;
+    vbv.StrideInBytes = sizeof(TrailVertex);
     pipelineHelper::DrawVertexColorEffect(dxCommon_->GetCommandList(), rootSignature_.Get(), pipelineState_.Get(),
-        vbv_, sceneCB_->GetGPUVirtualAddress(), vertexCount_);
+        vbv, upload.Allocate(&sceneCB_, sizeof(SceneCB)), vertexCount_);
 }
 
 /** @brief 武器の軌跡用のパイプラインを生成する */

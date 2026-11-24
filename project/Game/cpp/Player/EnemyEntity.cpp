@@ -234,6 +234,11 @@ void EnemyEntity::Update(float playerX) {
         UpdateScripted();
         return;
     }
+    // この敵の時間だけ遅い間は、進めないフレームを止まった時と同じ見た目の更新だけにする
+    if (SkipFrameForTimeSlow()) {
+        UpdateDuringHitStop();
+        return;
+    }
 
     // 各タイマーを1フレーム進める（減速とのけぞりは0で止める）
     const BasicEnemyTuning& tuning = EnemyTuning::GetInstance()->Basic();
@@ -256,8 +261,9 @@ void EnemyEntity::Update(float playerX) {
     } else if (!defeated_ && !isLaunched_ && !IsInHitstun() && attackState_->IsIdle()) {
         // 予備動作/攻撃中やノックバック中は歩かせない。プレイヤーが持ち場に近づいてくるまでは待機し、
         // 近づいてきたら間合いの外にいる間だけ追うが、持ち場から離れすぎたら止まる（全員が団子にならないように）
-        const bool playerNearPost = std::abs(playerX - spawnX_) <= tuning.aggroRange;
-        const bool withinLeash = std::abs(pos_.x - spawnX_) < tuning.leashDistance;
+        // 持ち場に縛らない敵（戦いが始まったステージのボス）は、どこまでも追う（壁と足場の端はシーンが止める）
+        const bool playerNearPost = chaseUnleashed_ || std::abs(playerX - spawnX_) <= tuning.aggroRange;
+        const bool withinLeash = chaseUnleashed_ || std::abs(pos_.x - spawnX_) < tuning.leashDistance;
         const float dx = playerX - pos_.x;
         // プレイヤーが高い所にいる時は、壁を登れるよう間合いの中でも近づく
         const bool playerAbove = hasTargetHeight_ && targetY_ - pos_.y > tuning.climbChaseHeight;
@@ -274,7 +280,10 @@ void EnemyEntity::Update(float playerX) {
     if (isLaunched_) {
         airComboTimer_ = (std::max)(airComboTimer_ - gameConstants::kFrameDeltaTime, 0.0f);
         const float gravity = airComboTimer_ > 0.0f ? tuning.gravity * tuning.airComboGravityScale : tuning.gravity;
-        if (ApplyGravityAndClampY(pos_.y, velY_, gravity, launchOriginY_, tuning.ceilingY, kCeilingBounceFactor)) {
+        // 床に着く直前の落ちる速さ（速く落ちてきた吹き飛びは床で跳ねる）
+        const float fallSpeed = -(velY_ - gravity);
+        if (ApplyGravityAndClampY(pos_.y, velY_, gravity, launchOriginY_, tuning.ceilingY, kCeilingBounceFactor)
+            && !TryFloorBounce(fallSpeed)) {
             isLaunched_ = false;
             justLanded_ = true;
         }

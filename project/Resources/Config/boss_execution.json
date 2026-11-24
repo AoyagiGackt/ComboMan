@@ -1,5 +1,5 @@
 {
-  "_comment": "倒したボスが膝をつく姿勢と、武器を奪う時のとどめの流れ。位置はボスの足元が原点で、X の正はプレイヤーが最初にいた側。拍は前の拍から delay 秒後に行う（afterMove なら前の移動が終わってから数える）。pose は g0〜=地上の段、glast=地上の最後、a0〜=空中の段、alast=空中の最後、launch=打ち上げ（抜き取ったボスの武器の技）。銃で倒した時は intro の代わりに gunIntro、stages と defaultStyle の代わりに gunStages と gunDefaultStyle を使う（銃の型が無ければ斬る型になる）。銃の型では pose に s0〜=射撃の段、slast=射撃の最後、none=構えを解く が使え、shot を付けた拍でボスへ弾を撃つ（poseSeconds は、撃たない拍なら構え切るまで、撃つ拍なら反動から構え直すまでの秒数）。隠しの型: 爆弾の中心がボスの体にめり込んだまま倒した時は、intro の代わりに bombIntro、型は bombStyle を使う（空なら使わない）。bomb を付けた拍で、めり込んでいた爆弾が爆発する（プレイヤーと敵は巻き込まない）",
+  "_comment": "倒したボスが膝をつく姿勢と、武器を奪う時のとどめの流れ。位置はボスの足元が原点で、X の正はプレイヤーが最初にいた側。拍は前の拍から delay 秒後に行う（afterMove なら前の移動が終わってから数える）。pose は g0〜=地上の段、glast=地上の最後、a0〜=空中の段、alast=空中の最後、launch=打ち上げ（抜き取ったボスの武器の技）。銃で倒した時は intro の代わりに gunIntro、stages と defaultStyle の代わりに gunStages と gunDefaultStyle を使う（銃の型が無ければ斬る型になる）。銃の型では pose に s0〜=射撃の段、slast=射撃の最後、none=構えを解く が使え、shot を付けた拍でボスへ弾を撃つ（poseSeconds は、撃たない拍なら構え切るまで、撃つ拍なら反動から構え直すまでの秒数）。隠しの型: 爆弾の中心がボスの体にめり込んだまま倒した時は、intro の代わりに bombIntro、型は bombStyle を使う（空なら使わない）。近接武器で倒した時は、weapons で倒した武器に割り当てた型を、intro の代わりに weaponIntro から倒した武器のまま行い（pose はその武器の技、none で構えを解く）。ボスの武器は抜き取らず、崩す時にいっしょに消える（割り当てが無い武器は stages の型でボスの武器を抜いて斬る）。bomb を付けた拍で、めり込んでいた爆弾が爆発する（プレイヤーと敵は巻き込まない）。field を付けた拍で、ボスの足元に粒の場（particle_fields.json の名前）を置く。爆弾の型では武器ごと吹き飛び、抜き取りには戻らない",
   "bossCenterHeight": 0.45,
   "cameraHeight": 1.0,
   "zoomRate": 3.0,
@@ -47,6 +47,22 @@
     { "_comment": "武器は抜かず、少し手前まで歩み寄る", "move": true, "moveTo": [1.2, 0.0, 0.0], "walkSpeed": 1.6, "face": "boss", "zoom": 0.5 },
     { "_comment": "めり込んだ爆弾を見下ろして間を置く", "afterMove": true, "delay": 0.6, "zoom": 0.4 }
   ],
+  "weaponIntro": [
+    { "_comment": "ボスの武器は抜かず、倒した武器のままゆっくり歩み寄る", "move": true, "moveTo": [0.75, 0.0, 0.0], "walkSpeed": 1.6, "face": "boss", "zoom": 0.5 },
+    { "_comment": "見下ろして間を置く", "afterMove": true, "delay": 0.45, "zoom": 0.42 },
+    { "_comment": "倒した武器を構え直す", "pose": "g0", "poseSeconds": 0.0, "cue": "swing" },
+    { "delay": 0.4 }
+  ],
+  "weapons": {
+    "Sword": "cross",
+    "Spear": "pierce",
+    "Hammer": "judgement",
+    "Dagger": "flurry",
+    "Ball": "judgement",
+    "Greatsword": "cleave",
+    "Scythe": "reap",
+    "Axe": "cleave"
+  },
   "stages": {
     "level01": "judgement",
     "level02": "pierce",
@@ -57,16 +73,17 @@
   },
   "styles": {
     "bomb_secret": {
-      "_comment": "隠しの型。めり込んだ爆弾に気づいて背を向け、数歩離れた背中の向こうで爆発させる。振り返って残った武器を抜き取る",
-      "endHold": 1.0,
+      "_comment": "隠しの型。めり込んだ爆弾に気づいてびくっと止まり、慌てて跳びのいて身を伏せた所で爆発する。武器ごと吹き飛ぶので抜き取りには戻らない（武器は終わった時に手に入る）",
+      "endHold": 1.4,
       "beats": [
-        { "_comment": "そっと背を向ける", "face": "away", "zoom": 0.45 },
-        { "_comment": "数歩離れる", "delay": 0.35, "move": true, "moveTo": [2.6, 0.0, 0.0], "walkSpeed": 1.4 },
-        { "_comment": "背中の向こうで爆発し、ボスが砕ける", "afterMove": true, "delay": 0.3, "bomb": true, "slice": true, "flash": "combo_finisher", "hitStop": 8, "shake": 0.7, "shakeSeconds": 0.5, "slowSeconds": 0.6, "slowScale": 0.35, "zoom": 0.55 },
-        { "_comment": "振り返る", "delay": 1.0, "face": "boss" },
-        { "_comment": "残った武器へ歩み寄る", "delay": 0.35, "move": true, "moveTo": [0.55, 0.0, 0.0], "walkSpeed": 1.6 },
-        { "_comment": "突き立った武器を抜き取る", "afterMove": true, "delay": 0.2, "grab": true, "pose": "g0", "poseSeconds": 0.0, "ring": "absorb", "flash": "absorb", "cue": "swing" },
-        { "_comment": "背を向ける", "delay": 0.45, "face": "away" }
+        { "_comment": "爆弾に気づいて、びくっと固まる", "zoom": 0.38, "shake": 0.12, "shakeSeconds": 0.15, "cue": "beat" },
+        { "_comment": "慌てて後ろへ跳びのく（ボスの方を向いたまま）", "delay": 0.35, "face": "boss", "move": true, "moveTo": [2.3, 0.75, 0.0], "moveSeconds": 0.16, "playerSparks": "land_dust", "zoom": 0.5 },
+        { "_comment": "着地する", "afterMove": true, "move": true, "moveTo": [3.3, 0.0, 0.0], "moveSeconds": 0.18 },
+        { "_comment": "身を伏せて、ひと呼吸置く", "afterMove": true, "playerSparks": "land_dust", "shake": 0.1, "shakeSeconds": 0.1, "zoom": 0.62 },
+        { "_comment": "爆発し、ボスが武器ごと砕ける（爆風で周りの粒を吹き飛ばす）", "delay": 0.45, "bomb": true, "slice": true, "field": "execution_bomb", "impact": "explosion", "flash": "explosion", "ring": "explosion_fire", "sparks": "explosion_fire", "hitStop": 10, "shake": 0.9, "shakeSeconds": 0.6, "slowSeconds": 0.7, "slowScale": 0.3, "zoom": 0.7 },
+        { "_comment": "炎の輪と破片が続けて広がる", "delay": 0.08, "ring": "explosion_smoke", "sparks": "explosion_debris" },
+        { "_comment": "残り火と煙がもう一度噴き上がる", "delay": 0.25, "sparks": "boss_slam", "ring": "boss_slam_outer", "shake": 0.3, "shakeSeconds": 0.3 },
+        { "_comment": "顔を上げる", "delay": 0.6, "zoom": 0.55 }
       ]
     },
     "point_blank": {

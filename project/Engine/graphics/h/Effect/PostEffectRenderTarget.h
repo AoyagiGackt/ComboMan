@@ -39,6 +39,8 @@ inline void SetupSceneRenderTarget(engine::DirectXCommon* dxCommon, D3D12_CPU_DE
     D3D12_CPU_DESCRIPTOR_HANDLE dsv = targetsBackBuffer
         ? dxCommon->GetBackBufferDsvHandle() : dxCommon->GetDsvHandle();
     commandList->OMSetRenderTargets(1, &rtv, FALSE, &dsv);
+    dxCommon->SetActiveDepthTarget(targetsBackBuffer ? engine::DirectXCommon::DepthTarget::kBackBuffer
+                                                     : engine::DirectXCommon::DepthTarget::kScene);
 
     if (targetsBackBuffer) {
         D3D12_VIEWPORT vp = dxCommon->GetCenteredClientViewport();

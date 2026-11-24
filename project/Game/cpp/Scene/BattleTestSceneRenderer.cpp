@@ -40,6 +40,7 @@ void BattleTestSceneRenderer::Draw(BattleTestScene& scene) {
     scene.modelCommon_->CommonDrawSettings();
     scene.objectCommon_->SetDefaultLight(commandList);
     scene.shadowManager_->SetShadowMap(commandList, scene.srvManager_);
+    scene.skydome_->Draw();
 
     // 3D: ポータル・ダミー（斬られた物は破片の側で描く）・弾・プレイヤー・破片
     for (auto& portal : scene.warpPortalBlocks_) {

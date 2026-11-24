@@ -1,4 +1,5 @@
 {
+  "sky": "Resources/SkyDome/sky_meadow.png",
   "_comment": "タイトル背景デモの舞台。F2のステージエディタで配置を編集できる",
   "objects": [
     {
@@ -8,8 +9,8 @@
       "axis": "x",
       "count": 67,
       "step": 1,
-      "model": "Resources/block/block.obj",
-      "texture": "Resources/block/block.png",
+      "model": "Resources/block/terrain/terrain_ground.obj",
+      "texture": "Resources/block/terrain/terrain_palette_meadow.png",
       "position": [
         -11,
         -0.6,
@@ -30,8 +31,8 @@
       "axis": "x",
       "count": 67,
       "step": 1,
-      "model": "Resources/block/block.obj",
-      "texture": "Resources/block/block.png",
+      "model": "Resources/block/terrain/terrain_ground.obj",
+      "texture": "Resources/block/terrain/terrain_palette_meadow.png",
       "position": [
         -11,
         -1.6,

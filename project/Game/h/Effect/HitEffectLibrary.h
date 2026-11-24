@@ -17,11 +17,17 @@ class ParticleManager;
 namespace engine::game {
 class CameraShaker;
 
-/** @brief ヒットストップとカメラ揺れ */
+/** @brief 振動の値を書いていない時の印（画面の揺れから振動を決める） */
+inline constexpr float kRumbleFromShake = -1.0f;
+
+/** @brief ヒットストップとカメラ揺れとパッドの振動 */
 struct ImpactDef {
     int hitStopFrames = 0;
     float shakeAmount = 0.0f;
     float shakeSeconds = 0.0f;
+    float rumbleLow = kRumbleFromShake; ///< 低い揺れのモーターの強さ（0〜1。負なら画面の揺れから決める）
+    float rumbleHigh = kRumbleFromShake; ///< 高い揺れのモーターの強さ（0〜1。負なら低い揺れから決める）
+    float rumbleSeconds = kRumbleFromShake; ///< 振動の長さ（秒。負なら画面の揺れの長さを使う）
 };
 
 /**

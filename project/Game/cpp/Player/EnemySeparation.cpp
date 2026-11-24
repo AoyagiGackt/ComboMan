@@ -2,11 +2,15 @@
  * @brief 敵の壁接触・敵どうし・プレイヤーとの重なりに基づく位置補正
  */
 #include "EnemySeparation.h"
+#include "UniformGridX.h"
 #include "IEnemyEntity.h"
 #include "EnemyTuning.h"
+#include "SmokeTestRunner.h"
 #include <algorithm>
+#include <cstdio>
 #include <cmath>
 #include <optional>
+#include <numeric>
 #include <utility>
 namespace engine::game {
 namespace {
@@ -46,25 +50,28 @@ bool OverlapsSideWall(const engine::AABB& body, const engine::AABB& wall) {
 }
 
 /** @brief その横位置に置いた体が、どれかの壁に横からめり込んでいるか */
-bool OverlapsAnyWall(float x, const Vector3& pos, const WallBodyShape& shape, const std::vector<engine::AABB>& walls, const EnemySeparationTuning& tuning) {
+bool OverlapsAnyWall(float x, const Vector3& pos, const WallBodyShape& shape, const std::vector<engine::AABB>& walls, const UniformGridX& grid, std::vector<uint32_t>& candidates, const EnemySeparationTuning& tuning) {
     const engine::AABB body = EnemyWallBody({ x, pos.y, pos.z }, shape, tuning);
-    return std::any_of(walls.begin(), walls.end(), [&body](const engine::AABB& wall) {
-        return OverlapsSideWall(body, wall);
+    grid.Query(body.min.x, body.max.x, candidates);
+    return std::any_of(candidates.begin(), candidates.end(), [&](uint32_t index) {
+        return OverlapsSideWall(body, walls[index]);
     });
 }
 
 /** @brief その横位置の体の真下に、地形が1つでもあるか（無ければステージの外とみなす） */
-bool HasTerrainBelow(float x, const Vector3& pos, const WallBodyShape& shape, const std::vector<engine::AABB>& walls, const EnemySeparationTuning& tuning) {
+bool HasTerrainBelow(float x, const Vector3& pos, const WallBodyShape& shape, const std::vector<engine::AABB>& walls, const UniformGridX& grid, std::vector<uint32_t>& candidates, const EnemySeparationTuning& tuning) {
     const float bodyBottom = pos.y + tuning.wallBandBottom;
-    return std::any_of(walls.begin(), walls.end(), [&](const engine::AABB& wall) {
+    grid.Query(x - shape.halfWidth, x + shape.halfWidth, candidates);
+    return std::any_of(candidates.begin(), candidates.end(), [&](uint32_t index) {
+        const engine::AABB& wall = walls[index];
         return wall.max.y <= bodyBottom && x + shape.halfWidth > wall.min.x && x - shape.halfWidth < wall.max.x
             && pos.z >= wall.min.z && pos.z <= wall.max.z;
     });
 }
 
 /** @brief 壁にめり込んでいれば、どの壁にもめり込まない一番近い横位置を返す（真下に地形がある所を優先し、ステージの端の壁の外へは出さない） */
-float PushOutOfWalls(const Vector3& pos, const WallBodyShape& shape, const std::vector<engine::AABB>& walls, const EnemySeparationTuning& tuning) {
-    if (!OverlapsAnyWall(pos.x, pos, shape, walls, tuning)) {
+float PushOutOfWalls(const Vector3& pos, const WallBodyShape& shape, const std::vector<engine::AABB>& walls, const UniformGridX& grid, std::vector<uint32_t>& candidates, const EnemySeparationTuning& tuning) {
+    if (!OverlapsAnyWall(pos.x, pos, shape, walls, grid, candidates, tuning)) {
         return pos.x;
     }
     // 並べた壁は1マスずつのブロックなので、1個ずつ浅い側へ押すと隣のブロックへ押し込んで行き来する。
@@ -76,20 +83,22 @@ float PushOutOfWalls(const Vector3& pos, const WallBodyShape& shape, const std::
         if (body.max.y <= wall.min.y || body.min.y >= wall.max.y || body.min.z < wall.min.z || body.max.z > wall.max.z) {
             continue;
         }
-        // 上下に浅く掛かっているだけの物（天井・床）の端は候補にしない
+        // 上下に浅く掛かっているだけの物（天井・床）の端は候補にしない。
+        // ただし、めり込みの判定（OverlapsSideWall）で横からめり込んでいるとみなした物は、薄い足場でもその端を候補にする
+        // （候補に入れないと、近くの端へ出せずに遠くの壁の端まで一気に飛ばしてしまう）
         const float verticalDepth = (std::min)(body.max.y, wall.max.y) - (std::max)(body.min.y, wall.min.y);
-        if (verticalDepth < shape.halfWidth) {
+        if (verticalDepth < shape.halfWidth && !OverlapsSideWall(body, wall)) {
             continue;
         }
-        const float candidates[] = {
+        const float candidatePositions[] = {
             wall.min.x - shape.halfWidth - kWallClearance,
             wall.max.x + shape.halfWidth + kWallClearance,
         };
-        for (float candidate : candidates) {
-            if (OverlapsAnyWall(candidate, pos, shape, walls, tuning)) {
+        for (float candidate : candidatePositions) {
+            if (OverlapsAnyWall(candidate, pos, shape, walls, grid, candidates, tuning)) {
                 continue;
             }
-            std::optional<float>& slot = HasTerrainBelow(candidate, pos, shape, walls, tuning) ? best : bestOutside;
+            std::optional<float>& slot = HasTerrainBelow(candidate, pos, shape, walls, grid, candidates, tuning) ? best : bestOutside;
             if (!slot || std::abs(candidate - pos.x) < std::abs(*slot - pos.x)) {
                 slot = candidate;
             }
@@ -99,7 +108,7 @@ float PushOutOfWalls(const Vector3& pos, const WallBodyShape& shape, const std::
 }
 
 /** @brief fromX から toX へ横に動かす途中で新しく当たる壁があれば、その手前で止めた横位置を返す（fromX で既に掛かっている壁は見ない） */
-float StopAtFirstWall(float fromX, float toX, const Vector3& pos, const WallBodyShape& shape, const std::vector<engine::AABB>& walls, const EnemySeparationTuning& tuning) {
+float StopAtFirstWall(float fromX, float toX, const Vector3& pos, const WallBodyShape& shape, const std::vector<engine::AABB>& walls, const UniformGridX& grid, std::vector<uint32_t>& candidates, const EnemySeparationTuning& tuning) {
     if (fromX == toX) {
         return toX;
     }
@@ -108,7 +117,9 @@ float StopAtFirstWall(float fromX, float toX, const Vector3& pos, const WallBody
     const float sweepMinX = (std::min)(fromX, toX) - shape.halfWidth;
     const float sweepMaxX = (std::max)(fromX, toX) + shape.halfWidth;
     float stopX = toX;
-    for (const engine::AABB& wall : walls) {
+    grid.Query(sweepMinX, sweepMaxX, candidates);
+    for (uint32_t index : candidates) {
+        const engine::AABB& wall = walls[index];
         const bool atBodyHeight = body.max.y > wall.min.y && body.min.y < wall.max.y && body.min.z >= wall.min.z && body.max.z <= wall.max.z;
         const bool overlappedBefore = fromX + shape.halfWidth > wall.min.x && fromX - shape.halfWidth < wall.max.x;
         if (!atBodyHeight || overlappedBefore || sweepMaxX <= wall.min.x || sweepMinX >= wall.max.x) {
@@ -121,17 +132,27 @@ float StopAtFirstWall(float fromX, float toX, const Vector3& pos, const WallBody
 }
 
 /** @brief 指定した向き（左=-1, 右=+1）のすぐ横に壁があるか（その向きへは押されても動けない） */
-bool WallOnSide(const Vector3& pos, const WallBodyShape& shape, float side, const std::vector<engine::AABB>& walls, const EnemySeparationTuning& tuning) {
+bool WallOnSide(const Vector3& pos, const WallBodyShape& shape, float side, const std::vector<engine::AABB>& walls, const UniformGridX& grid, std::vector<uint32_t>& candidates, const EnemySeparationTuning& tuning) {
     // 体のその向きの端だけを細い帯で調べる（反対側の壁に触れていても誤判定しない）
     const float margin = tuning.wallContactMargin;
     engine::AABB probe = EnemyWallBody(pos, shape, tuning);
     const float edgeX = side < 0.0f ? probe.min.x : probe.max.x;
     probe.min.x = edgeX - margin;
     probe.max.x = edgeX + margin;
-    return std::any_of(walls.begin(), walls.end(), [&probe](const engine::AABB& wall) {
-        return OverlapsWall(probe, wall);
+    grid.Query(probe.min.x, probe.max.x, candidates);
+    return std::any_of(candidates.begin(), candidates.end(), [&](uint32_t index) {
+        return OverlapsWall(probe, walls[index]);
     });
 }
+/** @brief ステージの外へ出た敵を、自動テストプレイの見張りに知らせる（どこから出たかを後で追えるように） */
+void ReportEscapedEnemy(const Vector3& position) {
+    constexpr size_t kTextCapacity = 256; // 日本語の説明と位置が入る長さ
+    constexpr const char* kFormat = "(%.1f, %.1f) で地形全体の端より外へ出ていたので、持ち場へ戻した";
+    char text[kTextCapacity];
+    std::snprintf(text, sizeof(text), kFormat, position.x, position.y);
+    SmokeTestRunner::ReportIssue("敵の位置", "ステージの外へ出た", text);
+}
+
 /** @brief 地形全体の左右の端（地形が無ければ空） */
 std::optional<std::pair<float, float>> TerrainExtentX(const std::vector<engine::AABB>& walls) {
     if (walls.empty()) {
@@ -150,6 +171,9 @@ std::optional<std::pair<float, float>> TerrainExtentX(const std::vector<engine::
 std::vector<IEnemyEntity*> EnemySeparation::Resolve(const std::vector<Target>& targets, const std::vector<AABB>& walls,
     const std::optional<Vector3>& playerPosition) {
     // 押し出しの強さは 0〜1 に丸める（1で一度に重なりを全部解く）
+    UniformGridX grid;
+    grid.Build(walls);
+    std::vector<uint32_t> candidates;
     const EnemySeparationTuning& tuning = EnemyTuning::GetInstance()->Separation();
     const float pushRate = std::clamp(tuning.pushRate, 0.0f, 1.0f);
 
@@ -184,28 +208,42 @@ std::vector<IEnemyEntity*> EnemySeparation::Resolve(const std::vector<Target>& t
     for (Body& body : bodies) {
         Vector3 pos = body.enemy->GetPosition();
         const float startX = pos.x;
-        // 地形全体の端より外（端の壁の向こう）へ出てしまった敵は、どの道で出たかに関係なく、内側へ戻してから押し出す
+        // 地形全体の端より外（端の壁の向こう）へ出てしまった敵は、どの道で出たかに関係なく、持ち場へ戻してから押し出す
+        // （端に置くと、部屋から遠いステージの端に敵が現れてしまう。持ち場を持たない種類だけ端の内側へ寄せる）
         if (extent && (pos.x - body.shape.halfWidth < extent->first || pos.x + body.shape.halfWidth > extent->second)) {
-            pos.x = std::clamp(pos.x, extent->first + body.shape.halfWidth, (std::max)(extent->first + body.shape.halfWidth, extent->second - body.shape.halfWidth));
+            ReportEscapedEnemy(pos);
+            if (body.enemy->ReturnHome()) {
+                pos = body.enemy->GetPosition();
+            } else {
+                pos.x = std::clamp(pos.x, extent->first + body.shape.halfWidth, (std::max)(extent->first + body.shape.halfWidth, extent->second - body.shape.halfWidth));
+            }
         }
-        const float resolvedX = PushOutOfWalls(pos, body.shape, walls, tuning);
+        const float resolvedX = PushOutOfWalls(pos, body.shape, walls, grid, candidates, tuning);
         body.moved = resolvedX != startX;
         pos.x = resolvedX;
         body.enemy->SetPosition(pos);
         body.startX = pos.x;
-        body.wallLeft = WallOnSide(pos, body.shape, kLeft, walls, tuning);
-        body.wallRight = WallOnSide(pos, body.shape, kRight, walls, tuning);
+        body.wallLeft = WallOnSide(pos, body.shape, kLeft, walls, grid, candidates, tuning);
+        body.wallRight = WallOnSide(pos, body.shape, kRight, walls, grid, candidates, tuning);
     }
 
     // 近すぎる2体の組ごとに、横へ押し離す
-    for (size_t i = 0; i < bodies.size(); ++i) {
-        for (size_t j = i + 1; j < bodies.size(); ++j) {
-            Body& a = bodies[i];
-            Body& b = bodies[j];
+    std::vector<size_t> order(bodies.size());
+    std::iota(order.begin(), order.end(), 0);
+    std::stable_sort(order.begin(), order.end(), [&](size_t a, size_t b) {
+        return bodies[a].enemy->GetPosition().x < bodies[b].enemy->GetPosition().x;
+    });
+    for (size_t i = 0; i < order.size(); ++i) {
+        for (size_t j = i + 1; j < order.size(); ++j) {
+            Body& a = bodies[order[i]];
+            Body& b = bodies[order[j]];
             Vector3 posA = a.enemy->GetPosition();
             Vector3 posB = b.enemy->GetPosition();
             const float dx = posB.x - posA.x;
             const float distanceX = std::abs(dx);
+            if (distanceX >= tuning.minDistanceX) {
+                break;
+            }
             if (distanceX >= tuning.minDistanceX || std::abs(posB.y - posA.y) >= tuning.minDistanceY) {
                 continue;
             }
@@ -259,8 +297,8 @@ std::vector<IEnemyEntity*> EnemySeparation::Resolve(const std::vector<Target>& t
         // 押し離しで壁へ入った分も戻してから見た目へ反映する。何度も押されて壁の真ん中を越えると、
         // 一番近い外側が壁の向こう側になるので、まず押される前の位置から押された向きへ進めて最初の壁で止める
         Vector3 pos = body.enemy->GetPosition();
-        pos.x = StopAtFirstWall(body.startX, pos.x, pos, body.shape, walls, tuning);
-        pos.x = PushOutOfWalls(pos, body.shape, walls, tuning);
+        pos.x = StopAtFirstWall(body.startX, pos.x, pos, body.shape, walls, grid, candidates, tuning);
+        pos.x = PushOutOfWalls(pos, body.shape, walls, grid, candidates, tuning);
         body.enemy->SetPosition(pos);
         body.enemy->RefreshVisualTransforms();
         moved.push_back(body.enemy);

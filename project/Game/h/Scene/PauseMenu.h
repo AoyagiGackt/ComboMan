@@ -4,6 +4,7 @@
  */
 #pragma once
 #include "CommandListView.h"
+#include "FusionBookView.h"
 #include "GamePauseController.h"
 #include "UIMenu.h"
 #include <functional>
@@ -62,10 +63,6 @@ public:
     void EnableComboTrial(ComboTrial* trial);
     /** @brief 武器の合体の ON/OFF の項目を出す（オートコンボの下。本編のポーズだけで使う） */
     void EnableWeaponFusionOption();
-    /** @brief 操作説明のページの右に、2人目で遊ぶ時の説明を出す（本編のポーズだけで使う） */
-    void EnableTwoPlayerGuide() {
-        twoPlayerGuide_ = true;
-    }
 
     /** @brief ポーズ中かを返す */
     bool IsPaused() const {
@@ -98,11 +95,13 @@ private:
     class IPage;
     class MenuPage;
     class CommandListPage;
+    class FusionBookPage;
     class ControlsPage;
     class ComboTrialPage;
     class ConfirmExitPage;
     static const IPage& Menu();
     static const IPage& CommandList();
+    static const IPage& FusionBook();
     static const IPage& Controls();
     static const IPage& ComboTrialList();
     static const IPage& ConfirmExit();
@@ -114,6 +113,7 @@ private:
         kSeVolume,
         kAutoCombo,
         kWeaponFusion,
+        kFusionBook,
         kControls,
         kCommandList,
         kComboTrial,
@@ -145,8 +145,8 @@ private:
     UIMenu confirmMenu_; ///< 退出の確認（いいえ・はい）
     ComboTrial* comboTrial_ = nullptr;
     bool weaponFusionOption_ = false; ///< 武器の合体の ON/OFF の項目を出すか
-    bool twoPlayerGuide_ = false; ///< 操作説明のページに 2人目で遊ぶ時の説明を出すか
     CommandListView commandList_;
+    FusionBookView fusionBook_; ///< 合体図鑑（武器の合体の項目を出す時だけ、その下から開く）
     std::unique_ptr<engine::graphics::Sprite> overlay_;
     FontRenderer* fontRenderer_ = nullptr;
     engine::Audio* audio_ = nullptr;

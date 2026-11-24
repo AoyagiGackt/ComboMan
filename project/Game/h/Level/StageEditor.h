@@ -145,7 +145,7 @@ class StageEditor {
 public:
     // 編集パネルと中央ビューの操作判定で共有するレイアウト定数。
     // 画面座標のテキストがパネルに隠れるかの判定にも使う。
-    static constexpr float kToolbarHeight = 82.0f;
+    static constexpr float kToolbarHeight = 112.0f;
     static constexpr float kLeftPanelWidth = 280.0f; // ヒエラルキー＋アセットパレットの列
     static constexpr float kRightPanelWidth = 300.0f; // 詳細設定(インスペクタ)の列
 
@@ -173,6 +173,15 @@ public:
     static StageEditor* GetActive() {
         return sActiveEditor;
     }
+    /** @brief 開いているレベルの JSON の場所 */
+    const std::string& GetLevelPath() const {
+        return levelPath_;
+    }
+    /**
+     * @brief 配置物ごとに、配置の情報とワールドの位置を渡して fn を呼ぶ（画面に固定する文章などは除く）
+     * @note 自動テストプレイが、変えた配置物の近くへプレイヤーを移す時に使う
+     */
+    void ForEachWorldObject(const std::function<void(const ObjectDesc&, const Vector3&)>& fn) const;
 
     /**
      * @brief レベルJSONを読み込み、配置物とトリガーを生成する
@@ -349,6 +358,17 @@ public:
     void SetWaterSplashCallback(std::function<void(const Vector3&)> callback) {
         onWaterSplashRequested_ = std::move(callback);
     }
+    /**
+     * @brief レベルの空の画像が変わった時（読み込み・エディタで選び直し・元に戻す）に呼ぶコールバックを登録する
+     * @note 空の実体はシーンが持つので、StageEditor は画像の場所を渡すだけ
+     */
+    void SetSkyChangedCallback(std::function<void(const std::string&)> callback) {
+        onSkyChanged_ = std::move(callback);
+    }
+    /** @brief レベルの空の画像（空なら既定の空） */
+    const std::string& GetSky() const {
+        return sky_;
+    }
 
 private:
     enum class SelKind { kNone,
@@ -518,6 +538,28 @@ private:
     std::vector<int> CollectEventTargets(const std::string& flag) const;
     /** @brief レベルに紐付ける常駐グラフとフラグ起動グラフの一覧を編集する */
     void RenderGraphPanel();
+    /** @brief レベル全体の設定（説明書き・空・常駐グラフ・プレイヤーの出る位置・中身の数）をまとめて編集する */
+    void RenderLevelPanel();
+    /** @brief 空の画像を一覧から選ぶ欄（選ぶとすぐ画面の空に映る） */
+    void RenderSkyPicker();
+    /**
+     * @brief グラフを Resources/Graphs の一覧から選ぶ欄
+     * @param id ImGui の識別名（## で始める）
+     * @param path 選んでいるグラフの場所（選び直すと書き換わる）
+     * @param allowNone なし も選べるか
+     * @return 選び直したら true
+     */
+    bool RenderGraphPathPicker(const char* id, std::string& path, bool allowNone);
+    /** @brief 常駐グラフを選ぶ欄と、開く・新しく作るのボタン（このレベルとグラフのタブで共通） */
+    void RenderResidentGraphPicker();
+    /**
+     * @brief レベルの名前と suffix から、まだ使われていないグラフの場所を作る
+     * @param suffix 名前の後ろ（main やフラグ名）
+     * @return Resources/Graphs/level01_main.json のような場所
+     */
+    std::string MakeNewGraphPath(const std::string& suffix) const;
+    /** @brief レベルの空の画像を変えて、シーンへ知らせる */
+    void SetSky(const std::string& sky);
     /** @brief 敵Wave用のSpawnPoint群を表形式の設定から生成する */
     void RenderWavePanel();
     /** @brief 配置・接続・到達性の問題を解析して一覧表示する */
@@ -694,12 +736,16 @@ private:
 
     // トリガーのspawnsWaterSplash成立時にシーン側の演出を呼ぶためのコールバック（SetWaterSplashCallback()で登録）
     std::function<void(const Vector3&)> onWaterSplashRequested_;
+    // レベルの空の画像が変わった時にシーンの空を差し替えるためのコールバック（SetSkyChangedCallback()で登録）
+    std::function<void(const std::string&)> onSkyChanged_;
 
     // 実体はModelManagerが所有・共有する（GetOrLoadModel()参照）。ここは非所有の高速参照用
     std::map<std::string, engine::graphics::Model*> modelCache_;
 
     Vector3 playerSpawn_ = { };
     Vector3 enemySpawn_ = { };
+    std::string sky_; ///< レベルJSONの空の画像（エディタでは編集せず、保存で消えないよう持っておく）
+    std::string comment_; ///< レベルJSONの説明書き（_comment。同じく保存で消えないよう持っておく）
 
     // レベルに紐付いたノードグラフ（レベルJSONのgraphPath/flagGraphs）。実行はlevelGraphs_が担う
     std::string graphPath_;
@@ -733,6 +779,10 @@ private:
     float uiDragGrabOffsetY_ = 0.0f;
 
     bool objectsDrawnThisFrame_ = false; // DrawObjects()の二重呼び出し防止用（UpdateObjects()で毎フレームリセット）
+    std::vector<engine::graphics::Object3d*> staticDrawList_; // 今フレーム描く配置物の見た目（毎フレーム詰め直し、確保は使い回す）
+
+    /** @brief 配置物の見た目を描く。数が多ければ何本かに分けて、別々のスレッドでバンドルへ記録する */
+    void DrawStaticObjects();
 
     std::string statusMessage_;
     float statusTimer_ = 0.0f;
@@ -777,6 +827,8 @@ private:
         Vector3 playerSpawn;
         Vector3 enemySpawn;
         std::string graphPath;
+        std::string sky;
+        std::string comment;
         std::vector<FlagGraphBinding> flagGraphs;
         std::vector<UIPositionRecord> uiPositions;
     };
@@ -912,6 +964,7 @@ private:
     bool dirty_ = false; // 最後の保存以降に編集があるか（未保存マーカーと開く時の破棄確認に使う）
 
     char hierarchySearch_[textBufferCapacity::kIdentifier] = { };
+    int hierarchyKindFilter_ = 0; ///< 配置物一覧を種類で絞り込む番号（0 はすべて。表は StageEditorPanels.cpp）
 
     bool snapEnabled_ = false; // グリッドスナップ（ドラッグ移動・新規配置・複製に効く）
     float snapStep_ = 1.0f;
@@ -1041,6 +1094,7 @@ private:
     bool showWorkflowPanel_ = false;
     bool showNoCodeEventPanel_ = false;
     bool showGraphPanel_ = false;
+    bool showLevelPanel_ = false;
     bool showGrid_ = true; // スナップON時にグリッド線を描くか
     int levelFileIndex_ = -1; // レベル切替コンボの選択位置（-1は未選択）
     char newLevelName_[textBufferCapacity::kIdentifier] = "level03";
@@ -1050,6 +1104,7 @@ private:
     bool showEnemyTypeEditor_ = false; ///< 「敵を作る」画面を開いているか
     EnemyTypeEditor enemyTypeEditor_; ///< 「敵を作る」画面
     char graphPathBuffer_[textBufferCapacity::kRelativePath] = { };
+    char commentBuffer_[textBufferCapacity::kParagraph] = { }; ///< 説明書きの入力欄（comment_ の写し）
     char newFlagGraphFlag_[textBufferCapacity::kIdentifier] = { };
     char newFlagGraphPath_[textBufferCapacity::kRelativePath] = "Resources/Graphs/";
     /** @brief 使い方パネルの制作チェックリストの項目数（項目の文言は StageEditorWorkflowPanels.cpp の表） */

@@ -7,7 +7,9 @@
 #include <algorithm>
 #include <cstdint>
 #include <iterator>
+#include <set>
 #include <string>
+#include <utility>
 #include <vector>
 namespace engine::game {
 /**
@@ -166,6 +168,26 @@ public:
         return std::find(bossTechniques_.begin(), bossTechniques_.end(), name) != bossTechniques_.end();
     }
 
+    /**
+     * @brief 作った合体の組み合わせを合体図鑑に登録する（ランごと。NEW GAME で消える）
+     * @param baseType 土台の武器の種類（WeaponType の番号）
+     * @param partnerType 相棒の武器の種類（WeaponType の番号）
+     * @param bossFusion ボスの武器どうしの合体か（図鑑の別のページに載せる）
+     * @return 初めて作った組み合わせなら true
+     */
+    bool RecordFusion(int baseType, int partnerType, bool bossFusion) {
+        return FusionRecipes(bossFusion).insert({ baseType, partnerType }).second;
+    }
+    /** @brief その組み合わせを、このランで作ったことがあるか */
+    bool HasFusion(int baseType, int partnerType, bool bossFusion) const {
+        const std::set<std::pair<int, int>>& recipes = bossFusion ? bossFusionRecipes_ : fusionRecipes_;
+        return recipes.contains({ baseType, partnerType });
+    }
+    /** @brief このランで作った組み合わせの数 */
+    int FusionCount(bool bossFusion) const {
+        return static_cast<int>((bossFusion ? bossFusionRecipes_ : fusionRecipes_).size());
+    }
+
     /** @brief ステージ1つ分の戦績（スタイルの最高値はセーブのため千分率の整数で持つ） */
     struct StageRecord {
         int32_t floor = 0; ///< ステージの番号
@@ -254,6 +276,8 @@ public:
         tutorialActive_ = false;
         skills_.clear();
         bossTechniques_.clear();
+        fusionRecipes_.clear();
+        bossFusionRecipes_.clear();
         stageRecords_.clear();
         currentNode_ = NodeType::kCombat;
     }
@@ -374,6 +398,13 @@ private:
     std::vector<Skill> skills_;
     std::vector<StageRecord> stageRecords_; ///< クリア済みステージの戦績（ステージ順）
     std::vector<std::string> bossTechniques_; ///< ボスから奪って習得した技名（StartNewRunで消える。セーブ対象外）
+    std::set<std::pair<int, int>> fusionRecipes_; ///< 作った合体の組み合わせ（土台と相棒の WeaponType の番号。StartNewRunで消える。セーブ対象外）
+    std::set<std::pair<int, int>> bossFusionRecipes_; ///< 作ったボスの武器どうしの合体の組み合わせ（同じ）
+
+    /** @brief ふつうの合体かボスの武器どうしの合体の、組み合わせの記録を返す */
+    std::set<std::pair<int, int>>& FusionRecipes(bool bossFusion) {
+        return bossFusion ? bossFusionRecipes_ : fusionRecipes_;
+    }
 };
 
 } // namespace engine::game

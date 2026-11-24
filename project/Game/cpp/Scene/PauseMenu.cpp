@@ -18,12 +18,24 @@ namespace engine::game {
 namespace {
 constexpr const char* kWhiteTexture = "Resources/white.png";
 constexpr Vector4 kOverlayColor = { 0.0f, 0.0f, 0.0f, 0.75f };
-constexpr Vector2 kMenuPosition = { 440.0f, 220.0f };
-constexpr Vector2 kMenuItemSize = { 400.0f, 60.0f };
-constexpr Vector2 kBgmVolumeTextPosition = { 900.0f, 291.0f };
-constexpr Vector2 kSeVolumeTextPosition = { 900.0f, 351.0f };
-constexpr Vector2 kAutoComboTextPosition = { 900.0f, 411.0f };
-constexpr Vector2 kWeaponFusionTextPosition = { 900.0f, 471.0f }; // オートコンボの1行下
+// 本編のポーズは9行（合体図鑑の行がある）になるので、画面の高さ 720 に収まるよう行を少し詰めている
+constexpr Vector2 kMenuPosition = { 440.0f, 180.0f };
+constexpr Vector2 kMenuItemSize = { 400.0f, 54.0f };
+constexpr float kValueTextX = 900.0f; // 行の右に出す今の値の左端
+constexpr float kValueTextOffsetY = 8.0f; // 行の上端から今の値までの縦の距離
+constexpr int kBgmVolumeRow = 1; // 今の値を出す行の番号（RebuildItems の並び）
+constexpr int kSeVolumeRow = 2;
+constexpr int kAutoComboRow = 3;
+constexpr int kWeaponFusionRow = 4;
+
+/** @brief 行の右に出す今の値の位置（行の位置から決めるので、行の大きさを変えてもずれない） */
+constexpr Vector2 ValueTextPosition(int row) {
+    return { kValueTextX, kMenuPosition.y + kMenuItemSize.y * static_cast<float>(row) + kValueTextOffsetY };
+}
+constexpr Vector2 kBgmVolumeTextPosition = ValueTextPosition(kBgmVolumeRow);
+constexpr Vector2 kSeVolumeTextPosition = ValueTextPosition(kSeVolumeRow);
+constexpr Vector2 kAutoComboTextPosition = ValueTextPosition(kAutoComboRow);
+constexpr Vector2 kWeaponFusionTextPosition = ValueTextPosition(kWeaponFusionRow);
 constexpr float kValueTextScale = 1.5f;
 constexpr Vector4 kValueTextColor = { 1.0f, 1.0f, 1.0f, 1.0f };
 constexpr Vector2 kTitlePosition = { 560.0f, 130.0f };
@@ -41,24 +53,6 @@ constexpr const wchar_t* kConfirmExitTitle = L"本当に戻りますか？";
 constexpr const wchar_t* kControlsTitle = L"操作説明";
 constexpr const wchar_t* kControlsBackHint = L"[{Back}] もどる";
 constexpr Vector2 kControlsListPosition = { 470.0f, 230.0f }; // 操作の一覧の左上
-// 2人目で遊ぶ時の説明（操作の一覧の右）
-constexpr Vector2 kTwoPlayerGuidePosition = { 870.0f, 230.0f };
-constexpr float kTwoPlayerGuideScale = 0.85f;
-constexpr float kTwoPlayerGuideLineHeight = 24.0f;
-constexpr const wchar_t* kTwoPlayerGuideLines[] = {
-    L"-- 2人で遊ぶ --",
-    L"ボスの武器どうしを合体すると、",
-    L"V / BACK で味方のボスを呼べる",
-    L"参加: 2台目のパッドの L3+R3 同時押し",
-    L"  （1Pがキーボードなら1台目のパッドでも、",
-    L"   1Pがパッドならキーボードの右Shift+右Ctrl）",
-    L"パッド: スティック移動 A跳ぶ X攻撃 B回避",
-    L"キー: ←→移動 ↑跳ぶ .攻撃 /回避",
-    L"抜ける: もう一度同時押し",
-    L"しばらく操作しないと自動に戻る",
-    L"ラスボス戦では攻撃で援護に飛び込む",
-    L"覚醒・フィニッシャー・遠距離攻撃は無い",
-};
 constexpr float kControlsBackHintY = 640.0f;
 constexpr float kControlsBackHintScale = 1.2f;
 constexpr const char* kStopTrialLabel = "練習をやめる";
@@ -116,6 +110,25 @@ public:
         pause.commandList_.Draw(input);
     }
     // 戻るボタンはコマンド表を閉じるのに使う（一時停止は解除しない）
+    bool HandlesBack() const override {
+        return true;
+    }
+};
+
+/** @brief ポーズ中の合体図鑑と戻る操作を処理するページ */
+class PauseMenu::FusionBookPage : public PauseMenu::IPage {
+public:
+    /** @brief 合体図鑑のページの入力を処理する（戻るでメニューへ戻る） */
+    void Update(PauseMenu& pause, Input* input) const override {
+        if (pause.fusionBook_.Update(input)) {
+            pause.page_ = &Menu();
+        }
+    }
+    /** @brief 合体図鑑のページを描画する */
+    void Draw(PauseMenu& pause, const Input* input) const override {
+        pause.fusionBook_.Draw(input);
+    }
+    // 戻るボタンは図鑑を閉じるのに使う（一時停止は解除しない）
     bool HandlesBack() const override {
         return true;
     }
@@ -186,6 +199,12 @@ const PauseMenu::IPage& PauseMenu::CommandList() {
     return kPage;
 }
 
+/** @brief 合体図鑑のページの共有インスタンスを返す */
+const PauseMenu::IPage& PauseMenu::FusionBook() {
+    static const FusionBookPage kPage;
+    return kPage;
+}
+
 /** @brief 操作説明のページの共有インスタンスを返す */
 const PauseMenu::IPage& PauseMenu::Controls() {
     static const ControlsPage kPage;
@@ -225,6 +244,7 @@ void PauseMenu::Initialize(SpriteCommon* spriteCommon, FontRenderer* fontRendere
     menu_.BindLayout(layoutName_, "pause_menu", kMenuPosition, kMenuItemSize);
     RebuildItems();
     commandList_.Initialize(fontRenderer, audio);
+    fusionBook_.Initialize(fontRenderer, audio);
 
     UIMenuStyle subStyle;
     subStyle.labelScale = kSubMenuLabelScale;
@@ -256,6 +276,8 @@ void PauseMenu::RebuildItems() {
     if (weaponFusionOption_) {
         rows_.push_back(Row::kWeaponFusion);
         items.push_back({ "武器の合体" });
+        rows_.push_back(Row::kFusionBook);
+        items.push_back({ "合体図鑑" });
     }
     rows_.push_back(Row::kControls);
     items.push_back({ "操作説明" });
@@ -326,6 +348,9 @@ void PauseMenu::UpdateMenu(Input* input) {
     } else if (row == Row::kCommandList) {
         commandList_.Open();
         page_ = &CommandList();
+    } else if (row == Row::kFusionBook) {
+        fusionBook_.Open();
+        page_ = &FusionBook();
     } else if (row == Row::kComboTrial) {
         OpenComboTrialList();
     } else if (row == Row::kExit) {
@@ -428,16 +453,6 @@ void PauseMenu::DrawControls() {
     // 一覧の表記は、最後に使った機器（キーボード/パッド）に合わせて変わる
     // 見出しはページの上に大きく出しているので、一覧の上には出さない
     sceneShared::DrawControlsHud(*fontRenderer_, layout.Pos("pause.controls_pos", kControlsListPosition), L": 調べる・入口に入る", L"");
-    // 2人目で遊ぶ時の説明は一覧の右に並べる
-    if (twoPlayerGuide_) {
-        const Vector2 position = layout.Pos("pause.two_player_pos", kTwoPlayerGuidePosition);
-        const float scale = layout.Float("pause.two_player_scale", kTwoPlayerGuideScale);
-        const float lineHeight = layout.Float("pause.two_player_line_height", kTwoPlayerGuideLineHeight);
-        for (size_t i = 0; i < std::size(kTwoPlayerGuideLines); ++i) {
-            fontRenderer_->DrawStringW(kTwoPlayerGuideLines[i], position.x, position.y + lineHeight * static_cast<float>(i), scale,
-                i == 0 ? titleColor : kValueTextColor);
-        }
-    }
     const Input* input = Input::GetCurrent();
     const std::wstring backHint = input != nullptr ? input->ExpandPrompts(kControlsBackHint) : std::wstring(kControlsBackHint);
     fontRenderer_->DrawStringCenteredW(backHint, layout.Float("pause.controls_back_y", kControlsBackHintY),

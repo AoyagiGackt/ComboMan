@@ -34,8 +34,10 @@ public:
      */
     void PreDraw();
 
-    /** @brief フレームの数を1つ進め、待ち時間を過ぎた解放済みインデックスを再利用できるようにする（1フレームに1回だけ呼ぶ） */
+    /** @brief GPU が使い終えた（付けたフェンスの値まで進んだ）解放済みインデックスを再利用できるようにする（1フレームに1回だけ呼ぶ） */
     void BeginFrame();
+    /** @brief このフレームに解放したインデックスへ、フレームの終わりに積んだフェンスの値を付ける（DirectXCommon::PostDraw の後に1回呼ぶ） */
+    void EndFrame();
 
     /**
      * @brief 未使用のデスクリプタインデックスを1つ確保する
@@ -128,17 +130,14 @@ private:
     /** @brief 現在どこまでインデックスを使用しているかのカウント */
     uint32_t useIndex_ = 0;
 
-    /** @brief 遅延解放の安全マージン（このフレーム数だけ経過してから再利用を許可する） */
-    static constexpr uint64_t kFreeDelayFrames = 3;
-
     /** @brief 即座に再利用可能なインデックスのリスト */
     std::vector<uint32_t> freeList_;
 
-    /** @brief Free()されたが、まだ再利用不可なインデックス（解放時のフレーム番号付き） */
-    std::vector<std::pair<uint64_t, uint32_t>> pendingFree_;
+    /** @brief Free()されたが、まだそのフレームの描画を GPU に出していないインデックス（EndFrame でフェンスの値を付ける） */
+    std::vector<uint32_t> freedThisFrame_;
 
-    /** @brief フレーム開始の回数 */
-    uint64_t frameCount_ = 0;
+    /** @brief GPU が使い終えるのを待っているインデックス（そのフレームの終わりに積んだフェンスの値付き） */
+    std::vector<std::pair<uint64_t, uint32_t>> pendingFree_;
 };
 
 } // namespace engine::graphics

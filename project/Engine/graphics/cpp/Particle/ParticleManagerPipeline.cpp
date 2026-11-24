@@ -4,23 +4,53 @@
  * @note ParticleManager のパイプラインの作成だけを ParticleManager.cpp から分けて置いている（クラスは ParticleManager のまま）
  */
 #include "ParticleManager.h"
-#include "PipelineHelper.h"
 #include "EngineAssert.h"
-#include "EngineConstants.h"
-#include "TextureManager.h"
-#include <cmath>
+#include "PipelineHelper.h"
+#include <cstring>
 #include <d3dx12.h>
-#include <numbers>
-#include <random>
+#include <initializer_list>
+#include <vector>
 
 using namespace Microsoft::WRL;
+
+namespace engine::graphics {
+namespace {
+
+/** @brief 全段から見えるルートの SRV（バッファを直接指す）を作る */
+D3D12_ROOT_PARAMETER MakeRootSrvParam(UINT shaderRegister) {
+    D3D12_ROOT_PARAMETER parameter {};
+    parameter.ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
+    parameter.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+    parameter.Descriptor.ShaderRegister = shaderRegister;
+    return parameter;
+}
+
+/** @brief 計算用シェーダーのルートシグネチャを、並べたルートパラメータから作る */
+ComPtr<ID3D12RootSignature> CreateComputeRootSignature(ID3D12Device* device, std::initializer_list<D3D12_ROOT_PARAMETER> parameters) {
+    const std::vector<D3D12_ROOT_PARAMETER> list(parameters);
+    ComPtr<ID3D12RootSignature> signature = pipelineHelper::CreateRootSignature(device, list.data(), static_cast<UINT>(list.size()),
+        nullptr, 0, D3D12_ROOT_SIGNATURE_FLAG_NONE);
+    ENGINE_ASSERT(signature);
+    return signature;
+}
+
+// シェーダーのレジスタ番号（ParticleCompute.hlsli を使う計算用シェーダーで共通）
+constexpr UINT kRegisterB0 = 0;
+constexpr UINT kRegisterB1 = 1;
+constexpr UINT kRegisterB2 = 2;
+constexpr UINT kRegisterT0 = 0;
+constexpr UINT kRegisterParticles = 0; // u0
+constexpr UINT kRegisterInstances = 1; // u1
+constexpr UINT kRegisterFreeList = 2; // u2
+constexpr UINT kRegisterCounter = 3; // u3
+
+} // namespace
 
 // ══════════════════════════════════════════════════════
 // パイプライン生成
 // ══════════════════════════════════════════════════════
 
-namespace engine::graphics {
-/** @brief パーティクル用のルートシグネチャを生成する */
+/** @brief パーティクル描画用のルートシグネチャを生成する */
 void ParticleManager::CreateRootSignature() {
     ID3D12Device* device = dxCommon_->GetDevice();
 
@@ -36,12 +66,21 @@ void ParticleManager::CreateRootSignature() {
     rangeT1[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
     rangeT1[0].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
+    D3D12_DESCRIPTOR_RANGE rangeT2[1] { };
+    rangeT2[0].BaseShaderRegister = 2;
+    rangeT2[0].NumDescriptors = 1;
+    rangeT2[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+    rangeT2[0].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+
     // slot 0: t0 (VS が読む instancing StructuredBuffer)
     // slot 1: t1 (PS が読む Texture2D)
-    // 未使用の CBV スロット (b0/b1) は宣言しない - GBV が null アドレスを検出してクラッシュするため
-    D3D12_ROOT_PARAMETER rootParameters[2] { };
-    rootParameters[0] = pipelineHelper::MakeSrvTableParam(rangeT0, D3D12_SHADER_VISIBILITY_VERTEX);
-    rootParameters[1] = pipelineHelper::MakeSrvTableParam(rangeT1, D3D12_SHADER_VISIBILITY_PIXEL);
+    // slot 2: b0 (PS が読むソフトパーティクルの定数。Draw で必ず設定する)
+    // slot 3: t2 (PS が読む、写し取った深度)
+    D3D12_ROOT_PARAMETER rootParameters[4] { };
+    rootParameters[pipelineHelper::particleRootSlot::kInstances] = pipelineHelper::MakeSrvTableParam(rangeT0, D3D12_SHADER_VISIBILITY_VERTEX);
+    rootParameters[pipelineHelper::particleRootSlot::kTexture] = pipelineHelper::MakeSrvTableParam(rangeT1, D3D12_SHADER_VISIBILITY_PIXEL);
+    rootParameters[pipelineHelper::particleRootSlot::kSoftConstants] = pipelineHelper::MakeCbvParam(kRegisterB0, D3D12_SHADER_VISIBILITY_PIXEL);
+    rootParameters[pipelineHelper::particleRootSlot::kSceneDepth] = pipelineHelper::MakeSrvTableParam(rangeT2, D3D12_SHADER_VISIBILITY_PIXEL);
 
     D3D12_STATIC_SAMPLER_DESC sampler = pipelineHelper::MakePixelSampler(D3D12_FILTER_MIN_MAG_MIP_LINEAR,
         D3D12_TEXTURE_ADDRESS_MODE_WRAP, D3D12_TEXTURE_ADDRESS_MODE_WRAP, D3D12_TEXTURE_ADDRESS_MODE_WRAP);
@@ -51,23 +90,45 @@ void ParticleManager::CreateRootSignature() {
     ENGINE_ASSERT(rootSignature_);
 }
 
-//  CS ルートシグネチャ
-
-/** @brief 粒子更新用コンピュートシェーダーのルートシグネチャ（CBV と UAV 2つ）を作る */
-void ParticleManager::CreateCSRootSignature() {
+/**
+ * @brief 4つの計算用シェーダー（空にする・頼まれた粒を出す・エミッター・動かす）のルートシグネチャとパイプラインを作る
+ * @note ルートパラメータの並びは PipelineHelper.h の particleComputeSlot と同じにする
+ */
+void ParticleManager::CreateComputePipelines() {
     ID3D12Device* device = dxCommon_->GetDevice();
+    using pipelineHelper::MakeCbvParam;
+    using pipelineHelper::MakeUavParam;
+    constexpr D3D12_SHADER_VISIBILITY kAll = D3D12_SHADER_VISIBILITY_ALL;
 
-    D3D12_ROOT_PARAMETER params[3] { };
-    params[0] = pipelineHelper::MakeCbvParam(0, D3D12_SHADER_VISIBILITY_ALL);
-    params[1] = pipelineHelper::MakeUavParam(0);
-    params[2] = pipelineHelper::MakeUavParam(1);
+    // 空にする: b0 定数, u0 粒, u1 描画用, u2 空き一覧, u3 空きの数
+    initPass_.rootSignature = CreateComputeRootSignature(device, {
+        MakeCbvParam(kRegisterB0, kAll), MakeUavParam(kRegisterParticles), MakeUavParam(kRegisterInstances),
+        MakeUavParam(kRegisterFreeList), MakeUavParam(kRegisterCounter) });
+    initPass_.pipeline = pipelineHelper::CreateComputePipeline(dxCommon_, initPass_.rootSignature.Get(),
+        L"Resources/shaders/Particle/ParticleInit.CS.hlsl");
 
-    csRootSignature_ = pipelineHelper::CreateRootSignature(device, params, _countof(params),
-        nullptr, 0, D3D12_ROOT_SIGNATURE_FLAG_NONE);
-    ENGINE_ASSERT(csRootSignature_);
+    // 頼まれた粒を出す: b0 定数, t0 頼まれた粒, u0 粒, u2 空き一覧, u3 空きの数
+    spawnPass_.rootSignature = CreateComputeRootSignature(device, {
+        MakeCbvParam(kRegisterB0, kAll), MakeRootSrvParam(kRegisterT0), MakeUavParam(kRegisterParticles),
+        MakeUavParam(kRegisterFreeList), MakeUavParam(kRegisterCounter) });
+    spawnPass_.pipeline = pipelineHelper::CreateComputePipeline(dxCommon_, spawnPass_.rootSignature.Get(),
+        L"Resources/shaders/Particle/ParticleSpawn.CS.hlsl");
+
+    // エミッター: b0 エミッター, u0 粒, u2 空き一覧, u3 空きの数
+    emitPass_.rootSignature = CreateComputeRootSignature(device, {
+        MakeCbvParam(kRegisterB0, kAll), MakeUavParam(kRegisterParticles),
+        MakeUavParam(kRegisterFreeList), MakeUavParam(kRegisterCounter) });
+    emitPass_.pipeline = pipelineHelper::CreateComputePipeline(dxCommon_, emitPass_.rootSignature.Get(),
+        L"Resources/shaders/Particle/EmitParticle.CS.hlsl");
+
+    // 動かす: b0 定数, b1 出し直し, u0 粒, u1 描画用, u2 空き一覧, u3 空きの数, b2 場
+    updatePass_.rootSignature = CreateComputeRootSignature(device, {
+        MakeCbvParam(kRegisterB0, kAll), MakeCbvParam(kRegisterB1, kAll), MakeUavParam(kRegisterParticles),
+        MakeUavParam(kRegisterInstances), MakeUavParam(kRegisterFreeList), MakeUavParam(kRegisterCounter),
+        MakeCbvParam(kRegisterB2, kAll) });
+    updatePass_.pipeline = pipelineHelper::CreateComputePipeline(dxCommon_, updatePass_.rootSignature.Get(),
+        L"Resources/shaders/Particle/ParticleUpdate.CS.hlsl");
 }
-
-//  CS パイプラインステート
 
 /** @brief 粒子1枚分の板ポリゴンの頂点・インデックスバッファを作る */
 void ParticleManager::CreateQuadGeometry() {
@@ -104,39 +165,6 @@ void ParticleManager::CreateQuadGeometry() {
     quadIBV_.BufferLocation = quadIndexBuffer_->GetGPUVirtualAddress();
     quadIBV_.SizeInBytes = sizeof(indices);
     quadIBV_.Format = DXGI_FORMAT_R32_UINT;
-}
-
-/** @brief パーティクルの更新用のコンピュートPSOを生成する */
-void ParticleManager::CreateCSPipelineState() {
-    csPipelineState_ = pipelineHelper::CreateComputePipeline(dxCommon_, csRootSignature_.Get(),
-        L"Resources/shaders/Particle/ParticleUpdate.CS.hlsl");
-}
-
-//  EmitParticle CS ルートシグネチャ / パイプライン
-
-/** @brief 粒子発生用コンピュートシェーダーのルートシグネチャ（CBV と UAV）を作る */
-void ParticleManager::CreateCSEmitRootSignature() {
-    ID3D12Device* device = dxCommon_->GetDevice();
-
-    D3D12_ROOT_PARAMETER params[2] { };
-    params[0] = pipelineHelper::MakeCbvParam(0, D3D12_SHADER_VISIBILITY_ALL);
-    params[1] = pipelineHelper::MakeUavParam(0);
-
-    csEmitRootSignature_ = pipelineHelper::CreateRootSignature(device, params, _countof(params),
-        nullptr, 0, D3D12_ROOT_SIGNATURE_FLAG_NONE);
-    ENGINE_ASSERT(csEmitRootSignature_);
-}
-
-/** @brief パーティクルの発生用のコンピュートPSOを生成する */
-void ParticleManager::CreateCSEmitPipelineState() {
-    csEmitPipelineState_ = pipelineHelper::CreateComputePipeline(dxCommon_, csEmitRootSignature_.Get(),
-        L"Resources/shaders/Particle/EmitParticle.CS.hlsl");
-}
-
-/** @brief 指定グループのエミッターデータへのポインタを返す */
-Emitter* ParticleManager::GetEmitter(const std::string& name) {
-    ENGINE_ASSERT(particleGroups_.contains(name));
-    return particleGroups_[name].emitterData;
 }
 
 //  グラフィックスパイプラインステート

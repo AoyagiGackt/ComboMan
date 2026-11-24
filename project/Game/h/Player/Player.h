@@ -104,6 +104,13 @@ public:
     void SetVisualYawOffset(float radians) {
         visualYawOffset_ = radians;
     }
+    /**
+     * @brief 次の更新の始めに横へずらす量を足す（ボスの吸い込みなど、外から引っ張る時に使う）
+     * @note ずらした後の壁や床との当たりは、いつもどおり ResolveBlockCollision が解く
+     */
+    void AddExternalShiftX(float dx) {
+        externalShiftX_ += dx;
+    }
     /** @brief 左右の移動入力が無くても走りのアニメにするか（闘技場で横へ回り込んでいる間） */
     void SetStrafeMoving(bool moving) {
         strafeMoving_ = moving;
@@ -115,6 +122,13 @@ public:
     /** @brief 銃を描かないようにする（演出用の分身は刀だけを持たせる） */
     void SetGunHidden(bool hidden) {
         gunHidden_ = hidden;
+    }
+    /**
+     * @brief 戦わずに歩くだけの状態にするか（マップを移動する時）
+     * @note 武器を持たず（手にも構えにも出さない）、攻撃・回避・持ち替えを受け付けず、走りの代わりに歩く。ジャンプはできる
+     */
+    void SetExplorationMode(bool exploring) {
+        explorationMode_ = exploring;
     }
     /**
      * @brief 乱舞中でない時、渡した敵のどれとも一定距離以上重ならないようX座標を押し出す
@@ -364,6 +378,15 @@ public:
      * @return 武器を手のボーンに持っている時だけtrue（非表示・投擲中はfalse）
      */
     bool GetHeldWeaponTransform(WeaponType& outType, Matrix4x4& outMatrix) const;
+    /**
+     * @brief 手に持つ近接武器（合体の相棒も）の、手に付けた後のワールド行列に掛ける補正を決め、すぐ付け直す（演出で武器が床へめり込まないように起こす時に使う）
+     * @param correction ワールド座標で掛ける行列（単位行列で補正なし）
+     */
+    void SetHeldWeaponWorldCorrection(const Matrix4x4& correction);
+    /** @brief 手に持つ近接武器の補正をなくす（付け直しは次に姿を更新した時） */
+    void ClearHeldWeaponWorldCorrection() {
+        hasHeldWeaponCorrection_ = false;
+    }
 
     /**
      * @brief 近接の段を指定時刻の姿勢で見せる（モーション編集のプレビュー用）
@@ -602,7 +625,9 @@ private:
     float lastDirX_ = 1.0f;
     float visualYawOffset_ = 0.0f; ///< 見た目の向きだけに足す角度
     bool strafeMoving_ = false; ///< 横へ回り込んでいて走りのアニメにするか
+    float externalShiftX_ = 0.0f; ///< 次の更新の始めに横へずらす量（AddExternalShiftX で足し、使ったら 0 に戻す）
     bool gunHidden_ = false; ///< 銃を描かないか
+    bool explorationMode_ = false; ///< 戦わずに歩くだけの状態か（マップを移動する時）
     Vector3 heldGripOffset_ { }; ///< 近接武器の握りの回転に足す角度
     /** @brief 見た目の縦軸回りの向き（左右の向きに SetVisualYawOffset の角度を足したもの） */
     float FacingYaw() const {
@@ -631,6 +656,10 @@ private:
     void SyncMotionLayer();
     /** @brief 持っている武器の構えを、技を振っていない間だけ重ねる（技の間は素早く薄める） */
     void SyncStanceLayer(bool attacking);
+    /** @brief フィニッシャーの溜めで取る構え（持っている武器の地上の最後の段。武器が無ければ nullptr） */
+    const MeleeAttackDef* FinisherChargePose() const;
+    /** @brief フィニッシャーの溜めの進み具合（0 で溜め始め、1 で溜めきった） */
+    float FinisherChargeProgress() const;
     const engine::graphics::Animation* previewAnim_ = nullptr; ///< プレビュー中に設定済みのベースアニメ（毎フレームのクリップ複製を避ける）
     /** @brief プレビューで差し替えた攻撃の姿勢から、今の接地・構えに合った移動系のアニメへ入り直す */
     void LeavePreviewAnimation();
@@ -771,6 +800,7 @@ private:
         engine::graphics::Animation runHoldAnim; ///< 武器持ち走り（構え系スタイル）
         engine::graphics::Animation slashAnim; ///< 斬撃（ソード攻撃・乱舞・フィニッシャー）
         engine::graphics::Animation punchAnim; ///< パンチ（ソード以外のスタイルのコンボ）
+        engine::graphics::Animation walkAnim; ///< 歩き（マップを移動する時）
     };
     CharacterRig normalRig_; ///< 通常フォーム
     CharacterRig awakenedRig_; ///< 覚醒フォーム（メカ）
@@ -901,6 +931,26 @@ private:
     std::vector<HeldWeaponSlot> heldWeapons_;
     int activeHeldIndex_ = -1; ///< 現在表示中の heldWeapons_ インデックス（-1=非表示）
     int thrownWeaponIndex_ = -1; ///< 手元を離れて飛んでいる武器（武器切り替え後もactiveHeldIndex_と別に描画し続けるための heldWeapons_ インデックス、無ければ-1）
+    // 合体の素材の武器（土台の柄頭から逆向きに付けて、両端に刃のある1本に見せる。土台と同じ種類でも描けるよう heldWeapons_ とは別に持つ）
+    std::vector<HeldWeaponSlot> fusedPartnerWeapons_;
+    int fusedPartnerIndex_ = -1; ///< 表示中の fusedPartnerWeapons_ インデックス（-1=合体していない）
+    bool hasHeldWeaponCorrection_ = false; ///< 手に持つ近接武器に補正を掛けるか
+    Matrix4x4 heldWeaponCorrection_ {}; ///< 手に持つ近接武器のワールド行列に掛ける補正（SetHeldWeaponWorldCorrection で決める）
+
+    /** @brief 選んでいる枠の武器が合体していれば、素材の武器を土台の柄頭から逆向きに付ける */
+    void AttachFusedPartner();
+    /** @brief 手に付けた近接武器へ、決めてある補正を掛ける（補正が無ければ何もしない） */
+    void ApplyHeldWeaponCorrection(Object3d& object) const;
+    /** @brief 手に持つ近接武器の実体すべて（合体の素材の分も含む）に fn を呼ぶ */
+    template <class Fn>
+    void ForEachMeleeWeaponObject(Fn&& fn) {
+        for (auto& slot : heldWeapons_) {
+            fn(*slot.object);
+        }
+        for (auto& slot : fusedPartnerWeapons_) {
+            fn(*slot.object);
+        }
+    }
 
     /** @brief 手元を離れて飛んでいる武器を、手のボーンから外して位置・回転を直接動かす */
     void PlaceThrownWeapon(HeldWeaponSlot& slot, const Vector3& position, float spinZ);

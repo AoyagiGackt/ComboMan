@@ -26,6 +26,43 @@ using namespace engine::graphics;
 namespace {
 namespace editorUi = engine::game::stageEditorUiStyle;
 
+/** @brief 種類の絞り込みの1項目（表示名と、一致させる kind の頭。使わない頭は空文字） */
+struct HierarchyKindFilter {
+    const char* label; ///< コンボに出す名前
+    const char* prefix1; ///< 一致させる kind の頭（空ならすべてに一致）
+    const char* prefix2; ///< 2つ目の頭
+    const char* prefix3; ///< 3つ目の頭
+};
+
+// 配置物一覧の種類の絞り込み（先頭の すべて が 0 番。StageEditor::hierarchyKindFilter_ の番号）
+constexpr HierarchyKindFilter kHierarchyKindFilters[] = {
+    { "すべて", "", "", "" },
+    { "敵", "enemy_", "", "" },
+    { "ギミック", "gimmick", "", "" },
+    { "地形・配置物", "prop", "terrain", "background" },
+    { "収集物・壊せる物", "pickup", "breakable", "" },
+    { "出現・巡回・カメラ", "spawn_point", "patrol_point", "camera_point" },
+    { "イベント条件", "event_condition", "", "" },
+};
+constexpr char kClearHierarchySearchLabel[] = "×"; // 検索語を消すボタン
+constexpr char kHierarchyKindFilterLabel[] = "種類"; // 種類の絞り込みのコンボの名前
+constexpr char kHierarchyMatchCountFormat[] = "一致 %d 件 / 全 %d 件"; // 絞り込んだ件数の表示
+constexpr char kHierarchyNoMatchesText[] = "検索語を短くするか、種類をすべてに戻してください。"; // 1件も無い時の案内
+constexpr char kHierarchyPositionFormat[] = "X %.1f  Y %.1f"; // 行の右に出す位置
+constexpr char kHierarchySearchId[] = "##searchObj"; // 平らな一覧の行の識別名の頭
+constexpr char kHierarchyLabelSeparator[] = "  "; // 行の名前と種類の間
+constexpr char kHierarchyTextFormat[] = "%s"; // 文字列をそのまま出す書式
+constexpr float kHierarchyButtonPaddingFactor = 2.0f; // ボタンの幅に足す内側の余白（左右の2つ分）
+
+/** @brief 種類の先頭文字列が絞り込み条件に一致するか調べる */
+bool MatchesHierarchyKind(const HierarchyKindFilter& filter, const std::string& kind) {
+    const auto matchesPrefix = [&](const char* prefix) {
+        return prefix[0] != '\0' && kind.compare(0, std::strlen(prefix), prefix) == 0;
+    };
+    return filter.prefix1[0] == '\0' || matchesPrefix(filter.prefix1)
+        || matchesPrefix(filter.prefix2) || matchesPrefix(filter.prefix3);
+}
+
 constexpr int kGuideStepCount = 4; // 制作手順の項目数（地面・敵・トリガー・イベント接続）
 constexpr float kNewLevelNameWidth = 150.0f;
 constexpr float kSnapStepWidth = 70.0f;
@@ -329,8 +366,35 @@ void StageEditorHierarchyPanel::RenderFileAndHistoryActions(StageEditor& editor)
 }
 /** @brief 階層検索ボックスを描画し、小文字化した検索語を返す（空なら全件一致扱い） */
 std::string StageEditorHierarchyPanel::RenderSearchBar(StageEditor& editor) {
-    ImGui::SetNextItemWidth(-1.0f);
+    // 入力欄の右に検索語を消すボタンを配置する
+    const float clearButtonWidth = ImGui::CalcTextSize(kClearHierarchySearchLabel).x
+        + ImGui::GetStyle().FramePadding.x * kHierarchyButtonPaddingFactor;
+    ImGui::SetNextItemWidth(-clearButtonWidth - ImGui::GetStyle().ItemSpacing.x);
     ImGui::InputTextWithHint("##hierarchySearch", "名前・種類・モデルを検索", editor.hierarchySearch_, sizeof(editor.hierarchySearch_));
+    ImGui::SameLine();
+    ImGui::BeginDisabled(editor.hierarchySearch_[0] == '\0');
+    if (ImGui::Button(kClearHierarchySearchLabel)) {
+        editor.hierarchySearch_[0] = '\0';
+    }
+    ImGui::EndDisabled();
+
+    // 配置物の種類を選ぶ
+    constexpr int kFilterCount = static_cast<int>(sizeof(kHierarchyKindFilters) / sizeof(kHierarchyKindFilters[0]));
+    if (editor.hierarchyKindFilter_ < 0 || editor.hierarchyKindFilter_ >= kFilterCount) {
+        editor.hierarchyKindFilter_ = 0;
+    }
+    if (ImGui::BeginCombo(kHierarchyKindFilterLabel, kHierarchyKindFilters[editor.hierarchyKindFilter_].label)) {
+        for (int i = 0; i < kFilterCount; ++i) {
+            const bool selected = editor.hierarchyKindFilter_ == i;
+            if (ImGui::Selectable(kHierarchyKindFilters[i].label, selected)) {
+                editor.hierarchyKindFilter_ = i;
+            }
+            if (selected) {
+                ImGui::SetItemDefaultFocus();
+            }
+        }
+        ImGui::EndCombo();
+    }
     std::string searchText = editor.hierarchySearch_;
     std::transform(searchText.begin(), searchText.end(), searchText.begin(),
         [](unsigned char c) {
@@ -423,17 +487,38 @@ void StageEditorHierarchyPanel::RenderObjectTree(StageEditor& editor, const std:
         ImGui::EndPopup();
     }
     if (objOpen) {
-        // 検索中は親子をたどらず、名前・種類・モデルが一致するものを平らに並べる（Ctrlで複数選択の切り替え）
-        if (!searchTextLower.empty()) {
+        // 検索または種類の絞り込み中は一致する配置物を平らに並べる
+        if (!searchTextLower.empty() || editor.hierarchyKindFilter_ != 0) {
+            // 検索語と種類の両方に一致する配置物を集める
+            std::vector<int> matchingIndices;
             for (int i = 0; i < static_cast<int>(editor.objects_.size()); ++i) {
-                const ObjectDesc& d = editor.objects_[i].desc;
-                if (!matchesSearch(d.name) && !matchesSearch(d.kind) && !matchesSearch(d.model)) {
+                const ObjectDesc& desc = editor.objects_[i].desc;
+                if ((!matchesSearch(desc.name) && !matchesSearch(desc.kind) && !matchesSearch(desc.model))
+                    || !MatchesHierarchyKind(kHierarchyKindFilters[editor.hierarchyKindFilter_], desc.kind)) {
                     continue;
                 }
-                bool selected = std::find(editor.selectedObjectIndices_.begin(), editor.selectedObjectIndices_.end(), i)
+                matchingIndices.push_back(i);
+            }
+            ImGui::Text(kHierarchyMatchCountFormat, static_cast<int>(matchingIndices.size()),
+                static_cast<int>(editor.objects_.size()));
+            if (matchingIndices.empty()) {
+                ImGui::TextWrapped(kHierarchyTextFormat, kHierarchyNoMatchesText);
+            }
+
+            // 一致した配置物を選択できる行として並べる
+            for (int i : matchingIndices) {
+                const ObjectDesc& d = editor.objects_[i].desc;
+                const bool selected = std::find(editor.selectedObjectIndices_.begin(), editor.selectedObjectIndices_.end(), i)
                     != editor.selectedObjectIndices_.end();
-                std::string label = d.name + "  " + d.kind + "##searchObj" + std::to_string(i);
-                if (ImGui::Selectable(label.c_str(), selected)) {
+                const std::string label = d.name + kHierarchyLabelSeparator + d.kind + kHierarchySearchId + std::to_string(i);
+                // 親に付いている物も見つけやすいよう、ワールドの位置を出す
+                const Vector3 worldPosition = editor.WorldPositionOf(d);
+                char positionText[textBufferCapacity::kLabel];
+                snprintf(positionText, sizeof(positionText), kHierarchyPositionFormat, worldPosition.x, worldPosition.y);
+                const float positionWidth = ImGui::CalcTextSize(positionText).x;
+                const float rowWidth = (std::max)(1.0f, ImGui::GetContentRegionAvail().x
+                    - positionWidth - ImGui::GetStyle().ItemSpacing.x);
+                if (ImGui::Selectable(label.c_str(), selected, 0, ImVec2(rowWidth, 0.0f))) {
                     editor.selKind_ = StageEditor::SelKind::kObject;
                     editor.selIndex_ = i;
                     if (!ImGui::GetIO().KeyCtrl) {
@@ -446,6 +531,13 @@ void StageEditorHierarchyPanel::RenderObjectTree(StageEditor& editor, const std:
                         editor.selectedObjectIndices_.erase(selectedIt);
                     }
                 }
+                // 画面に固定された配置物を除き、ダブルクリックでカメラを寄せる
+                if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)
+                    && !ObjectKind::Of(d.kind).IsScreenSpace(d)) {
+                    editor.FocusCameraOn(worldPosition);
+                }
+                ImGui::SameLine();
+                ImGui::TextDisabled(kHierarchyTextFormat, positionText);
             }
         } else {
             // 検索していない時は、親のいない物から子をたどって木構造で並べる

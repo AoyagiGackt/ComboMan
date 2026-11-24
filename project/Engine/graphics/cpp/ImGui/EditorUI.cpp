@@ -7,6 +7,7 @@
 #include <Windows.h>
 #include <algorithm>
 #include <cctype>
+#include <cstdarg>
 #include <cmath>
 #include <commdlg.h>
 #include <imgui.h>
@@ -87,6 +88,38 @@ void HelpMarker(const char* desc) {
         ImGui::PopTextWrapPos();
         ImGui::EndTooltip();
     }
+}
+
+/** @brief 箇条書きの1行を、窓の幅で折り返して出す（ImGui::BulletText は折り返さないため） */
+void BulletWrapped(const char* format, ...) {
+    // 点を打った右から文字を始め、折り返した行も点の右にそろえる
+    ImGui::Bullet();
+    va_list args;
+    va_start(args, format);
+    ImGui::TextWrappedV(format, args);
+    va_end(args);
+}
+
+/** @brief 薄い色の文字を、窓の幅で折り返して出す（ImGui::TextDisabled は折り返さないため） */
+void TextDisabledWrapped(const char* format, ...) {
+    ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
+    va_list args;
+    va_start(args, format);
+    ImGui::TextWrappedV(format, args);
+    va_end(args);
+    ImGui::PopStyleColor();
+}
+
+/** @brief 幅を決めて折り返すツールチップを出す（ImGui::SetTooltip は長い説明で画面の端まで伸びるため） */
+void TooltipWrapped(const char* format, ...) {
+    ImGui::BeginTooltip();
+    ImGui::PushTextWrapPos(ImGui::GetFontSize() * kDialogWrapEm);
+    va_list args;
+    va_start(args, format);
+    ImGui::TextV(format, args);
+    va_end(args);
+    ImGui::PopTextWrapPos();
+    ImGui::EndTooltip();
 }
 
 /** @brief 確認モーダル（破棄・上書きなど取り返しのつかない操作の前に挟む） */

@@ -39,6 +39,8 @@ public:
     void SetImpactPoints(const std::vector<ImpactPoint>& points);
     /** @brief true なら割れて散った破片がガラスになって集まり直し、はまった所から後ろの画面を見せる */
     void SetReassemble(bool reassemble);
+    /** @brief true なら爆発で割る（破片が割れ始めの点から外へ吹き飛び、ひびが炎の色になる。割れ始めの点で割る時だけ） */
+    void SetBlast(bool blast);
 
     /** @brief PSO・定数バッファ等を初期化する */
     void Initialize(engine::DirectXCommon* dxCommon, SrvManager* srvManager);
@@ -51,8 +53,18 @@ public:
     /** @brief ゲーム画面をキャプチャする（全シーン描画直後、Apply() の前に一度だけ呼ぶ） */
     void CaptureFrame();
 
-    /** @brief バックバッファ上にエフェクトを重ねて描画する（シーン描画後に呼ぶ） */
+    /** @brief 絵を描き込んでいる先へエフェクトを重ねて描画する（シーン描画後に呼ぶ。ふだんはバックバッファ） */
     void Apply();
+
+    /**
+     * @brief 絵を描き込んでいる先を設定する（CaptureFrame と Apply の前に毎フレーム呼ぶ）
+     * @param texture 色の加工でオフスクリーンへ描いている時のテクスチャ（nullptr ならバックバッファ）
+     * @param rtv そのテクスチャの描画先のハンドル
+     */
+    void SetSceneTarget(ID3D12Resource* texture, D3D12_CPU_DESCRIPTOR_HANDLE rtv) {
+        sceneTexture_ = texture;
+        sceneRtv_ = rtv;
+    }
 
     /** @brief エフェクトを最初から再生する */
     void Start();
@@ -99,8 +111,10 @@ private:
 
     /** @brief 斬線で分かれた破片ごとの中心と大きさを、画面を細かく区切って数えて求める（集まり直す時に破片ごとに回すため） */
     void BuildCutPieces();
-    /** @brief 画面を撮る写し先をバックバッファと同じ大きさにし、絵がある範囲を定数バッファへ送る（ウィンドウの大きさを変えても撮れるように） */
-    void MatchFreezeTextureToBackBuffer();
+    /** @brief 画面を撮る写し先を写す元と同じ大きさにし、絵がある範囲を定数バッファへ送る（ウィンドウの大きさを変えても撮れるように） */
+    void MatchFreezeTextureToSource();
+    /** @brief 画面を写す元（オフスクリーンへ描いていればそのテクスチャ、無ければバックバッファ） */
+    ID3D12Resource* CaptureSource() const;
 
     engine::DirectXCommon* dxCommon_ = nullptr;
     SrvManager* srvManager_ = nullptr;
@@ -125,7 +139,8 @@ private:
         std::array<std::array<float, kCutLineComponents>, kMaxCutLines> cutLines = {}; ///< 斬線ごとに通る点（xy）と法線（zw）
         uint32_t impactCount = 0; ///< 0 なら impactU/V の1点だけ
         uint32_t reassemble = 0; ///< 1 なら割れた後に集まり直す
-        std::array<float, 2> padding = {}; ///< 次の配列を16バイト境界にそろえる
+        uint32_t blast = 0; ///< 1 なら爆発で割る（破片が外へ吹き飛び、ひびが炎の色になる）
+        float padding = 0.0f; ///< 次の配列を16バイト境界にそろえる
         std::array<std::array<float, kCutLineComponents>, kMaxImpacts> impacts = {}; ///< 割れ始める点（xy だけ使う）
         uint32_t cutPieceCount = 0; ///< 中心を求めた斬線の破片の数
         std::array<uint32_t, 3> piecePadding = {}; ///< 次の配列を16バイト境界にそろえる
@@ -155,6 +170,8 @@ private:
     // フリーズテクスチャ（クリア直前のゲーム画面を保存する）
     Microsoft::WRL::ComPtr<ID3D12Resource> freezeTexture_;
     uint32_t freezeSrvIndex_ = UINT32_MAX;
+    ID3D12Resource* sceneTexture_ = nullptr; ///< 絵を描き込んでいるオフスクリーンのテクスチャ（nullptr ならバックバッファ）
+    D3D12_CPU_DESCRIPTOR_HANDLE sceneRtv_ = { }; ///< そのテクスチャの描画先
 
     float timer_ = 0.0f;
     float duration_ = kDefaultDuration;

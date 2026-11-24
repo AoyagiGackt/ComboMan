@@ -22,6 +22,8 @@ void* PostEffectFullscreenPass::InitializeCommon(DirectXCommon* dxCommon, SrvMan
     };
     pipelineHelper::CreateRenderTarget(device, srvManager, WinApp::kClientWidth, WinApp::kClientHeight,
         kFormats, pipelineHelper::kOffscreenClearColor, { sceneTexture_, rtvHeap_, rtvHandle_, srvIndex_ });
+    // シーンの描き込み先の状態は、描画パスの宣言から RenderPassGraph が切り替える（作った直後は描画先の状態）
+    dxCommon->GetResourceStateTracker().Register(sceneTexture_.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET);
 
     // 効果ごとの値を書き込む定数バッファ（呼び出し側へ書き込み先を返す）
 
@@ -54,22 +56,23 @@ void* PostEffectFullscreenPass::InitializeCommon(DirectXCommon* dxCommon, SrvMan
 void PostEffectFullscreenPass::FinalizeCommon() {
     pipelineHelper::ReleaseEffectResources(cbResource_, cbData_, pipelineState_, rootSignature_);
     rtvHeap_.Reset();
+    if (dxCommon_ != nullptr) {
+        dxCommon_->GetResourceStateTracker().Unregister(sceneTexture_.Get());
+    }
     sceneTexture_.Reset();
 }
 
-/** @brief オフスクリーンRTV（＋共有深度バッファ）をレンダーターゲットに設定しクリアする */
+/**
+ * @brief オフスクリーンRTV（＋共有深度バッファ）をレンダーターゲットに設定しクリアする
+ * @note 描画先の状態への切り替えは、このパスの宣言から RenderPassGraph が入れる
+ */
 void PostEffectFullscreenPass::BeginScene() {
     auto* cmdList = dxCommon_->GetCommandList();
-
-    if (!isFirstFrame_) {
-        DirectXCommon::TransitionBarrier(cmdList, sceneTexture_.Get(),
-            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);
-    }
-    isFirstFrame_ = false;
 
     // 共有の深度バッファを再利用することで、3D 深度テストが正しく機能する
     D3D12_CPU_DESCRIPTOR_HANDLE dsv = dxCommon_->GetDsvHandle();
     cmdList->OMSetRenderTargets(1, &rtvHandle_, FALSE, &dsv);
+    dxCommon_->SetActiveDepthTarget(DirectXCommon::DepthTarget::kScene);
 
     constexpr const float (&kClearColor)[4] = pipelineHelper::kOffscreenClearColor;
     cmdList->ClearRenderTargetView(rtvHandle_, kClearColor, 0, nullptr);
@@ -77,12 +80,11 @@ void PostEffectFullscreenPass::BeginScene() {
     pipelineHelper::SetClientViewportAndScissor(cmdList);
 }
 
-/** @brief オフスクリーンテクスチャをピクセルシェーダーリソース状態へ遷移させる */
+/**
+ * @brief シーン描画を終了する
+ * @note 読む状態への切り替えは、合成するパスの宣言から RenderPassGraph が入れるので、ここでは何もしない
+ */
 void PostEffectFullscreenPass::EndScene() {
-    auto* cmdList = dxCommon_->GetCommandList();
-
-    DirectXCommon::TransitionBarrier(cmdList, sceneTexture_.Get(),
-        D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 }
 
 /** @brief バックバッファをレンダーターゲットに戻し、オフスクリーン結果をフルスクリーンPSで合成する */

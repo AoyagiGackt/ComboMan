@@ -46,7 +46,7 @@ public:
     /** @brief オフスクリーンテクスチャをレンダーターゲットとしてバインドし、シーン描画を開始する */
     void BeginScene() override;
 
-    /** @brief シーン描画を終了し、オフスクリーンテクスチャを SRV 状態に遷移する */
+    /** @brief シーン描画を終了する（読む状態への切り替えは RenderPassGraph がパスの宣言から入れる） */
     void EndScene() override;
 
     /**
@@ -330,6 +330,10 @@ public:
     D3D12_CPU_DESCRIPTOR_HANDLE GetSceneRTVHandle() const override {
         return sceneRtvHandle_;
     }
+    /** @brief シーンキャプチャ用のテクスチャを返す（画面を写し取る演出が使う） */
+    ID3D12Resource* GetSceneTexture() const override {
+        return sceneTexture_.Get();
+    }
 
 private:
     // フィルタの既定値
@@ -538,7 +542,6 @@ private:
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> sceneRtvHeap_;
     D3D12_CPU_DESCRIPTOR_HANDLE sceneRtvHandle_ = { };
     uint32_t sceneSrvIndex_ = UINT32_MAX;
-    bool isSceneFirstFrame_ = true;
 
     // 水平パス出力用中間テクスチャ
     Microsoft::WRL::ComPtr<ID3D12Resource> intermediateTexture_;

@@ -90,6 +90,10 @@ void BattleTestScene::InitializeCoreSystems() {
     hsvFilter_ = HsvFilter::GetInstance();
 
     BuildRenderFoundation(dxCommon_, srvManager_, "battletest", { modelCommon_, objectCommon_, shadowManager_, camera_ });
+    skydome_ = std::make_unique<Skydome>();
+    skydome_->InitializeDefault(modelCommon_.get());
+    sceneShared::ApplyStageSky(skydome_.get(), GetEditorLevelPath());
+    sceneShared::ConnectStageSkyToEditor(GetStageEditor(), skydome_.get());
 }
 
 /** @brief Initialize()の下請け 境界ブロック・ワープポータル・ダミー用モデル・パーティクル群を初期化する */
@@ -237,6 +241,7 @@ void BattleTestScene::UpdateHpBars() {
 
 /** @brief 訓練用の操作・戦闘・ダミー敵・演出を更新する（ポーズ中は止める） */
 void BattleTestScene::Update() {
+    skydome_->Update(camera_.get());
     if (glassShatter_.IsActive()) {
         glassShatter_.Update(gameConstants::kFrameDeltaTime);
         return;
@@ -397,6 +402,7 @@ void BattleTestScene::UpdatePlayerAndCamera() {
     }
     sceneShared::UpdateCameraFollow(camera_.get(), player_->GetPosition(), GetStageEditor().GetSolidColliders(), lockTargetPos);
     comboFeel_.ApplyCameraZoom(camera_.get());
+    skydome_->Update(camera_.get());
     player_->RefreshVisualTransforms();
 }
 /** @brief 影・境界ブロック・ワープポータルの演出を更新する */
@@ -531,6 +537,7 @@ void BattleTestScene::Draw() {
 void BattleTestScene::Finalize() {
     ImGuiControlPanel::RegisterGlassShatterTrigger(nullptr);
     pm_->ClearAllGroups();
+    pm_->ClearFields();
     finisherEffects::FinalizeAll(glassShatter_, finisherShatter_, spaceWarp_, bladeFlash_);
     comboFeel_.Finalize();
     motionEditor_.Close(*player_);

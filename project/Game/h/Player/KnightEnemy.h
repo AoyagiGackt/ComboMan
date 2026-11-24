@@ -65,15 +65,20 @@ public:
     /**
      * @brief ステージ上のsolidブロックとの当たり判定を解決する（Update()の後に毎フレーム呼ぶ）
      * @param blocks StageEditor::GetSolidColliders()等で得たワールドAABB一覧
-     * @note ナイトはジャンプしない（常にkGroundY固定）ため、横から当たったら押し出すだけで良い
+     * @note ナイトはジャンプしないので、横は押し出すだけ。高さは足元の床に合わせる（FollowFloor）
      */
     void ResolveBlockCollision(const std::vector<AABB>& blocks);
+    /**
+     * @brief 足元の床に合わせて立つ高さを決める（段差の端から出たら落ち始め、低い段には上がる）
+     * @param blocks 地形のワールドAABB一覧
+     */
+    void FollowFloor(const std::vector<AABB>& blocks);
 
     /**
      * @brief ダメージを与える生存中のみ有効撃破すると凍結状態(Defeated)へ遷移する
      * @param knockDirX ノックバックの方向（+1/-1想定、プレイヤーの向き等）
      * @param knockY    垂直ノックバック初速（MeleeAttackDef::knockY等。打ち上げ技ほど大きい値を渡す）
-     * @note 与えた分は毎フレーム重力で減衰し、地面(kGroundY)で自然に着地する（Update()参照）
+     * @note 与えた分は毎フレーム重力で減衰し、足元の床（groundY_）で自然に着地する（Update()参照）
      */
     void TakeDamage(int damage, float knockDirX = 0.0f, float knockY = kDefaultKnockY);
 
@@ -103,6 +108,7 @@ public:
     /** @brief 位置を値として受け取りワールド座標を更新する */
     void SetPosition(const Vector3& position) override {
         pos_ = position;
+        needsFloorSearch_ = true; // 動かされた先の床を次の当たり判定で探し直す
     }
     /** @brief 当たり判定の箱を返す */
     AABB GetAABB() const {
@@ -175,6 +181,8 @@ private:
     float hitFlash_ = 0.0f; ///< 被弾時に白く光らせる残り秒数
     float knockVelX_ = 0.0f; ///< 被弾ノックバックの水平速度（毎フレーム減衰）
     float knockVelY_ = 0.0f; ///< 被弾ノックバックの垂直速度（毎フレーム重力減衰）
+    float groundY_ = 0.0f; ///< 今立っている床の上での体の高さ（着地する高さ）
+    bool needsFloorSearch_ = true; ///< 次の当たり判定で、少し上の床まで探して立たせ直すか（出現・移動の直後）
 
     // 本体・剣のモデル実体はModelManagerが所有・共有する（同種の敵なら読み込みは1回だけで済む）
     std::unique_ptr<SkinCommon> skinCommon_;

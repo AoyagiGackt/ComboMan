@@ -192,6 +192,25 @@ void EnemyEntity::Heal(int amount) {
     }
 }
 
+/** @brief 体と武器のふちを光らせる（味方のボスを敵と見分けるために使う） */
+void EnemyEntity::SetRimGlow(const Vector3& color, float power, float intensity) {
+    const bool enabled = intensity > 0.0f;
+    // 騎士の体・モンスターの見た目・手の武器のどれも同じ光にする
+    auto apply = [&](auto& object) {
+        object.SetRimColor(color);
+        object.SetRimPower(power);
+        object.SetRimIntensity(intensity);
+        object.SetEnableRim(enabled);
+    };
+    apply(*object_);
+    if (monsterObject_) {
+        apply(*monsterObject_);
+    }
+    if (weaponObject_) {
+        apply(*weaponObject_);
+    }
+}
+
 /** @brief 回復されて光っている間、渡した色を緑へ寄せて返す（時間を進めるのは Update だけ） */
 Vector4 EnemyEntity::ApplyHealGlow(const Vector4& color, bool advance) {
     const BasicEnemyTuning& tuning = EnemyTuning::GetInstance()->Basic();

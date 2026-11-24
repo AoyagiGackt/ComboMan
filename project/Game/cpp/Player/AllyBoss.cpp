@@ -35,7 +35,10 @@ bool HitsWall(const Vector3& position, float footOffset, const std::vector<engin
 
 /** @brief ally_boss.json の項目 */
 constexpr JsonField<AllyBossTuning> kTuningFields[] = {
+    { nullptr, "enabled", &AllyBossTuning::enabled },
     { nullptr, "maxHp", &AllyBossTuning::maxHp },
+    { "fused", "hpMult", &AllyBossTuning::fusedHpMult },
+    { "fused", "damageMult", &AllyBossTuning::fusedDamageMult },
     { nullptr, "damage", &AllyBossTuning::damage },
     { nullptr, "attackInterval", &AllyBossTuning::attackInterval },
     { nullptr, "attackHitTime", &AllyBossTuning::attackHitTime },
@@ -63,6 +66,12 @@ constexpr JsonField<AllyBossTuning> kTuningFields[] = {
     { nullptr, "footOffset", &AllyBossTuning::footOffset },
     { nullptr, "screenMargin", &AllyBossTuning::screenMargin },
     { nullptr, "color", &AllyBossTuning::color },
+    { nullptr, "cloneScale", &AllyBossTuning::cloneScale },
+    { "rim", "color", &AllyBossTuning::rimColor },
+    { "rim", "power", &AllyBossTuning::rimPower },
+    { "rim", "intensity", &AllyBossTuning::rimIntensity },
+    { "rim", "pulseSpeed", &AllyBossTuning::rimPulseSpeed },
+    { "rim", "pulseDepth", &AllyBossTuning::rimPulseDepth },
     { "arena", "assistDamage", &AllyBossTuning::arenaAssistDamage },
     { "arena", "assistCooldown", &AllyBossTuning::arenaAssistCooldown },
     { "arena", "autoAssistInterval", &AllyBossTuning::arenaAutoAssistInterval },
@@ -95,25 +104,23 @@ void AllyBoss::Initialize(engine::graphics::ModelCommon* modelCommon) {
 }
 
 /** @brief 主軸の武器の体を返す（まだ無ければ作る。作った体はステージを出るまで残す） */
-EnemyEntity* AllyBoss::BodyFor(WeaponType weapon) {
+PlayerCloneBody* AllyBoss::BodyFor(WeaponType weapon) {
     auto found = bodies_.find(weapon);
     if (found != bodies_.end()) {
         return found->second.get();
     }
-    auto body = std::make_unique<EnemyEntity>();
+    // プレイヤーと同じ見た目の体に、ボスの武器を持たせる（作った時に一度行列も作る）
+    auto body = std::make_unique<PlayerCloneBody>();
     body->Initialize(modelCommon_, position_, weapon);
-    // AI と物理は動かさず、こちらが入れた位置と向きを見た目へ写すだけにする
-    body->SetScripted(true);
     body->SetVisible(false);
-    // 作った直後に一度行列を作っておく（作らないと画面の右上に白い四角が映る）
-    body->RefreshVisualTransforms();
-    EnemyEntity* raw = body.get();
+    PlayerCloneBody* raw = body.get();
     bodies_.emplace(weapon, std::move(body));
     return raw;
 }
 
 /** @brief 呼び出す（主軸の武器の体を出してプレイヤーの近くに置く） */
-void AllyBoss::Summon(WeaponType weapon, const Vector4& color, const Vector3& position) {
+void AllyBoss::Summon(WeaponType weapon, const Vector4& color, const Vector3& position, bool fused) {
+    fused_ = fused;
     // 前の体は隠し、主軸の武器の体を出す
     if (body_ != nullptr) {
         body_->SetVisible(false);
@@ -122,10 +129,11 @@ void AllyBoss::Summon(WeaponType weapon, const Vector4& color, const Vector3& po
     position_ = position;
     body_ = BodyFor(weapon);
     body_->SetColor(color);
+    UpdateRimGlow();
     body_->SetPosition(position_);
     body_->SetVisible(!hidden_);
     body_->RefreshVisualTransforms();
-    hp_ = AllyTune().maxHp;
+    hp_ = MaxHp();
     velocityY_ = 0.0f;
     invincibleTimer_ = AllyTune().hurtInvincibleSeconds;
     attackTimer_ = -1.0f;
@@ -157,9 +165,15 @@ void AllyBoss::TickRespawn(float dt) {
     respawnTimer_ = (std::max)(respawnTimer_ - dt, 0.0f);
 }
 
+/** @brief 今の体力の上限（合体していれば上がる） */
+int AllyBoss::MaxHp() const {
+    const float mult = fused_ ? AllyTune().fusedHpMult : 1.0f;
+    return (std::max)(1, static_cast<int>(std::round(static_cast<float>(AllyTune().maxHp) * mult)));
+}
+
 /** @brief 体力の割合（0〜1） */
 float AllyBoss::HpRatio() const {
-    return static_cast<float>(hp_) / static_cast<float>((std::max)(AllyTune().maxHp, 1));
+    return static_cast<float>(hp_) / static_cast<float>(MaxHp());
 }
 
 /** @brief 一番近い生きている敵を返す（狙う距離の外なら nullptr） */
@@ -234,6 +248,7 @@ bool AllyBoss::Update(const AllySurroundings& around, const AllyControl* control
     }
     const AllyBossTuning& tune = AllyTune();
     const float dt = gameConstants::kFrameDeltaTime;
+    UpdateRimGlow();
     invincibleTimer_ = (std::max)(invincibleTimer_ - dt, 0.0f);
     autoAttackCooldown_ = (std::max)(autoAttackCooldown_ - dt, 0.0f);
 
@@ -326,7 +341,7 @@ bool AllyBoss::Update(const AllySurroundings& around, const AllyControl* control
     if (attackTimer_ < 0.0f) {
         body_->PlayHeldAnimation(std::abs(stepX) > 0.0f);
     }
-    body_->Update(position_.x + facing_);
+    body_->Update();
     return hitNow;
 }
 
@@ -378,11 +393,12 @@ void AllyBoss::StartArenaAssist(WeaponType weapon, const Vector4& color, const V
     weapon_ = weapon;
     facing_ = facing;
     body_->SetColor(color);
+    UpdateRimGlow();
     body_->SetPosition(position);
     body_->SetScriptedFacing(facing);
     body_->SetVisible(true);
     body_->PlayScriptedAttackAnimation();
-    body_->Update(position.x + facing);
+    body_->Update();
     assistTimer_ = 0.0f;
     assistHitDone_ = false;
     assistCooldown_ = AllyTune().arenaAssistCooldown;
@@ -395,7 +411,8 @@ bool AllyBoss::UpdateArenaAssist() {
     }
     const AllyBossTuning& tune = AllyTune();
     assistTimer_ += gameConstants::kFrameDeltaTime;
-    body_->Update(body_->GetPosition().x + facing_);
+    UpdateRimGlow();
+    body_->Update();
     bool hitNow = false;
     if (!assistHitDone_ && assistTimer_ >= tune.arenaAssistHitTime) {
         assistHitDone_ = true;
@@ -413,6 +430,19 @@ bool AllyBoss::UpdateArenaAssist() {
 float AllyBoss::TickAssistCooldown(float dt) {
     assistCooldown_ = (std::max)(assistCooldown_ - dt, 0.0f);
     return assistCooldown_;
+}
+
+/** @brief 体のふちの光を進める（味方の目印。ゆっくり強まったり弱まったりさせる） */
+void AllyBoss::UpdateRimGlow() {
+    if (body_ == nullptr) {
+        return;
+    }
+    const AllyBossTuning& tune = AllyTune();
+    rimTimer_ += gameConstants::kFrameDeltaTime;
+    // 0〜1 で揺らし、一番弱い時でも pulseDepth の分しか減らさない（消えて敵と紛れないように）
+    const float wave = (1.0f + std::sin(rimTimer_ * tune.rimPulseSpeed)) * kHalf;
+    const float intensity = tune.rimIntensity * (1.0f - tune.rimPulseDepth * wave);
+    body_->SetRimGlow(tune.rimColor, tune.rimPower, intensity);
 }
 
 /** @brief 体を描く（ラスボス戦の援護の間も描く） */

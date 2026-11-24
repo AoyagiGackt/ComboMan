@@ -4,6 +4,7 @@
  * @note データそのものはここが唯一の定義元。個別シーン側でテーブルを複製しない。
  */
 #pragma once
+#include "Animation.h"
 #include "Object3d.h"
 #include "GameConstants.h"
 #include "Skeleton.h"
@@ -40,6 +41,7 @@ struct RigVisualDef {
     const char* runHold;
     const char* slash;
     const char* punch;
+    const char* walk; ///< 歩き（マップを移動する時）
 };
 
 // 通常フォーム: マテリアル単色を焼き込んだパレットテクスチャ（UVは変換時にブロック中心へ書き換え済み）
@@ -62,6 +64,7 @@ inline constexpr RigVisualDef kNormalRigVisual = {
     "Alien_RunHold",
     "Alien_SwordSlash",
     "Alien_Punch",
+    "Alien_Walk",
 };
 
 // 覚醒フォーム: メカ（実テクスチャ付き素材）。モデル身長は約5.35で、覚醒の迫力を出すため
@@ -86,10 +89,23 @@ inline constexpr RigVisualDef kAwakenedRigVisual = {
     "Run_Holding",
     "SwordSlash",
     "Punch",
+    "Walk",
 };
 
 // プレイヤーの見た目プリセットはリグの定義から参照する
 inline constexpr const RigVisualDef* kPlayerVisualPresets[] = { &kNormalRigVisual, &kAwakenedRigVisual };
+
+/** @brief 体の移動キーの高さを最初の値に固定する（高さは物理で決めるため。プレイヤーと分身で使う） */
+inline void LockClipVerticalRootMotion(engine::graphics::Animation& animation) {
+    auto body = animation.nodeAnimations.find("Body");
+    if (body == animation.nodeAnimations.end() || body->second.translate.keyframes.empty()) {
+        return;
+    }
+    const float baseY = body->second.translate.keyframes.front().value.y;
+    for (auto& keyframe : body->second.translate.keyframes) {
+        keyframe.value.y = baseY;
+    }
+}
 
 /** @brief モデルパスに対応するリグのプリセット番号を返し、未登録なら-1を返す */
 inline int FindPlayerVisualPreset(const std::string& modelPath) {

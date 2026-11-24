@@ -78,6 +78,9 @@
     <Filter Include="ヘッダーファイル\Engine\core\h\Window">
       <UniqueIdentifier>{75bec25a-1d5a-466c-9639-9b5c6a44d250}</UniqueIdentifier>
     </Filter>
+    <Filter Include="ソースファイル\Engine\core\cpp\Collision">
+      <UniqueIdentifier>{2e061862-7c47-426a-b111-34dcb551beb9}</UniqueIdentifier>
+    </Filter>
     <Filter Include="ソースファイル\Engine\core\cpp\Object">
       <UniqueIdentifier>{7e9762ea-2a1a-4124-8b3a-ba55f8f24a5a}</UniqueIdentifier>
     </Filter>
@@ -377,6 +380,21 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="Engine\core\cpp\Collision\UniformGridX.cpp">
+      <Filter>ソースファイル\Engine\core\cpp\Collision</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\core\cpp\Util\WorkerPool.cpp">
+      <Filter>ソースファイル\Engine\core\cpp\Util</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\core\cpp\Device\ParallelBundleRecorder.cpp">
+      <Filter>ソースファイル\Engine\core\cpp\Device</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\core\cpp\Device\ResourceStateTracker.cpp">
+      <Filter>ソースファイル\Engine\core\cpp\Device</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\core\cpp\Time\FixedStepClock.cpp">
+      <Filter>ソースファイル\Engine\core\cpp\Time</Filter>
+    </ClCompile>
     <ClCompile Include="Engine\graphics\cpp\Skeleton\Animation.cpp">
       <Filter>ソースファイル\Engine\graphics\cpp\Skeleton</Filter>
     </ClCompile>
@@ -402,6 +420,12 @@
       <Filter>ソースファイル\Game\cpp\Core\App</Filter>
     </ClCompile>
     <ClCompile Include="Game\cpp\Core\App\SmokeTestRunner.cpp">
+      <Filter>ソースファイル\Game\cpp\Core\App</Filter>
+    </ClCompile>
+    <ClCompile Include="Game\cpp\Core\App\SmokeTestRunnerVisit.cpp">
+      <Filter>ソースファイル\Game\cpp\Core\App</Filter>
+    </ClCompile>
+    <ClCompile Include="Game\cpp\Core\App\BugHuntChanges.cpp">
       <Filter>ソースファイル\Game\cpp\Core\App</Filter>
     </ClCompile>
     <ClCompile Include="Engine\core\cpp\Object\GameObject.cpp">
@@ -431,6 +455,9 @@
     <ClCompile Include="Game\cpp\Player\AllyBoss.cpp">
       <Filter>ソースファイル\Game\cpp\Player\敵</Filter>
     </ClCompile>
+    <ClCompile Include="Game\cpp\Player\PlayerCloneBody.cpp">
+      <Filter>ソースファイル\Game\cpp\Player\敵</Filter>
+    </ClCompile>
     <ClCompile Include="Game\cpp\Scene\GamePlaySceneAlly.cpp">
       <Filter>ソースファイル\Game\cpp\Scene\ゲームプレイ</Filter>
     </ClCompile>
@@ -446,10 +473,19 @@
     <ClCompile Include="Game\cpp\Effect\HitEffectLibrary.cpp">
       <Filter>ソースファイル\Game\cpp\Effect</Filter>
     </ClCompile>
+    <ClCompile Include="Game\cpp\Effect\EnemyEffectLibrary.cpp">
+      <Filter>ソースファイル\Game\cpp\Effect</Filter>
+    </ClCompile>
+    <ClCompile Include="Game\cpp\Effect\ParticleFieldLibrary.cpp">
+      <Filter>ソースファイル\Game\cpp\Effect</Filter>
+    </ClCompile>
     <ClCompile Include="Game\cpp\Effect\SceneVisualTuning.cpp">
       <Filter>ソースファイル\Game\cpp\Effect</Filter>
     </ClCompile>
     <ClCompile Include="Game\cpp\UI\CommandListView.cpp">
+      <Filter>ソースファイル\Game\cpp\UI\HUD</Filter>
+    </ClCompile>
+    <ClCompile Include="Game\cpp\UI\FusionBookView.cpp">
       <Filter>ソースファイル\Game\cpp\UI\HUD</Filter>
     </ClCompile>
     <ClCompile Include="Game\cpp\Effect\SlashMark.cpp">
@@ -474,6 +510,9 @@
       <Filter>ソースファイル\Game\cpp\Scene</Filter>
     </ClCompile>
     <ClCompile Include="Game\cpp\Scene\GamePlaySceneBombs.cpp">
+      <Filter>ソースファイル\Game\cpp\Scene</Filter>
+    </ClCompile>
+    <ClCompile Include="Game\cpp\Scene\GamePlaySceneActionFeel.cpp">
       <Filter>ソースファイル\Game\cpp\Scene</Filter>
     </ClCompile>
     <ClCompile Include="Game\cpp\Scene\GamePlaySceneFinishers.cpp">
@@ -569,6 +608,9 @@
     <ClCompile Include="Game\cpp\Player\MeleeCombo.cpp">
       <Filter>ソースファイル\Game\cpp\Player\コンボ</Filter>
     </ClCompile>
+    <ClCompile Include="Game\cpp\Player\MeleeBossCombo.cpp">
+      <Filter>ソースファイル\Game\cpp\Player\コンボ</Filter>
+    </ClCompile>
     <ClCompile Include="Game\cpp\Player\ComboMotion.cpp">
       <Filter>ソースファイル\Game\cpp\Player\コンボ</Filter>
     </ClCompile>
@@ -645,6 +687,9 @@
       <Filter>ソースファイル\Game\cpp\Scripting\調整値</Filter>
     </ClCompile>
     <ClCompile Include="Game\cpp\Scripting\CombatTuning.cpp">
+      <Filter>ソースファイル\Game\cpp\Scripting\調整値</Filter>
+    </ClCompile>
+    <ClCompile Include="Game\cpp\Scripting\ActionFeelTuning.cpp">
       <Filter>ソースファイル\Game\cpp\Scripting\調整値</Filter>
     </ClCompile>
     <ClCompile Include="Game\cpp\Scripting\LevelGraphRunner.cpp">
@@ -901,6 +946,9 @@
     <ClCompile Include="Engine\core\cpp\Input\Input.cpp">
       <Filter>ソースファイル\Engine\core\cpp\Input</Filter>
     </ClCompile>
+    <ClCompile Include="Engine\core\cpp\Input\GamepadRumble.cpp">
+      <Filter>ソースファイル\Engine\core\cpp\Input</Filter>
+    </ClCompile>
     <ClCompile Include="Engine\graphics\cpp\ImGui\ImGuiManager.cpp">
       <Filter>ソースファイル\Engine\graphics\cpp\ImGui</Filter>
     </ClCompile>
@@ -1017,6 +1065,21 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Engine\core\h\Collision\UniformGridX.h">
+      <Filter>ヘッダーファイル\Engine\core\h\Collision</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\core\h\Util\WorkerPool.h">
+      <Filter>ヘッダーファイル\Engine\core\h\Util</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\core\h\Device\ParallelBundleRecorder.h">
+      <Filter>ヘッダーファイル\Engine\core\h\Device</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\core\h\Device\ResourceStateTracker.h">
+      <Filter>ヘッダーファイル\Engine\core\h\Device</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\core\h\Time\FixedStepClock.h">
+      <Filter>ヘッダーファイル\Engine\core\h\Time</Filter>
+    </ClInclude>
     <ClInclude Include="Game\h\Scene\AbstractSceneFactory.h">
       <Filter>ヘッダーファイル\Game\h\Scene\共通</Filter>
     </ClInclude>
@@ -1048,6 +1111,9 @@
       <Filter>ヘッダーファイル\Game\h\Core\App</Filter>
     </ClInclude>
     <ClInclude Include="Game\h\Core\App\SmokeTestRunner.h">
+      <Filter>ヘッダーファイル\Game\h\Core\App</Filter>
+    </ClInclude>
+    <ClInclude Include="Game\h\Core\App\BugHuntChanges.h">
       <Filter>ヘッダーファイル\Game\h\Core\App</Filter>
     </ClInclude>
     <ClInclude Include="Engine\core\h\Object\GameObject.h">
@@ -1128,6 +1194,9 @@
     <ClInclude Include="Game\h\Player\AllyBoss.h">
       <Filter>ヘッダーファイル\Game\h\Player\敵</Filter>
     </ClInclude>
+    <ClInclude Include="Game\h\Player\PlayerCloneBody.h">
+      <Filter>ヘッダーファイル\Game\h\Player\敵</Filter>
+    </ClInclude>
     <ClInclude Include="Game\h\Player\IEnemyEntity.h">
       <Filter>ヘッダーファイル\Game\h\Player\敵</Filter>
     </ClInclude>
@@ -1140,6 +1209,12 @@
     <ClInclude Include="Game\h\Effect\HitEffectLibrary.h">
       <Filter>ヘッダーファイル\Game\h\Effect</Filter>
     </ClInclude>
+    <ClInclude Include="Game\h\Effect\EnemyEffectLibrary.h">
+      <Filter>ヘッダーファイル\Game\h\Effect</Filter>
+    </ClInclude>
+    <ClInclude Include="Game\h\Effect\ParticleFieldLibrary.h">
+      <Filter>ヘッダーファイル\Game\h\Effect</Filter>
+    </ClInclude>
     <ClInclude Include="Game\h\Effect\SceneVisualTuning.h">
       <Filter>ヘッダーファイル\Game\h\Effect</Filter>
     </ClInclude>
@@ -1150,6 +1225,9 @@
       <Filter>ヘッダーファイル\Game\h\Scene\ゲームプレイ</Filter>
     </ClInclude>
     <ClInclude Include="Game\h\UI\CommandListView.h">
+      <Filter>ヘッダーファイル\Game\h\UI\HUD</Filter>
+    </ClInclude>
+    <ClInclude Include="Game\h\UI\FusionBookView.h">
       <Filter>ヘッダーファイル\Game\h\UI\HUD</Filter>
     </ClInclude>
     <ClInclude Include="Game\h\Effect\SlashMark.h">
@@ -1303,6 +1381,9 @@
       <Filter>ヘッダーファイル\Game\h\Scripting\調整値</Filter>
     </ClInclude>
     <ClInclude Include="Game\h\Scripting\CombatTuning.h">
+      <Filter>ヘッダーファイル\Game\h\Scripting\調整値</Filter>
+    </ClInclude>
+    <ClInclude Include="Game\h\Scripting\ActionFeelTuning.h">
       <Filter>ヘッダーファイル\Game\h\Scripting\調整値</Filter>
     </ClInclude>
     <ClInclude Include="Game\h\Scripting\LevelGraphRunner.h">
@@ -1505,6 +1586,9 @@
     <ClInclude Include="Engine\core\h\Input\Input.h">
       <Filter>ヘッダーファイル\Engine\core\h\Input</Filter>
     </ClInclude>
+    <ClInclude Include="Engine\core\h\Input\GamepadRumble.h">
+      <Filter>ヘッダーファイル\Engine\core\h\Input</Filter>
+    </ClInclude>
     <ClInclude Include="Engine\core\h\Util\StringUtility.h">
       <Filter>ヘッダーファイル\Engine\core\h\Util</Filter>
     </ClInclude>
@@ -1672,6 +1756,12 @@
     <FxCompile Include="Resources\shaders\object3d\ShadowVS.hlsl">
       <Filter>Shader\object3d</Filter>
     </FxCompile>
+    <FxCompile Include="Resources\shaders\Particle\ParticleInit.CS.hlsl">
+      <Filter>Shader\Particle</Filter>
+    </FxCompile>
+    <FxCompile Include="Resources\shaders\Particle\ParticleSpawn.CS.hlsl">
+      <Filter>Shader\Particle</Filter>
+    </FxCompile>
     <FxCompile Include="Resources\shaders\Particle\EmitParticle.CS.hlsl">
       <Filter>Shader\Particle</Filter>
     </FxCompile>
@@ -1789,6 +1879,9 @@
     <FxCompile Include="Resources\shaders\sprite\SpritePS.hlsl">
       <Filter>Shader\sprite</Filter>
     </FxCompile>
+    <FxCompile Include="Resources\shaders\sprite\SpriteBindlessPS.hlsl">
+      <Filter>Shader\sprite</Filter>
+    </FxCompile>
     <FxCompile Include="Resources\shaders\postprocess\RadialBlurPS.hlsl">
       <Filter>Shader\postprocess</Filter>
     </FxCompile>
@@ -1826,6 +1919,9 @@
     </None>
     <None Include="Resources\shaders\object3d\Object3d.hlsli">
       <Filter>Shader\object3d</Filter>
+    </None>
+    <None Include="Resources\shaders\Particle\ParticleCompute.hlsli">
+      <Filter>Shader\Particle</Filter>
     </None>
     <None Include="Resources\shaders\Particle\Particle.hlsli">
       <Filter>Shader\Particle</Filter>
@@ -1870,6 +1966,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Game\cpp\Level\StageEditorEventPanels.cpp"><Filter>ソースファイル\Game\cpp\Level\StageEditor\パネル</Filter></ClCompile>
+    <ClCompile Include="Game\cpp\Level\StageEditorLevelPanel.cpp"><Filter>ソースファイル\Game\cpp\Level\StageEditor\パネル</Filter></ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Game\cpp\Level\StageEditorWorkflowPanels.cpp"><Filter>ソースファイル\Game\cpp\Level\StageEditor\パネル</Filter></ClCompile>

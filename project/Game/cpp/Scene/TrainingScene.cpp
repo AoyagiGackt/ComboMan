@@ -81,6 +81,10 @@ void TrainingScene::InitializeCoreSystems() {
     weaponManager_ = WeaponManager::GetInstance();
 
     BuildRenderFoundation(dxCommon_, srvManager_, "training", { modelCommon_, objectCommon_, shadowManager_, camera_ });
+    skydome_ = std::make_unique<Skydome>();
+    skydome_->InitializeDefault(modelCommon_.get());
+    sceneShared::ApplyStageSky(skydome_.get(), GetEditorLevelPath());
+    sceneShared::ConnectStageSkyToEditor(GetStageEditor(), skydome_.get());
 }
 
 /** @brief Initialize()の下請け 境界ブロック・ワープポータルを初期化する（背景のビルはtraining.jsonに置く） */
@@ -154,6 +158,7 @@ void TrainingScene::DrawWeaponSlotHud() {
 
 /** @brief 入力・物理・パーティクルを毎フレーム更新する */
 void TrainingScene::Update() {
+    skydome_->Update(camera_.get());
     fontRenderer_.Reset();
 
     // 一時停止中はゲームを止める（HUDは描画側で隠す）。Backspaceもポーズを閉じるのに使うため先に判定する
@@ -264,6 +269,7 @@ void TrainingScene::UpdatePlayerAndBullets() {
 /** @brief カメラ追従、影、境界ブロック、PBRデモ、ワープポータル演出を更新する */
 void TrainingScene::UpdateCameraAndEnvironment() {
     sceneShared::UpdateCameraFollow(camera_.get(), player_->GetPosition(), GetStageEditor().GetSolidColliders());
+    skydome_->Update(camera_.get());
     player_->RefreshVisualTransforms();
 
 #ifdef _DEBUG
@@ -364,6 +370,7 @@ void TrainingScene::Draw() {
     modelCommon_->CommonDrawSettings();
     objectCommon_->SetDefaultLight(cmd);
     shadowManager_->SetShadowMap(cmd, srvManager_);
+    skydome_->Draw();
 
     for (auto& b : borderBlocks_) {
         b->Draw();

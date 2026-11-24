@@ -382,6 +382,8 @@ struct LevelData {
     Vector3 enemySpawn = { 28.0f, 0.4f, 0.0f };
     std::string graphPath; // レベル読込直後から常駐で走るグラフJSONのパス（空なら無し）
     std::vector<FlagGraphBinding> flagGraphs; // フラグの立ち上がりで起動するグラフ一覧
+    std::string sky; // 空の画像（正距円筒、Resources/SkyDome/sky_～.png。空なら既定の空）
+    std::string comment; // ファイルの説明書き（_comment。ゲームでは使わず、保存しても消えないように持っておく）
 };
 
 // Spawn() の戻り値Model と Object3d の所有権を持つ

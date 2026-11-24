@@ -30,6 +30,7 @@
 #include "GameConstants.h"
 #include "GamePlayScene.h"
 #include "GameSettings.h"
+#include "GamepadRumble.h"
 #include "GrayscaleEffect.h"
 #include "HsvFilter.h"
 #include "ImGuiControlPanel.h"
@@ -124,6 +125,7 @@ void MyGame::Initialize() {
 
     // 最初のBGMが鳴る前に、保存済みの音量設定を反映する。
     GameSettingsManager::GetInstance()->Load();
+    GamepadRumble::GetInstance()->SetEnabled(GameSettingsManager::GetInstance()->Get().vibration);
     const GameSettings& s = GameSettingsManager::GetInstance()->Get();
     audio_->SetBGMVolume(s.bgmVolume);
     audio_->SetSEVolume(s.seVolume);
@@ -164,7 +166,8 @@ void MyGame::Initialize() {
 
 /** @brief ゲーム固有の更新処理（自動テストの速回しの時は、1回描くごとに何回か進める） */
 void MyGame::Update() {
-    const int updates = fastSmokeTest_ ? smokeTest_.GetUpdatesPerDraw() : 1;
+    // 1回の更新で進める時間は固定のまま、重くて描画が遅れた時だけ遅れた分の回数を回す（速回しの自動テストは決まった回数）
+    const int updates = fastSmokeTest_ ? smokeTest_.GetUpdatesPerDraw() : frameClock_.UpdatesThisFrame();
     for (int i = 0; i < updates; ++i) {
         // 描かなかった回の ImGui のフレームは、次を始める前に閉じておく
         if (i > 0) {
@@ -216,6 +219,11 @@ void MyGame::UpdateOnce() {
             auto* profiler = FrameProfiler::GetInstance();
             ImGui::Text("CPU %.2f ms  %.1f FPS", profiler->GetMs(), profiler->GetFPS());
             ImGui::Text("Gamepad %s", input_->IsGamepadConnected() ? "Connected" : "Disconnected");
+            // 配置物の描画を複数のスレッドでバンドルへ記録するか（切って重さを比べられる）
+            bool parallelRecording = ParallelBundleRecorder::IsEnabled();
+            if (ImGui::Checkbox("配置物の描画を複数のスレッドで記録", &parallelRecording)) {
+                ParallelBundleRecorder::SetEnabled(parallelRecording);
+            }
             bool hotReloadEnabled = TextureManager::GetInstance()->IsHotReloadEnabled();
             if (ImGui::Checkbox("ゲーム中のテクスチャホットリロード", &hotReloadEnabled)) {
                 TextureManager::GetInstance()->SetHotReloadEnabled(hotReloadEnabled);
@@ -297,7 +305,9 @@ void MyGame::Draw() {
 
     // 同じ優先順で選んだエフェクトに開始と合成を委譲する
     IPostEffectSource* activeEffect = postEffectsSupported ? FindActivePostEffect({ imgFilter, gs, hsv }) : nullptr;
-    graph.AddPass("Scene Capture Begin", [activeEffect] {
+    // シーンの描き込み先は、描き始めのパスで描画先、合成のパスで読む状態にする（バリアはグラフが宣言から入れる）
+    ID3D12Resource* sceneTexture = activeEffect != nullptr ? activeEffect->GetSceneTexture() : nullptr;
+    graph.AddPass("Scene Capture Begin", { .writes = { WriteRenderTarget(sceneTexture) } }, [activeEffect] {
         activeEffect->BeginScene();
     }, activeEffect != nullptr);
 
@@ -305,7 +315,7 @@ void MyGame::Draw() {
         SceneManager::GetInstance()->Draw();
     });
 
-    graph.AddPass("Post Effects", [activeEffect] {
+    graph.AddPass("Post Effects", { .reads = { ReadTexture(sceneTexture) } }, [activeEffect] {
         activeEffect->EndScene();
         activeEffect->Apply(SrvManager::GetInstance());
     }, activeEffect != nullptr);
@@ -329,6 +339,8 @@ void MyGame::Draw() {
     graph.Execute();
 
     dxCommon_->PostDraw();
+    // このフレームに解放したデスクリプタは、今積んだフェンスの値まで GPU が進んでから再利用する
+    SrvManager::GetInstance()->EndFrame();
 }
 
 /** @brief ゲーム固有の終了処理 */

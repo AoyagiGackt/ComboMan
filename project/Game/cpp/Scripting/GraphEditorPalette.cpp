@@ -83,7 +83,7 @@ void GraphEditor::DrawAddNodeMenu() {
                 // 説明が登録されているノードだけツールチップを出す
                 const NodeTypeSpec* spec = NodeRegistry::GetInstance()->FindSpec(type);
                 if (spec && !spec->description.empty()) {
-                    ImGui::SetTooltip("%s", spec->description.c_str());
+                    graphics::editorUI::TooltipWrapped("%s", spec->description.c_str());
                 }
             }
             if (clicked) {
@@ -224,7 +224,7 @@ void GraphEditor::DrawVariablesPanel() {
     ImGui::SetNextWindowPos(kVariablesWindowPos, ImGuiCond_Once);
     ImGui::SetNextWindowSize(kVariablesWindowSize, ImGuiCond_FirstUseEver);
     ImGui::Begin("グラフ変数（実行中）");
-    ImGui::TextDisabled("実行中の変数一覧値を直接書き換えて上書きテストできます");
+    graphics::editorUI::TextDisabledWrapped("実行中の変数一覧値を直接書き換えて上書きテストできます");
     ImGui::Separator();
 
     testRuntime_.VisitVariables([this](const std::string& name, const GraphValue& value) {

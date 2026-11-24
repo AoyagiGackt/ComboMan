@@ -77,6 +77,27 @@ struct FinishTuning {
     std::string shotImpact = "clear_shot"; ///< 弾が入った瞬間のカメラ揺れ。impacts の項目の名前
     std::string shotSound; ///< 弾が入った瞬間に鳴らす音（空なら鳴らさない）
     // 割れる
+    // 爆弾: 画面のあちこちで小さな爆発が続き、静止の後に画面の真ん中で大爆発
+    int blastCount = 7; ///< 小さな爆発の数（最大。スプライトはこの数だけ作る）
+    int blastCountJitter = 2; ///< 数を毎回この数までの範囲で減らす
+    float blastInterval = 0.11f; ///< 次の爆発までの間隔
+    float blastIntervalJitter = 0.05f; ///< 間隔のばらつき（±）
+    float blastMargin = 0.15f; ///< 爆発を画面の端からどれだけ離すか（画面に対する割合）
+    float blastSize = 260.0f; ///< 小さな爆発が広がり切った時の大きさ（画面の座標）
+    float blastSeconds = 0.4f; ///< 爆発が広がって消えるまでの長さ
+    float blastCoreScale = 0.45f; ///< 白く熱い芯の大きさ（火の玉の何倍か）
+    Vector4 blastColor = { 1.0f, 0.55f, 0.15f, 0.9f }; ///< 火の玉の色
+    Vector4 blastCoreColor = { 1.0f, 0.95f, 0.8f, 1.0f }; ///< 芯の色
+    std::string blastFlash; ///< 小さな爆発の瞬間の画面フラッシュ（空なら出さない）
+    std::string blastImpact = "clear_spray"; ///< 小さな爆発の瞬間のカメラ揺れ
+    std::string blastSound; ///< 小さな爆発の瞬間に鳴らす音（空なら鳴らさない）
+    float bombSilenceSeconds = 0.4f; ///< 小さな爆発を出し終えてから大爆発までの静止
+    float finaleBlastSize = 1100.0f; ///< 大爆発が広がり切った時の大きさ
+    float finaleBlastSeconds = 0.6f; ///< 大爆発が広がって消えるまでの長さ
+    float bombHoldSeconds = 0.3f; ///< 大爆発から割れ始めるまでの長さ
+    std::string finaleFlash = "explosion"; ///< 大爆発の瞬間の画面フラッシュ
+    std::string finaleImpact = "explosion"; ///< 大爆発の瞬間のカメラ揺れ
+    std::string finaleSound; ///< 大爆発の瞬間に鳴らす音（空なら鳴らさない）
     float shatterSeconds = 3.2f; ///< ひびが広がって破片が散り、集まり直して結果画面になるまでの長さ
     float crackWidth = 0.005f; ///< ひびの線の太さ（画面の幅に対する割合）
     float shardSpeed = 0.9f; ///< 破片が落ちる速さ

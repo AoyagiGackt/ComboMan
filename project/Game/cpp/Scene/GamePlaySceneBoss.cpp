@@ -5,9 +5,12 @@
 #include "GamePlayScene.h"
 #include "EnemyTuning.h"
 #include "HitEffectLibrary.h"
+#include "ParticleFieldLibrary.h"
 #include "StageEditor.h"
 #include "StringUtility.h"
 #include <algorithm>
+#include <cmath>
+#include <random>
 
 namespace engine::game {
 namespace {
@@ -21,6 +24,14 @@ constexpr float kBossWarningPulseSeconds = 0.12f; // 身構えている間に輪
 constexpr float kBossTrailSeconds = 0.04f; // 走っている間に火花を出す間隔
 constexpr float kWaveSparkSeconds = 0.05f; // 衝撃波が走る所に土煙を出す間隔
 constexpr float kLeapHitHalfHeight = 1.5f; // 跳びかかりの着地の周りで、上下に届く半分の高さ
+constexpr float kVortexDebrisSeconds = 0.03f; // 渦が引き寄せている間に、まわりから土煙を出す間隔
+constexpr float kVortexDebrisRingRatio = 0.85f; // 土煙を出す円の半径（引き寄せる半径に対する割合）
+constexpr float kVortexDebrisSpreadY = 1.2f; // 土煙を出す高さのばらつき（渦の中心から上下）
+constexpr float kVortexWarningSeconds = 0.18f; // 引き寄せている間に、中心から輪を出す間隔
+constexpr float kVortexMinPullDistance = 0.3f; // これより中心に近いプレイヤーは引き寄せない（中心で震えないように）
+constexpr float kVortexPullReachY = 2.5f; // 渦の中心から上下にこの高さまでのプレイヤーを引き寄せる
+constexpr float kVortexBurstHalfHeight = 1.5f; // 弾けた時に上下に届く半分の高さ
+constexpr float kTwoPi = 6.28318530718f;
 } // namespace
 
 /** @brief その位置へボスを動かすと、壁にめり込むか足場の外へ出るか（ボスは高さが変わらないので、床の無い所へは行かせない） */
@@ -83,6 +94,7 @@ void GamePlayScene::UpdateStageBoss(float dt) {
     input.canSeePlayer = BossCanSeePlayer();
     BossFrameOutput output;
     bossDirector_.Update(dt, input, output);
+    KeepStageBossOnGround();
     // 今の技と区切りに合わせた動きをボスの体へ渡す（倒れたら外し、膝をつく姿勢に任せる）
     if (enemy_->IsDefeated()) {
         enemy_->ClearMotion();
@@ -96,6 +108,7 @@ void GamePlayScene::UpdateStageBoss(float dt) {
     if (output.staggerStarted) {
         fx.Impact(tuning.staggerImpact);
         fx.Ring(tuning.staggerRing, bossPosition);
+        ParticleFieldLibrary::Emit(pm_, "boss_stagger", bossPosition);
     }
     // 第2段階: 咆哮して体の色を変える
     if (output.rageStarted) {
@@ -103,6 +116,8 @@ void GamePlayScene::UpdateStageBoss(float dt) {
         fx.Flash(tuning.rageFlash);
         fx.Ring(tuning.rageRing, bossPosition);
         enemy_->SetColor(tuning.rageColor);
+        // 咆哮の風圧で、まわりの粒を渦を巻きながら吹き飛ばす
+        ParticleFieldLibrary::Emit(pm_, "boss_roar", bossPosition);
     }
     if (output.slamRequested) {
         bossSlamRequested_ = true;
@@ -134,6 +149,7 @@ void GamePlayScene::UpdateStageBoss(float dt) {
     if (output.waveStarted) {
         fx.Impact("boss_slam");
         fx.Ring("boss_slam_inner", bossPosition);
+        ParticleFieldLibrary::Emit(pm_, "boss_slam", bossPosition);
         for (const float dirX : { -1.0f, 1.0f }) {
             BossWave wave;
             wave.x = bossPosition.x;
@@ -146,9 +162,18 @@ void GamePlayScene::UpdateStageBoss(float dt) {
     if (output.leapLanded) {
         LandBossLeap(bossPosition);
     }
+    // 渦: 引き寄せている間は粒とプレイヤーを中心へ寄せ、時間が来たら弾けさせる
+    if (output.vortexPulling) {
+        UpdateBossVortexPull(dt, bossPosition, output.vortexProgress);
+    }
+    if (output.vortexBurst) {
+        BurstBossVortex(bossPosition);
+    }
     UpdateBossWaves(dt);
     // 走っている間は足元に火花を残し、体が当たったらダメージ
     if (output.rushing) {
+        // 走る後ろに、足元の火花や土煙を引きずる場を置く
+        ParticleFieldLibrary::Emit(pm_, "boss_charge", bossPosition, output.rushDirX);
         bossTrailTimer_ -= dt;
         if (bossTrailTimer_ <= 0.0f) {
             bossTrailTimer_ = kBossTrailSeconds;
@@ -159,6 +184,25 @@ void GamePlayScene::UpdateStageBoss(float dt) {
         }
     }
     UpdateStageBossHud(dt);
+}
+
+/**
+ * @brief ボスがふだんの動き（追いかける・ひるんで吹き飛ぶ）で壁にめり込むか足場の外へ出たら、最後に立てていた所へ戻す
+ * @note ボスは地形に合わせて高さを変えないので、追いかけて段差や足場の端を越えると宙に浮く。技の動きは進行役が自分で止める
+ */
+void GamePlayScene::KeepStageBossOnGround() {
+    if (enemy_ == nullptr || enemy_->IsDefeated() || enemy_->IsScripted() || enemy_->IsLaunched()) {
+        bossSafePosition_.reset();
+        return;
+    }
+    const Vector3 position = enemy_->GetPosition();
+    if (!IsBossBlockedAt(position)) {
+        bossSafePosition_ = position;
+        return;
+    }
+    if (bossSafePosition_) {
+        GetStageEditor().PlaceEnemyAt(enemy_, *bossSafePosition_);
+    }
 }
 
 /** @brief 当てた攻撃でボスが吹き飛んだりのけぞったりするか（ステージボスはひるんでいる間だけ。ラスボスは今までどおり） */
@@ -198,6 +242,8 @@ void GamePlayScene::UpdateBossWaves(float dt) {
             wave.sparkTimer = kWaveSparkSeconds;
             fx.Sparks(tuning.waveSparks, position);
         }
+        // 走る先端で土煙を押し上げる（このフレームだけの場を毎フレーム置き直して、衝撃波についていかせる）
+        ParticleFieldLibrary::Emit(pm_, "boss_wave", position, wave.dirX);
         // 足元から決めた高さまでに当たる（ジャンプで跳び越えればかわせる）
         const AABB box = { { wave.x - tuning.waveHalfWidth, wave.y, -kStageHalfDepth },
             { wave.x + tuning.waveHalfWidth, wave.y + tuning.waveHeight, kStageHalfDepth } };
@@ -220,9 +266,62 @@ void GamePlayScene::LandBossLeap(const Vector3& position) {
     fx.Impact("boss_slam");
     fx.Ring("boss_slam_outer", position, { .speed = tuning.leapRadius });
     fx.Sparks("boss_slam", position);
+    ParticleFieldLibrary::Emit(pm_, "boss_leap", position);
     const AABB area = { { position.x - tuning.leapRadius, position.y - kLeapHitHalfHeight, -kStageHalfDepth },
         { position.x + tuning.leapRadius, position.y + kLeapHitHalfHeight, kStageHalfDepth } };
     StrikePlayerFromBoss(area, position, tuning.leapDamage);
+}
+
+/** @brief 渦で引き寄せている間の1フレーム（まわりから土煙を出して吸い込ませ、プレイヤーも中心へ寄せる） */
+void GamePlayScene::UpdateBossVortexPull(float dt, const Vector3& bossPosition, float progress) {
+    const BossBattleTuning& tuning = BossBattleTuningStore::Get();
+    const HitEffectPlayer fx(pm_, &cameraShaker_, &rng_);
+    const Vector3 center = { bossPosition.x, bossPosition.y + tuning.vortexHeight, bossPosition.z };
+    // 粒を吸い込む渦の場（GPU パーティクルの更新が、範囲の中の粒を回しながら中心へ寄せる）
+    ParticleFieldLibrary::Emit(pm_, "boss_vortex", bossPosition);
+    // まわりの円の上から土煙を出す（出た粒が場に乗って渦を巻きながら吸い込まれる）
+    bossVortexDebrisTimer_ -= dt;
+    if (bossVortexDebrisTimer_ <= 0.0f) {
+        bossVortexDebrisTimer_ = kVortexDebrisSeconds;
+        std::uniform_real_distribution<float> angleDist(0.0f, kTwoPi);
+        std::uniform_real_distribution<float> heightDist(-kVortexDebrisSpreadY, kVortexDebrisSpreadY);
+        const float angle = angleDist(rng_);
+        const float ring = tuning.vortexPullRadius * kVortexDebrisRingRatio;
+        fx.Sparks(tuning.vortexDebris, { center.x + std::cos(angle) * ring, center.y + heightDist(rng_), center.z });
+    }
+    // 中心から輪を出して、弾けるまでの間を見せる
+    bossVortexWarningTimer_ -= dt;
+    if (bossVortexWarningTimer_ <= 0.0f) {
+        bossVortexWarningTimer_ = kVortexWarningSeconds;
+        fx.Ring(tuning.vortexWarningRing, center, { .speed = tuning.vortexBurstRadius });
+    }
+    // プレイヤーを中心へ寄せる（中心に近いほど強く、弾ける直前ほど強い。歩けば逆らえる程度）
+    const Vector3& playerPosition = player_->GetPosition();
+    const float dx = center.x - playerPosition.x;
+    const float distance = std::abs(dx);
+    const bool inReach = distance < tuning.vortexPullRadius && distance > kVortexMinPullDistance
+        && std::abs(playerPosition.y - center.y) < kVortexPullReachY;
+    if (!inReach || player_->IsInvincible()) {
+        return;
+    }
+    const float closeness = 1.0f - distance / tuning.vortexPullRadius;
+    const float step = tuning.vortexPullSpeed * (closeness + progress) * dt;
+    player_->AddExternalShiftX((dx > 0.0f ? 1.0f : -1.0f) * (std::min)(step, distance - kVortexMinPullDistance));
+}
+
+/** @brief 渦が弾けた瞬間（中心のまわりにダメージを出し、吸い込んだ粒を一気に吹き飛ばす） */
+void GamePlayScene::BurstBossVortex(const Vector3& bossPosition) {
+    const BossBattleTuning& tuning = BossBattleTuningStore::Get();
+    const HitEffectPlayer fx(pm_, &cameraShaker_, &rng_);
+    const Vector3 center = { bossPosition.x, bossPosition.y + tuning.vortexHeight, bossPosition.z };
+    fx.Impact("boss_slam");
+    fx.Ring("boss_slam_inner", center, { .speed = tuning.vortexBurstRadius });
+    fx.Ring("boss_slam_outer", center, { .speed = tuning.vortexBurstRadius });
+    fx.Sparks("boss_slam", center);
+    ParticleFieldLibrary::Emit(pm_, "boss_vortex_burst", bossPosition);
+    const AABB area = { { center.x - tuning.vortexBurstRadius, center.y - kVortexBurstHalfHeight, -kStageHalfDepth },
+        { center.x + tuning.vortexBurstRadius, center.y + kVortexBurstHalfHeight, kStageHalfDepth } };
+    StrikePlayerFromBoss(area, center, tuning.vortexDamage);
 }
 
 /** @brief ボスの叩きつけの範囲（第2段階で広がる） */

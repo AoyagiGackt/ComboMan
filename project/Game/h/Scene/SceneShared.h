@@ -17,6 +17,8 @@ class Input;
 }
 namespace engine::graphics {
 class Camera;
+class GlassShatterEffect;
+class Skydome;
 class ParticleManager;
 class Sprite;
 class SpriteCommon;
@@ -27,6 +29,7 @@ class Object3d;
 
 namespace engine::game {
 class FontRenderer;
+class StageEditor;
 class Player;
 class UILayout;
 class BulletPool;
@@ -34,6 +37,20 @@ class HitEffectPlayer;
 struct GunShotDef;
 
 namespace sceneShared {
+    /** @brief レベルに対応する空の画像を設定する（レベルの JSON の sky。書いていなければ既定の空） */
+    void ApplyStageSky(engine::graphics::Skydome* skydome, const std::string& levelPath);
+
+    /** @brief ステージエディタで空を選び直した時に、すぐ画面の空へ映す（シーンの空を作った後に一度呼ぶ） */
+    void ConnectStageSkyToEditor(StageEditor& editor, engine::graphics::Skydome* skydome);
+
+    /**
+     * @brief 画面を写し取る演出に、今の描画先（色の加工中はオフスクリーン、ふだんはバックバッファ）を教える
+     * @param effect 写し取る演出
+     * @param effects ポストエフェクトの候補（GetActiveRTVHandle と同じ並び）
+     */
+    void BindCaptureTarget(engine::graphics::GlassShatterEffect& effect,
+        const std::initializer_list<engine::graphics::IPostEffectSource*>& effects);
+
     /**
      * @brief 銃口から的へ飛ぶ見た目の弾を出す（弾数と拡散は段の定義に従い、粒の寿命のうちに的へ届く速さにする）
      * @param fx     粒を出す窓口
@@ -211,6 +228,10 @@ namespace sceneShared {
     void ToggleWeaponFusion(engine::Audio* audio);
     /** @brief オプション欄に出す武器の合体の状態表示（< ON > / < OFF >） */
     const char* WeaponFusionLabel();
+    /** @brief 振動の有効状態を切り替えて保存する */
+    void ToggleVibration(engine::Audio* audio);
+    /** @brief 振動の状態を表示する文字列を取得する */
+    const char* VibrationLabel();
 
     /**
      * @brief 武器一覧HUDと同じ体裁でシーン名の見出しだけを描画し、次に描画すべきY座標を返す

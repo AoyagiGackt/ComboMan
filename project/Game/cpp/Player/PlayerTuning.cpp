@@ -28,6 +28,7 @@ constexpr JsonField<PlayerTuning> kFields[] = {
     { "movement", "gravity", &PlayerTuning::gravity },
     { "movement", "jumpPower", &PlayerTuning::jumpPower },
     { "movement", "speed", &PlayerTuning::speed },
+    { "movement", "walkSpeedRatio", &PlayerTuning::walkSpeedRatio },
     { "movement", "minEnemyDistanceX", &PlayerTuning::minEnemyDistanceX },
     { "movement", "minEnemyDistanceY", &PlayerTuning::minEnemyDistanceY },
     { "movement", "invincibleDuration", &PlayerTuning::invincibleDuration },

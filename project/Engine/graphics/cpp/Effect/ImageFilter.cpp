@@ -63,6 +63,8 @@ void ImageFilter::Initialize(DirectXCommon* dxCommon, SrvManager* srvManager) {
 
     CreateOffscreenTexture(device, srvManager, width, height,
         sceneTexture_, sceneRtvHeap_, sceneRtvHandle_, sceneSrvIndex_);
+    // シーンの描き込み先の状態は、描画パスの宣言から RenderPassGraph が切り替える（作った直後は描画先の状態）
+    dxCommon->GetResourceStateTracker().Register(sceneTexture_.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET);
     CreateOffscreenTexture(device, srvManager, width, height,
         intermediateTexture_, intermediateRtvHeap_, intermediateRtvHandle_, intermediateSrvIndex_);
 
@@ -172,7 +174,8 @@ void ImageFilter::InitConstantBuffers(DirectXCommon* dxCommon, uint32_t width, u
 void ImageFilter::InitRootSignatures(DirectXCommon* dxCommon) {
     ID3D12Device* device = dxCommon->GetDevice();
 
-    D3D12_STATIC_SAMPLER_DESC sampler = pipelineHelper::MakePixelSampler(D3D12_FILTER_MIN_MAG_MIP_POINT,
+    // 内部解像度の絵をバックバッファの大きさへ引き伸ばして描くので、点で拾うと粗くなる。線形で補間する
+    D3D12_STATIC_SAMPLER_DESC sampler = pipelineHelper::MakePixelSampler(D3D12_FILTER_MIN_MAG_MIP_LINEAR,
         D3D12_TEXTURE_ADDRESS_MODE_CLAMP, D3D12_TEXTURE_ADDRESS_MODE_CLAMP, D3D12_TEXTURE_ADDRESS_MODE_CLAMP);
 
     // ブラー用 Root Signature（b0 + t0）
@@ -271,27 +274,25 @@ void ImageFilter::Finalize() {
     intermediateRtvHeap_.Reset();
     intermediateTexture_.Reset();
     sceneRtvHeap_.Reset();
+    if (dxCommon_ != nullptr) {
+        dxCommon_->GetResourceStateTracker().Unregister(sceneTexture_.Get());
+    }
     sceneTexture_.Reset();
 }
 
-/** @brief オフスクリーンテクスチャをレンダーターゲットとしてバインドし、シーン描画を開始する */
+/**
+ * @brief オフスクリーンテクスチャをレンダーターゲットとしてバインドし、シーン描画を開始する
+ * @note 描画先の状態への切り替えは、このパスの宣言から RenderPassGraph が入れる
+ */
 void ImageFilter::BeginScene() {
-    auto* cmd = dxCommon_->GetCommandList();
-    if (!isSceneFirstFrame_) {
-        DirectXCommon::TransitionBarrier(cmd, sceneTexture_.Get(),
-            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
-            D3D12_RESOURCE_STATE_RENDER_TARGET);
-    }
-    isSceneFirstFrame_ = false;
-
     pipelineHelper::BindSceneTarget(dxCommon_, sceneRtvHandle_);
 }
 
-/** @brief シーン描画を終了し、オフスクリーンテクスチャを SRV 状態に遷移する */
+/**
+ * @brief シーン描画を終了する
+ * @note 読む状態への切り替えは、合成するパスの宣言から RenderPassGraph が入れるので、ここでは何もしない
+ */
 void ImageFilter::EndScene() {
-    DirectXCommon::TransitionBarrier(dxCommon_->GetCommandList(), sceneTexture_.Get(),
-        D3D12_RESOURCE_STATE_RENDER_TARGET,
-        D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 }
 
 /** @brief 現在のモードに応じたフィルターをバックバッファに適用する */

@@ -3,6 +3,7 @@
  * @brief GamePlayScene のうち、武器の属性が敵に残る状態（燃焼・凍結など）、武器を手に入れた瞬間の演出、武器の合体と砕け、名前の表示
  */
 #include "GamePlayScene.h"
+#include "RunData.h"
 #include "CombatTuning.h"
 #include "CrashBreadcrumbs.h"
 #include "ElementEffect.h"
@@ -211,11 +212,15 @@ bool GamePlayScene::TryFuseAcquiredWeapon(WeaponManager::AcquireResult result, W
 /** @brief ボスから奪った武器をボスの枠へ入れる（空なら入れ、同じなら覚醒ゲージへ、別の種類なら主軸を選ぶ画面を出す） */
 void GamePlayScene::AcquireBossWeapon(WeaponType type) {
     WeaponManager* wm = WeaponManager::GetInstance();
-    const WeaponManager::BossAcquireResult result = wm->AcquireBossWeapon(type);
+    const WeaponManager::BossAcquireResult result = wm->AcquireBossWeapon(type, GameSettingsManager::GetInstance()->Get().weaponFusion);
     CrashBreadcrumbs::Add("game", "ボスの武器を入手（結果 " + std::to_string(static_cast<int>(result)) + "）");
     if (result == WeaponManager::BossAcquireResult::kAdded) {
         PlayWeaponAcquireEffect(type);
         hud_.Notify(HudEvent::kWeaponAcquired);
+        return;
+    }
+    if (result == WeaponManager::BossAcquireResult::kFusedSame) {
+        PlayWeaponFusionEffect(WeaponManager::kBossSlot, true);
         return;
     }
     if (result == WeaponManager::BossAcquireResult::kSame) {
@@ -284,7 +289,7 @@ void GamePlayScene::DrawBossMainChoice() {
         optionScale, bossChoiceKeepCurrent_ ? kBossChoiceSelectedColor : kBossChoiceOptionColor);
     drawCentered((bossChoiceKeepCurrent_ ? L"   " : L"▶ ") + swap, gameConstants::kScreenCenterX + kBossChoiceOptionOffsetX, centerY,
         optionScale, bossChoiceKeepCurrent_ ? kBossChoiceOptionColor : kBossChoiceSelectedColor);
-    drawCentered(std::wstring(input_->IsUsingGamepad() ? L"左右で選んで Aボタンで決める" : L"左右で選んで Enter か Space で決める") + L"（主軸の技で戦い、相棒の属性が乗る）",
+    drawCentered(std::wstring(input_->IsUsingGamepad() ? L"左右で選んで Aボタンで決める" : L"左右で選んで Enter か Space で決める") + L"（主軸の技で戦い、素材の属性が乗る）",
         gameConstants::kScreenCenterX, centerY + kBossChoiceHelpOffset, optionScale * kBossChoiceHelpScaleRatio, kBossChoiceOptionColor);
 }
 
@@ -314,6 +319,8 @@ void GamePlayScene::PlayWeaponFusionEffect(int slot, bool bossWeapon) {
             effect->EmitAcquire(ElementContext(), chest, ColorFromArray(weapon->effectColor));
         }
     }
+    // 合体図鑑に登録する（見出しには出さない）
+    RunData::GetInstance()->RecordFusion(static_cast<int>(base.type), static_cast<int>(partner->type), bossWeapon);
     // ボスの武器どうしの合体は見出しを変える
     const std::wstring heading = bossWeapon ? L"ボス武器の合体 " : L"合体 ";
     ShowWeaponBanner(heading + WeaponTypeLabel(base.type) + L"＋" + WeaponTypeLabel(partner->type), partnerColor);

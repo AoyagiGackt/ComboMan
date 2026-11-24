@@ -98,6 +98,26 @@ public:
     bool ResolveBlownAway(const std::vector<engine::AABB>& solids);
 
     /**
+     * @brief 宙にいる間（打ち上げ・跳ねる）の上下を地形に合わせる（頭が上の箱に当たったら止め、着地する高さを真下の床にする）
+     * @param solids 地形のブロック（敵の体を含まない。閉じた扉も含む）
+     * @note 宙にいる間は UpdateTerrain() が高さを見ないので、StopAtWallsEnteredThisFrame() の後に呼ぶ
+     */
+    void ResolveAirborneTerrain(const std::vector<engine::AABB>& solids);
+
+    /**
+     * @brief 跳ねて近づく（スライムなど。被弾の吹き飛びとは別なので、壁や高い所で止まっても倒れない）
+     * @param dirX   跳ぶ向き（+1 で +X）
+     * @param speedX 横の強さ（コンボの締めの吹き飛びと同じ単位）
+     * @param speedY 上の強さ（打ち上げと同じ単位）
+     */
+    void Hop(float dirX, float speedX, float speedY);
+
+    /** @brief 持ち場に縛らずプレイヤーを追うか（戦いが始まったステージのボス。離れて安全地帯にされないように） */
+    void SetChaseUnleashed(bool unleashed) {
+        chaseUnleashed_ = unleashed;
+    }
+
+    /**
      * @brief このフレームの横の動きで新しく壁へ入った・壁をまたいだ敵を、来た側の壁際で止める（勢いも消す）
      * @param solids 地形のブロック（敵の体を含まない。閉じた扉も含む）
      * @return 壁際で止めた時 true
@@ -166,6 +186,14 @@ public:
             weaponObject_->SetColor(color);
         }
     }
+
+    /**
+     * @brief 体と武器のふちを光らせる（味方のボスを敵と見分けるために使う）
+     * @param color 光の色
+     * @param power 鋭さ（大きいほど細いふち）
+     * @param intensity 強さ（0 以下なら光らせない）
+     */
+    void SetRimGlow(const Vector3& color, float power, float intensity);
 
     /**
      * @brief 上方向の初速を与えて打ち上げる
@@ -255,6 +283,36 @@ public:
     void ApplySlow(float seconds) {
         slowTimer_ = (std::max)(slowTimer_, seconds);
     }
+
+    /**
+     * @brief この敵の時間だけを遅くする（歩き・攻撃・吹き飛び・アニメのすべて。台本で動かしている間は遅くしない）
+     * @param seconds 遅くする長さ（秒）
+     * @param scale 遅い間に進める割合（0〜1）
+     */
+    void ApplyTimeSlow(float seconds, float scale);
+    /** @brief 時間が遅くなっている途中か */
+    bool IsTimeSlowed() const {
+        return timeSlowTimer_ > 0.0f;
+    }
+    /** @brief 横へ飛んでいる速さ（1フレームの距離。右が正） */
+    float GetKnockVelX() const {
+        return knockVelX_;
+    }
+    /** @brief 横へ飛んでいる速さを決め直す（ほかの敵に当たって勢いが落ちた時など） */
+    void SetKnockVelX(float velocity) {
+        knockVelX_ = velocity;
+    }
+    /** @brief 打ち上げか締めの大きな吹き飛びを受けて、まだ落ち着いていないか */
+    bool IsBlownAway() const {
+        return blownAway_;
+    }
+    /**
+     * @brief このフレームまでに壁か床で跳ね返っていれば、その場所を受け取って知らせを消す
+     * @param position 跳ね返った位置
+     * @param onWall 壁なら true、床なら false
+     * @return 跳ね返っていれば true
+     */
+    bool ConsumeBounce(Vector3& position, bool& onWall);
 
     /** @brief 予備動作が明けて弾を撃ち出す瞬間のフレームだけ true（弾の発射トリガー用） */
     bool JustFiredAttack() const {
@@ -472,10 +530,27 @@ public:
         // 置き直しは動きではないので、出現などで遠くへ移した時に途中の壁をまたいだと見なさないよう、動く前の位置もそろえる
         previousX_ = position.x;
     }
+    /** @brief 持ち場（出てきた位置）へ戻し、吹き飛びの勢いを止める（ステージの外へ出てしまった時に使う） */
+    bool ReturnHome() override;
 
 private:
     /** @brief 吹き飛び始めを記録する（もう吹き飛んでいる間は、最初に立っていた高さを残す） */
     void BeginBlownAway();
+    /** @brief 時間が遅い間に、このフレームを進めないなら true（進めないフレームは止まった時と同じ見た目の更新だけにする） */
+    bool SkipFrameForTimeSlow();
+    /**
+     * @brief 速く落ちてきて床に着いた時に、跳ね返らせる（吹き飛びの途中だけ）
+     * @param fallSpeed 着く直前の落ちる速さ（1フレームの距離）
+     * @return 跳ね返ったら true（まだ着地していない扱いにする）
+     */
+    bool TryFloorBounce(float fallSpeed);
+    /**
+     * @brief 速く壁にぶつかった時に、跳ね返らせる（吹き飛びの途中の、生きている敵だけ）
+     * @param hitSpeed ぶつかった時の横の速さ（1フレームの距離。右が正）
+     */
+    void TryWallBounce(float hitSpeed);
+    /** @brief 跳ね返ったことをシーンへ知らせる印を付ける */
+    void MarkBounce(bool onWall);
 
     // 攻撃間隔・索敵距離・重力などのゲームプレイ調整値はResources/Config/enemy_params.json（EnemyTuning::Basic()）で持つ。
     // ここに残す定数は見た目（装備の位置・傾き・被弾リアクションの倍率）だけ
@@ -529,6 +604,7 @@ private:
     static constexpr float kSwitchPullClamp = 0.32f; // 引き込み速度の上限
     static constexpr float kSwitchPullAirComboBonus = 0.18f; // 吸い寄せ時に伸びる空中コンボ猶予
     static constexpr float kKnockDirXScale = 0.055f; // 通常ノックバックの反映倍率
+    static constexpr float kHeadHitMargin = 0.01f; // 宙で頭が上の箱に当たった時に、箱の下面から空けるすき間
     static constexpr float kFinisherKnockDirXScale = 0.3f; // コンボの締めで吹き飛ばす時の反映倍率
 
     // 被弾硬直（のけぞり姿勢と、硬直明けに即反撃しないための猶予）
@@ -656,6 +732,7 @@ private:
     bool justLanded_ = false;
     float launchOriginY_ = 0.0f; ///< 打ち上げ直前のpos_.y（着地時にここへ戻す。Launch()の最初の呼び出しでだけ更新する）
     bool blownAway_ = false; ///< 打ち上げか締めの大きな吹き飛びを受けて、まだ落ち着いていないか
+    bool chaseUnleashed_ = false; ///< 持ち場からの距離に関係なくプレイヤーを追うか
     float blownFromY_ = 0.0f; ///< 吹き飛ぶ前に立っていた高さ（落ち着いた先がこれより高すぎれば届かない所とみなす）
     float blownSettleTimer_ = 0.0f; ///< 吹き飛びが止まってからの秒数（地形に合わせ終わるのを待つ）
     float previousX_ = 0.0f; ///< このフレームに動く前の横位置（吹き飛んで壁を突き抜けたかを調べる）
@@ -697,6 +774,14 @@ private:
     const IArchetype* archetype_ = nullptr; ///< コンストラクタでbasicを入れる
     float knockVelX_ = 0.0f;
     float slowTimer_ = 0.0f;
+    float timeSlowTimer_ = 0.0f; ///< この敵の時間が遅い残り秒数
+    float timeSlowScale_ = 1.0f; ///< 時間が遅い間に進める割合
+    float timeSlowAccumulator_ = 0.0f; ///< 進める割合の積み上げ（1を超えたらそのフレームを進める）
+    int wallBouncesLeft_ = 0; ///< 今の吹き飛びで、あと何回壁に跳ね返れるか
+    int floorBouncesLeft_ = 0; ///< 今の吹き飛びで、あと何回床で跳ねられるか
+    bool bouncePending_ = false; ///< 跳ね返ったのをシーンがまだ読んでいないか
+    bool bounceOnWall_ = false; ///< 最後に跳ね返ったのが壁か
+    Vector3 bouncePosition_ {}; ///< 最後に跳ね返った位置
     EnemyElementStatus elementStatus_; ///< 属性で残った状態
     float statusSpeedScale_ = 1.0f; ///< 属性の状態で歩く速さに掛ける倍率
     float airComboTimer_ = 0.0f;

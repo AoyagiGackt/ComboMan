@@ -3,6 +3,7 @@
  * @brief アプリケーションのメインループ・基盤システム初期化と終了処理（Framework）の実装
  */
 #include "Framework.h"
+#include "GamepadRumble.h"
 #include "AssetPack.h"
 #include "CrashBreadcrumbs.h"
 #include "FrameProfiler.h"
@@ -43,13 +44,19 @@ void Framework::Run() {
     }
     while (true) {
         FrameProfiler::GetInstance()->BeginFrame();
-        Update();
+        {
+            const ScopedFramePhase phase(FramePhase::kUpdate);
+            Update();
+        }
 
         if (IsEndRequest()) {
             break;
         }
 
-        Draw();
+        {
+            const ScopedFramePhase phase(FramePhase::kDraw);
+            Draw();
+        }
         FrameProfiler::GetInstance()->EndFrame();
     }
 
@@ -90,6 +97,7 @@ void Framework::Initialize() {
 
 /** @brief システムの更新処理 */
 void Framework::Update() {
+    GamepadRumble::GetInstance()->Update(GamepadRumble::RealDeltaSeconds());
     // 直前の出来事の記録が何フレーム目のことか分かるよう、最初にフレームを進める
     CrashBreadcrumbs::NextFrame();
     input_->Update();
@@ -109,6 +117,7 @@ void Framework::Update() {
 
 /** @brief システムの終了処理 */
 void Framework::Finalize() {
+    GamepadRumble::GetInstance()->Stop();
     // ImGuiの終了
     if (imguiManager_) {
         imguiManager_->Finalize();

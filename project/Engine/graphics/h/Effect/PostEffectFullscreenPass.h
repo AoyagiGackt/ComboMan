@@ -27,6 +27,8 @@ public:
     virtual void Apply(SrvManager* srvManager) = 0;
     /** @brief シーンを描き込むRTVのハンドルを返す */
     virtual D3D12_CPU_DESCRIPTOR_HANDLE GetSceneRTVHandle() const = 0;
+    /** @brief シーンを描き込むテクスチャを返す（画面を写し取る演出が、バックバッファの代わりにここから写す） */
+    virtual ID3D12Resource* GetSceneTexture() const = 0;
 };
 
 // シーンをオフスクリーンに描画し、フルスクリーンPSで加工してバックバッファへ合成する処理の共通基盤
@@ -38,11 +40,11 @@ class PostEffectFullscreenPass : public IPostEffectSource {
 public:
     /**
      * @brief オフスクリーンRTV（＋共有深度バッファ）をレンダーターゲットに設定しクリアする
-     * @note 3D描画の前に呼ぶ、2回目以降の呼び出しはリソースをRTV状態へ遷移させる
+     * @note 3D描画の前に呼ぶ。描画先の状態への切り替えは RenderPassGraph がパスの宣言から入れる
      */
     void BeginScene() override;
     /**
-     * @brief オフスクリーンテクスチャをピクセルシェーダーリソース状態へ遷移させる
+     * @brief シーン描画を終了する（読む状態への切り替えは RenderPassGraph がパスの宣言から入れる）
      * @note 3D描画の後、Apply() の前に呼ぶ
      */
     void EndScene() override;
@@ -65,6 +67,10 @@ public:
     D3D12_CPU_DESCRIPTOR_HANDLE GetSceneRTVHandle() const override {
         return rtvHandle_;
     }
+    /** @brief シーンを描き込むテクスチャを返す */
+    ID3D12Resource* GetSceneTexture() const override {
+        return sceneTexture_.Get();
+    }
 
 protected:
     /** @brief 全画面パスの描画資源が未確保の状態を作る */
@@ -86,7 +92,6 @@ private:
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> rtvHeap_;
     D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle_ = { };
     uint32_t srvIndex_ = UINT32_MAX;
-    bool isFirstFrame_ = true;
 
     Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> pipelineState_;

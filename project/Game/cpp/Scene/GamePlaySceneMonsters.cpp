@@ -3,6 +3,7 @@
  * @brief 道中のモンスターの個性の動き（ドラゴンは火を吐く・スケルトンは骨を投げる・スライムは跳ねる・コウモリは急降下）
  */
 #include "GamePlayScene.h"
+#include "EnemyEffectLibrary.h"
 #include "GameConstants.h"
 #include "HitEffectLibrary.h"
 #include "MonsterTraitTuning.h"
@@ -75,8 +76,10 @@ void GamePlayScene::UpdateMonsterTrait(WeaponEnemyEntry& entry, const MonsterTra
         }
         // 跳ねるは身構えずにすぐ跳ぶ
         if (data.trait == MonsterTrait::kHop) {
-            enemy.ApplyComboReaction(SignOf(ppos.x - epos.x) * data.hopX, data.hopY, false, ppos.x, true);
+            // 被弾の吹き飛びとは別の跳び方にする（吹き飛びの扱いだと、壁際で倒れたり地形を見ずに着地したりする）
+            enemy.Hop(SignOf(ppos.x - epos.x), data.hopX, data.hopY);
             fx.SparksIfNamed(data.actSparks, epos);
+            EnemyEffectLibrary::EmitAttack({ pm_, &rng_ }, EnemyEffectLibrary::KindOf(enemy), epos, SignOf(ppos.x - epos.x));
             state.timer = data.interval;
             return;
         }
@@ -119,6 +122,8 @@ void GamePlayScene::PerformMonsterTrait(WeaponEnemyEntry& entry, const MonsterTr
     const Vector3 mouth = { epos.x, epos.y + data.launchHeight, epos.z };
     const HitEffectPlayer fx(pm_, &cameraShaker_, &rng_);
     fx.Sparks(data.actSparks, mouth);
+    // 種類ごとの GPU パーティクル（火を吐く・骨を投げる・急降下を始める瞬間）
+    EnemyEffectLibrary::EmitAttack({ pm_, &rng_ }, EnemyEffectLibrary::KindOf(enemy), mouth, SignOf(ppos.x - epos.x));
     state.phase = MonsterTraitState::Phase::kIdle;
     state.timer = data.interval;
     // 火を吐く（まっすぐ扇状）と骨を投げる（山なり）は、共通の弾を出す処理で出す

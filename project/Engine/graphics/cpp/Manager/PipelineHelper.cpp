@@ -619,6 +619,7 @@ void BindSceneTarget(DirectXCommon* dxCommon, const D3D12_CPU_DESCRIPTOR_HANDLE&
     auto* cmd = dxCommon->GetCommandList();
     const auto dsv = dxCommon->GetDsvHandle();
     cmd->OMSetRenderTargets(1, &rtv, FALSE, &dsv);
+    dxCommon->SetActiveDepthTarget(DirectXCommon::DepthTarget::kScene);
     cmd->ClearRenderTargetView(rtv, kOffscreenClearColor, 0, nullptr);
     SetClientViewportAndScissor(cmd);
 }

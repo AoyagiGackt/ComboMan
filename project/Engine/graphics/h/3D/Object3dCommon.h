@@ -146,6 +146,10 @@ public:
      */
     void ClearPointLights() {
         pointLightCount_ = 0;
+        // 数はここで書いておく（描画のたびに書くと、複数のスレッドで描く時に同じ所へ同時に書くことになる）
+        if (pointLightData_) {
+            pointLightData_->count = pointLightCount_;
+        }
     }
 
     /**
@@ -156,6 +160,7 @@ public:
     void AddPointLight(const PointLight& light) {
         if (pointLightCount_ < kMaxPointLights && pointLightData_) {
             pointLightData_->lights[pointLightCount_++] = light;
+            pointLightData_->count = pointLightCount_;
         }
     }
 
@@ -176,8 +181,10 @@ private:
         Vector3 ambientColor;
         float ambientIntensity;
     };
-    Microsoft::WRL::ComPtr<ID3D12Resource> lightResource_;
-    DirectionalLight* lightData_ = nullptr; ///< Map 済みポインタ
+    // ライトの値は CPU 側に持ち、束縛するたびにこのフレーム用のアップロード領域へ写す
+    // （Map したままの1本を書き換えると、GPU が前のフレームを読んでいる間に上書きする恐れがあるため）
+    DirectionalLight light_ { }; ///< 平行光源の今の値
+    DirectionalLight* lightData_ = nullptr; ///< light_ を指す（初期化前は nullptr）
 
     // ポイントライト群
     /**
@@ -191,8 +198,8 @@ private:
     static_assert(sizeof(PointLightBuffer) == 16 + 48 * 8,
         "PointLightBuffer size mismatch with HLSL");
 
-    Microsoft::WRL::ComPtr<ID3D12Resource> pointLightResource_;
-    PointLightBuffer* pointLightData_ = nullptr; ///< Map 済みポインタ
+    PointLightBuffer pointLights_ { }; ///< ポイントライト群の今の値
+    PointLightBuffer* pointLightData_ = nullptr; ///< pointLights_ を指す（初期化前は nullptr）
 
     bool manualLightOverride_ = false; ///< true のとき UpdateLight() をスキップする
     UINT pointLightCount_ = 0; ///< AddPointLight で増える現在のライト数

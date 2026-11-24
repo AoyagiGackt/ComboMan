@@ -27,8 +27,8 @@ struct MeleeAttackDef {
     int hitStop; ///< ヒットストップのフレーム数
     float animSpeed; ///< プレイヤー攻撃アニメの再生速度倍率
     bool slashAnim; ///< true=斬撃アニメ / false=パンチアニメ
-    Vector3 swingFrom; ///< 武器グリップ回転オフセットの振りかぶり側（ラジアン）
-    Vector3 swingTo; ///< 武器グリップ回転オフセットの振り抜き側（ラジアン）
+    Vector3 swingFrom; ///< 振りの向きの目安の振りかぶり側（ラジアン。刃の向きは combo_motion.json の手の骨で付けるので、刃先の記録が無い時の斬撃線の向きの推定にだけ使う）
+    Vector3 swingTo; ///< 振りの向きの目安の振り抜き側（ラジアン）
     Vector3 bodyLeanFrom; ///< 体（rig_->object）の傾きオフセットの振りかぶり側（ラジアン、X=前後/Z=左右）
     Vector3 bodyLeanTo; ///< 体の傾きオフセットの振り抜き側（ラジアン）
     float bodyTurns = 0.0f; ///< 振り抜きまでに体をその場で何回転させるか（負で逆回り、回転斬り用）
@@ -51,11 +51,30 @@ inline float MeleeKnockDirSign(const MeleeAttackDef* attack) {
 const MeleeComboSet& GetMeleeComboSet(WeaponType type);
 
 /**
+ * @brief 武器タイプに対応するコンボ一式を返す（ボスの武器を振っていて、その種類に専用のコンボがあればそちら）
+ * @param type       武器タイプ
+ * @param bossWeapon ボスの枠の武器を振っているか（MeleeBossCombo.cpp の表を使う）
+ */
+const MeleeComboSet& GetMeleeComboSet(WeaponType type, bool bossWeapon);
+
+/** @brief ボスの武器を自分で振る時のコンボを返す（その種類に専用のコンボが無ければ nullptr） */
+const MeleeComboSet* GetBossMeleeComboSet(WeaponType type);
+
+/**
  * @brief 段がその武器のコンボの締め（地上/空中の最終段、または打ち上げ技）かを返す
  * @param type   武器タイプ
  * @param attack 判定する段（nullptrならfalse）
  */
 bool IsMeleeFinisher(WeaponType type, const MeleeAttackDef* attack);
+
+/**
+ * @brief 合体しているかも見て、段がコンボの締めかを返す
+ * @param type   武器タイプ
+ * @param attack 判定する段（nullptrならfalse）
+ * @param fused  今の武器が合体しているか（合体中は最後に素材の武器の締めが1段増えるので、土台の最後の段は締めにしない）
+ * @param bossWeapon ボスの枠の武器を振っているか（ボスの武器の専用のコンボの最後の段で見る）
+ */
+bool IsMeleeFinisher(WeaponType type, const MeleeAttackDef* attack, bool fused, bool bossWeapon);
 
 /**
  * @brief 武器の固有技の連撃表を返す（入力なしで先頭から最後まで自動で進み、最終段で敵を打ち飛ばす）
@@ -79,6 +98,26 @@ public:
      * @return 攻撃開始・段送り・先行入力バッファのいずれかで受理されたら true
      */
     bool TryAttack(WeaponType type, bool launcherInput, bool airborne);
+
+    /**
+     * @brief 合体している素材の武器を決める（合体中はコンボの最後に、素材の武器の締めが1段増える）
+     * @param partnerType 素材の武器の種類（WeaponType の番号。合体していなければ負の値）
+     * @param partnerIsBoss 素材がボスの武器か（ボスの武器の専用のコンボの締めを使う）
+     */
+    void SetFusionPartner(int partnerType, bool partnerIsBoss) {
+        fusionPartnerType_ = partnerType;
+        fusionPartnerBoss_ = partnerIsBoss;
+    }
+    /**
+     * @brief ボスの枠の武器を振っているかを決める（振っていればボスの武器の専用のコンボを使う）
+     * @note ふつうの武器とボスの武器を持ち替えたら、同じ種類でもコンボは最初から
+     */
+    void SetBossWeapon(bool bossWeapon) {
+        if (bossWeapon != bossWeapon_) {
+            Reset();
+        }
+        bossWeapon_ = bossWeapon;
+    }
 
     /** @brief 1フレーム進める（ヒット発火・先行入力の消化・モーション終了処理） */
     void Update(float dt);
@@ -149,14 +188,11 @@ public:
         return lungeDelta_;
     }
 
-    /** @brief 現在のスイング回転オフセットを返す（振りかぶり→振り抜き→構え直しの補間） */
-    Vector3 GetSwingOffset() const;
-
     /** @brief 現在の体の傾きオフセットを返す（同じ振りかぶり→振り抜き→構え直しのタイミングで補間） */
     Vector3 GetBodyLeanOffset() const;
 
 private:
-    /** @brief GetSwingOffset/GetBodyLeanOffset共通: 振りかぶり→振り抜き→構え直しの3相でfrom/toを補間する */
+    /** @brief GetBodyLeanOffset用: 振りかぶり→振り抜き→構え直しの3相でfrom/toを補間する */
     Vector3 BlendPhase(const Vector3& from, const Vector3& to) const;
 
     /**
@@ -173,9 +209,17 @@ private:
     const MeleeAttackDef* NextStep(bool launcherInput, bool airborne, int& outIdx, bool& outLauncher) const;
     /** @brief 次に出すべき段をすぐ始める（出せる段が無ければ false） */
     bool StartNextStep(bool launcherInput, bool airborne);
+    /**
+     * @brief 合体中にコンボの最後へ足す、素材の武器の締めの段を返す（合体していないか、素材に締めが無ければ nullptr）
+     * @param airborne 空中のコンボか（空中なら素材の空中の締め）
+     */
+    const MeleeAttackDef* FusionFinisherStep(bool airborne) const;
 
     const MeleeAttackDef* active_ = nullptr;
     WeaponType type_ { };
+    int fusionPartnerType_ = -1; ///< 合体している素材の武器の種類（WeaponType の番号。負なら合体していない）
+    bool fusionPartnerBoss_ = false; ///< 素材がボスの武器か
+    bool bossWeapon_ = false; ///< ボスの枠の武器を振っているか（専用のコンボを使う）
     bool airMode_ = false; ///< 空中コンボ表を使用中か
     bool launcherMode_ = false; ///< 打ち上げ技を再生中か
     int stepIdx_ = 0; ///< 現在のテーブル内インデックス

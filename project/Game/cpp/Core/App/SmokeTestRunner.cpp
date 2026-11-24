@@ -4,6 +4,7 @@
  */
 #include "SmokeTestRunner.h"
 #include "CrashBreadcrumbs.h"
+#include "FrameProfiler.h"
 #include "GameConstants.h"
 #include "GameRules.h"
 #include "Input.h"
@@ -46,6 +47,9 @@ constexpr size_t kReportPathCapacity = 256;
 constexpr int kMillisecondsPerSecond = 1000;
 constexpr int kMaxUpdatesPerDraw = 16; // 1回描くごとに進める回数の上限（上げすぎると画面がほとんど動かず様子が見えない）
 constexpr int kKeepAliveHpDivisor = 2; // keepPlayerAlive の時、体力がこの分の1を切ったら全快させる
+constexpr int kDefaultMaxVisitsPerStage = 12; // 1つのステージで近くへ移って試す配置物の数の上限の既定値
+constexpr float kDefaultVisitOffset = 1.5f; // 配置物からどれだけ左に移るかの既定値
+constexpr float kDefaultVisitRaise = 1.0f; // 配置物からどれだけ上に移るかの既定値（落ちて床に立つ）
 
 /** @brief 秒をフレーム数に直す（少なくとも1フレーム） */
 int SecondsToFrames(float seconds) {
@@ -149,6 +153,21 @@ bool SmokeTestRunner::StartIfRequested(engine::Input* input) {
     keepPlayerAlive_ = script.value("keepPlayerAlive", false);
     // 描くのを間引いて速く回す（ゲームの時間は1回ごとに決まった長さだけ進むので、何回進めても動きは同じ）
     updatesPerDraw_ = std::clamp(script.value("speed", 1), 1, kMaxUpdatesPerDraw);
+    maxVisitsPerStage_ = (std::max)(0, script.value("maxVisitsPerStage", kDefaultMaxVisitsPerStage));
+    visitOffset_ = script.value("visitOffset", kDefaultVisitOffset);
+    visitRaise_ = script.value("visitRaise", kDefaultVisitRaise);
+    visitSkipKinds_.clear();
+    for (const nlohmann::json& kind : script.value("visitSkipKinds", nlohmann::json::array())) {
+        if (kind.is_string()) {
+            visitSkipKinds_.push_back(kind.get<std::string>());
+        }
+    }
+    // バグ探しの時は、前回の記録から変えた所だけを遊ぶ
+    const std::wstring commandLine = GetCommandLineW();
+    bugHunt_ = commandLine.find(kBugHuntFlag) != std::wstring::npos;
+    if (bugHunt_) {
+        PrepareChanges(commandLine);
+    }
     steps_.clear();
     AppendSteps(script["steps"], 0);
     SuppressErrorDialogs();
@@ -164,6 +183,10 @@ bool SmokeTestRunner::StartIfRequested(engine::Input* input) {
     switchCountAtStep_ = lastSwitchCount_;
     Logger::LogInfo("[SmokeTest] 自動テストを始めます（" + scriptPath_ + "、手順 " + std::to_string(steps_.size())
         + " 個、種 " + std::to_string(seed_) + "、速さ " + std::to_string(updatesPerDraw_) + " 倍）");
+    if (bugHunt_) {
+        Logger::LogInfo("[SmokeTest] 回す所: " + changes_.Summary());
+        log_.push_back("回す所: " + changes_.Summary());
+    }
     CrashBreadcrumbs::Add("smoke", "自動テスト開始");
     return true;
 }
@@ -288,8 +311,13 @@ bool SmokeTestRunner::Update() {
     sContext = "手順 " + std::to_string(stepIndex_ + 1) + "（" + step.label + "）画面 " + SceneManager::GetInstance()->GetCurrentSceneName()
         + (RunData::GetInstance()->IsTutorialActive() ? std::string(" チュートリアル")
                                                        : " ステージ " + std::to_string(RunData::GetInstance()->GetPlayFloor() + 1));
+    if (step.action == "visitChanged" && !visitLabel_.empty()) {
+        sContext += " " + visitLabel_;
+    }
     // ステージの中だけの手順は、自分でクリアした・やられてリトライした等で画面が変わっていたら飛ばして次のステージへ進む
-    const bool skipped = step.sameStage && HasLeftStage();
+    // 変えていないステージを飛ばしている間は、ステージに入るのを待つ手順も飛ばす
+    const bool skippedStage = skippingStage_ && (step.sameStage || (step.action == "waitScene" && step.scene == kGameplaySceneName));
+    const bool skipped = skippedStage || (step.sameStage && HasLeftStage());
     const bool done = skipped || UpdateStep(step);
     if (finished_) {
         return true;
@@ -297,7 +325,7 @@ bool SmokeTestRunner::Update() {
     ++stepFrame_;
     if (done) {
         log_.push_back((skipped ? "--  手順 " : "OK  手順 ") + std::to_string(stepIndex_ + 1) + " (" + std::to_string(stepFrame_) + " フレーム): " + step.label
-            + (skipped ? "（ステージから画面が変わったので飛ばした）" : ""));
+            + (skippedStage ? "（変えていないステージなので飛ばした）" : (skipped ? "（ステージから画面が変わったので飛ばした）" : "")));
         ReleaseKeys();
         sExpectProgress = false;
         ++stepIndex_;
@@ -383,6 +411,12 @@ bool SmokeTestRunner::UpdateStep(const Step& step) {
     if (step.action == "enterTutorial") {
         return EnterTutorial();
     }
+    if (step.action == "enterFinalBoss") {
+        return EnterFinalBoss(step);
+    }
+    if (step.action == "visitChanged") {
+        return UpdateVisit(step);
+    }
     if (step.action == "grantBossWeapon") {
         return GrantBossWeapon(step.weapon);
     }
@@ -434,6 +468,12 @@ bool SmokeTestRunner::EnterNextStage() {
         inStage_ = false;
         return true;
     }
+    // 前回から変えていないステージは遊ばずに、クリアした扱いで進める
+    if (!changes_.IsStageSelected(GameRules::GetInstance()->LevelPathForFloor(floor, std::string()))) {
+        SkipFloor(floor);
+        return true;
+    }
+    skippingStage_ = false;
     // マップと同じく、最初は通常・途中は強敵・最後はボス扱いのマスとして入る
     const int lastFloor = stageCount - 1;
     const RunData::NodeType node = floor == lastFloor ? RunData::NodeType::kBoss
@@ -459,6 +499,15 @@ bool SmokeTestRunner::EnterTutorial() {
         log_.push_back("    チュートリアルが無いので飛ばす");
         return true;
     }
+    // 前回から変えていなければ入らずに、チュートリアルの中の手順を飛ばす
+    if (!changes_.IsStageSelected(GameRules::GetInstance()->Get().tutorialLevelPath)) {
+        log_.push_back("    チュートリアルは前回から変えていないので飛ばす");
+        skippingStage_ = true;
+        inStage_ = false;
+        pendingStageEntry_ = false;
+        return true;
+    }
+    skippingStage_ = false;
     MapScene::BeginTutorial();
     SceneManager::GetInstance()->ChangeScene(kGameplaySceneName);
     pendingStageEntry_ = true;
@@ -524,8 +573,22 @@ void SmokeTestRunner::CheckFrameHitch() {
     const float seconds = std::chrono::duration<float>(now - last).count();
     if (seconds >= kHitchSeconds) {
         ReportIssue("固まりかけ", SceneManager::GetInstance()->GetCurrentSceneName(),
-            "1フレームに " + std::to_string(static_cast<int>(seconds * kMillisecondsPerSecond)) + " ミリ秒かかった");
+            "1フレームに " + std::to_string(static_cast<int>(seconds * kMillisecondsPerSecond)) + " ミリ秒かかった" + DescribeFramePhases());
     }
+}
+
+/** @brief どの段階で時間がかかったかの文（前のフレームの更新・描画と、このフレームの始まりからの時間） */
+std::string SmokeTestRunner::DescribeFramePhases() {
+    using engine::graphics::FramePhase;
+    const auto* profiler = engine::graphics::FrameProfiler::GetInstance();
+    const auto ms = [](float value) {
+        return std::to_string(static_cast<int>(value));
+    };
+    return "（前のフレーム: 更新 " + ms(profiler->GetLastPhaseMs(FramePhase::kUpdate))
+        + " ・描画 " + ms(profiler->GetLastPhaseMs(FramePhase::kDraw))
+        + " のうち GPU 待ち " + ms(profiler->GetLastPhaseMs(FramePhase::kGpuWait))
+        + " ・画面へ出す " + ms(profiler->GetLastPhaseMs(FramePhase::kPresent))
+        + "、このフレームの始まりから " + ms(profiler->GetMsSinceFrameStart()) + " ミリ秒）";
 }
 
 /** @brief keepPlayerAlive の時、体力が減りすぎたら全快させて最後まで回れるようにする（ダメージ自体は受ける） */
@@ -612,6 +675,13 @@ void SmokeTestRunner::WriteReport(bool passed, const std::string& reason) const 
         report << "理由: " << reason << '\n';
     }
     report << "手順の表: " << scriptPath_ << "  ランダムの種: " << seed_ << '\n';
+    if (bugHunt_) {
+        report << "回した所: " << changes_.Summary() << "、近くで試した配置物 " << visitedCount_ << " 個\n";
+        // 最後まで回った時だけ、次に比べる記録を書く（起動役が全部の回を終えてから置き換える）
+        if (passed) {
+            changes_.WriteNextState();
+        }
+    }
     report << "かかったフレーム数: " << totalFrames_ << "（約 " << static_cast<int>(static_cast<float>(totalFrames_) * gameConstants::kFrameDeltaTime) << " 秒）\n";
     report << "見つけたおかしな所: " << sIssues.size() << " 件\n";
     report << "--- 見つけたおかしな所（見つけた順） ---\n";

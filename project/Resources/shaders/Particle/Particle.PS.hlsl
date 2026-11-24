@@ -1,7 +1,17 @@
 #include "Particle.hlsli"
 
 Texture2D<float4> gTexture : register(t1);
+Texture2D<float> gSceneDepth : register(t2); // 粒を描く前に写し取った、描き終えた物の深度
 SamplerState gSampler : register(s0);
+
+// ソフトパーティクルの設定（C++ の SoftParticleConstants と同じ並び）
+cbuffer SoftParticleConstants : register(b0)
+{
+    float gDepthA; // 射影行列の m[2][2]（深度から奥行きへ戻すのに使う）
+    float gDepthB; // 射影行列の m[3][2]
+    float gSoftRange; // 後ろの物にこの奥行きまで近づくと薄くなり始める
+    uint gSoftEnabled; // 1 ならソフトパーティクルにする
+};
 
 struct PixelShaderOutput
 {
@@ -48,6 +58,15 @@ PixelShaderOutput main(VertexShaderOutput input)
     // エッジをソフトにフェード
     if (useMask)
         output.color.a *= 1.0f - smoothstep(0.6f, 1.0f, dist);
+
+    // ソフトパーティクル: 後ろの床や壁に近い所ほど薄くして、板が刺さった直線の境目を消す
+    if (gSoftEnabled != 0u)
+    {
+        float sceneDevice = gSceneDepth.Load(int3(int2(input.position.xy), 0));
+        // 深度 = A + B / 奥行き なので、奥行き = B / (深度 - A)
+        float sceneView = gDepthB / (sceneDevice - gDepthA);
+        output.color.a *= saturate((sceneView - input.viewDepth) / gSoftRange);
+    }
 
     if (output.color.a == 0.0f)
         discard;

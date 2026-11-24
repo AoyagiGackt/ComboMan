@@ -143,6 +143,12 @@ void Player::HandleMeleeCombat(Input* input, const Vector3& enemyPos) {
         } else {
             const bool launcherInput = input->PushAction(Input::Action::kDown)
                 || autoCombo_.WantsLauncher(wm->GetCurrent().type, meleeCombo_, !onGround_);
+            // 合体していれば、コンボの最後に素材の武器の締めが1段増える
+            // ボスの枠の武器を振っている時は、ボスの武器の専用のコンボを使う（素材もボスの武器）
+            const bool bossWeapon = wm->IsBossSlotSelected();
+            meleeCombo_.SetBossWeapon(bossWeapon);
+            const WeaponData* fusionPartner = wm->GetCurrentFusionPartner();
+            meleeCombo_.SetFusionPartner(fusionPartner != nullptr ? static_cast<int>(fusionPartner->type) : -1, bossWeapon);
             const bool accepted = meleeCombo_.TryAttack(wm->GetCurrent().type, launcherInput, !onGround_);
             if (accepted && weaponSwitchAttackPending_) {
                 weaponSwitchAttackPending_ = false;

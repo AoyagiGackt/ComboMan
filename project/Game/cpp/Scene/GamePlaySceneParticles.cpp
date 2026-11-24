@@ -19,6 +19,7 @@
 #include "HsvFilter.h"
 #include "ImGuiControlPanel.h"
 #include "ImageFilter.h"
+#include "ParticleFieldLibrary.h"
 #include "ParticleManager.h"
 #include "PipelineStateGuard.h"
 #include "PlayerBridge.h"
@@ -513,7 +514,8 @@ void GamePlayScene::UpdateBossSlamAttack(float dt) {
         fx.Impact("boss_slam");
     }
 
-    // 内側と外側（半径の倍率はレシピの speed）の2重のリングと火花
+    // 内側と外側（半径の倍率はレシピの speed）の2重のリングと火花。叩きつけの衝撃でまわりの粒を押し広げる
+    ParticleFieldLibrary::Emit(pm_, "boss_slam", bossSlamTargetPos_);
     fx.Ring("boss_slam_inner", bossSlamTargetPos_, { .speed = slamRadius });
     fx.Ring("boss_slam_outer", bossSlamTargetPos_, { .speed = slamRadius });
     fx.Sparks("boss_slam", bossSlamTargetPos_);

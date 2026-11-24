@@ -42,13 +42,9 @@ constexpr float kAllyHpBarGreenScale = 0.5f;
 constexpr float kAllyHpBarGreenBase = 0.5f;
 constexpr float kAllyHpBarAlpha = 0.9f;
 constexpr Vector4 kAllyHpBarBackColor = { 0.05f, 0.15f, 0.25f, 0.85f };
-constexpr float kTwoPlayerMarkRaise = 118.0f; // 足元から 2P の印までの高さ（画面の px）
+constexpr float kTwoPlayerMarkRaise = 118.0f; // 足元から頭上の印までの高さ（画面の px）
 constexpr float kTwoPlayerMarkScale = 1.4f;
-constexpr Vector4 kTwoPlayerMarkColor = { 1.0f, 0.55f, 0.25f, 1.0f };
-constexpr Vector4 kAllyMarkColor = { 0.45f, 0.9f, 1.0f, 1.0f }; // 2P が操作していない時の 味方 の印の色（体の色に合わせる）
-constexpr Vector2 kTwoPlayerGuidePosition = { 860.0f, 600.0f }; // 2P の操作の案内の左上（画面の右下）
-constexpr float kTwoPlayerGuideScale = 0.9f;
-constexpr Vector4 kTwoPlayerGuideColor = { 1.0f, 0.8f, 0.6f, 1.0f };
+constexpr Vector4 kAllyMarkColor = { 0.45f, 0.9f, 1.0f, 1.0f }; // 分身の頭上の印の色（体の色に合わせる）
 constexpr Vector4 kAllyMessageColor = { 1.0f, 0.75f, 0.45f, 1.0f }; // 参加・抜け・呼べない理由の知らせの色
 } // namespace
 
@@ -60,14 +56,14 @@ const wchar_t* GamePlayScene::AllyDeviceName(AllyDevice device) {
     return index < std::size(kNames) ? kNames[index] : L"";
 }
 
-/** @brief 味方のボスを呼べるか（ボスの武器どうしを合体させていて、倒れた後の待ちが明けている）。呼べない時は理由を返す */
+/** @brief 分身を呼べるか（ボスの武器を持っていて、倒れた後の待ちが明けている）。呼べない時は理由を返す */
 std::wstring GamePlayScene::AllyUnavailableReason() const {
     const WeaponManager* wm = WeaponManager::GetInstance();
-    if (!wm->HasBossWeapon() || wm->GetFusedWeaponIndex(WeaponManager::kBossSlot) < 0) {
-        return L"ボスの武器どうしを合体させると、味方のボスを呼べる";
+    if (!wm->HasBossWeapon()) {
+        return L"ボスの武器を手に入れると、分身が出てくる";
     }
     if (ally_.RespawnRemaining() > 0.0f) {
-        return L"味方のボスはまだ休んでいる（あと " + std::to_wstring(static_cast<int>(std::ceil(ally_.RespawnRemaining()))) + L" 秒）";
+        return L"分身はまだ休んでいる（あと " + std::to_wstring(static_cast<int>(std::ceil(ally_.RespawnRemaining()))) + L" 秒）";
     }
     return std::wstring();
 }
@@ -83,7 +79,8 @@ bool GamePlayScene::SummonAlly() {
     const WeaponData& main = wm->GetList()[wm->GetSlotWeaponIndex(WeaponManager::kBossSlot)];
     const Vector3 playerPos = player_->GetPosition();
     const Vector3 position = { playerPos.x - player_->GetLastDirX() * kSummonSide, playerPos.y, playerPos.z };
-    ally_.Summon(main.type, AllyTune().color, position);
+    // ボスの武器どうしを合体させていれば、体力とダメージが上がる
+    ally_.Summon(main.type, AllyTune().color, position, wm->GetFusedWeaponIndex(WeaponManager::kBossSlot) >= 0);
     // 呼び出した所に吸い込みと同じ輪を主軸の武器の色で出す
     const HitEffectPlayer fx(pm_, &cameraShaker_, &rng_);
     fx.Ring("absorb", position, { .tint = ColorRgb(ColorFromArray(main.effectColor)) });
@@ -98,7 +95,7 @@ void GamePlayScene::JoinTwoPlayer(AllyDevice device) {
         const WeaponData* main = nullptr;
         const WeaponData* partner = nullptr;
         if (!ArenaAssistWeapons(main, partner)) {
-            ShowWeaponBanner(L"ボスの武器どうしを合体させていないので、援護できない", kAllyMessageColor);
+            ShowWeaponBanner(L"ボスの武器を持っていないので、援護できない", kAllyMessageColor);
             return;
         }
     } else if (!ally_.IsActive() && !SummonAlly()) {
@@ -174,16 +171,19 @@ void GamePlayScene::HandleAllyInput() {
     // 1P の呼び出しと引っ込め（2P が操作している間は引っ込めない）
     const bool summonPressed = input_->TriggerKey(Input::KeyFromName(AllyTune().keySummon)) || input_->TriggerButton(kSummonButton);
     if (summonPressed && allyDevice_ == AllyDevice::kNone && !finalBoss_.IsActive()) {
+        // 引っ込めたら、もう一度押すまでは自動で出さない
         if (ally_.IsActive()) {
             ally_.Dismiss();
+            allyPutAway_ = true;
         } else {
+            allyPutAway_ = false;
             SummonAlly();
         }
     }
     // 2P が参加している時は、同じ機器の同時押しで抜ける
     if (allyDevice_ != AllyDevice::kNone) {
         if (PressedJoinCombo(allyDevice_)) {
-            LeaveTwoPlayer(L"2P が抜けました。味方のボスは自動で戦います");
+            LeaveTwoPlayer(L"2P が抜けました。分身は自動で戦います");
         }
         return;
     }
@@ -199,6 +199,13 @@ void GamePlayScene::HandleAllyInput() {
 
 /** @brief 味方のボスを1フレーム進める（呼び出し・参加の操作、動き、味方と敵の当たり） */
 void GamePlayScene::UpdateAlly() {
+    // 分身を使わない設定の時は、呼び出しも 2人目の参加もラスボス戦の援護もしない
+    if (!AllyTune().enabled) {
+        if (ally_.IsActive() || allyDevice_ != AllyDevice::kNone) {
+            ResetAlly();
+        }
+        return;
+    }
     ally_.TickRespawn(gameConstants::kFrameDeltaTime);
     // とどめ・クリア・やられの演出の間は隠して止める
     const bool hold = bossExecution_.IsActive() || clearTriggered_ || playerDefeat_.IsActive();
@@ -212,6 +219,7 @@ void GamePlayScene::UpdateAlly() {
         return;
     }
     HandleAllyInput();
+    AutoSummonAlly();
     if (!ally_.IsActive()) {
         LeaveTwoPlayer(nullptr);
         return;
@@ -238,7 +246,7 @@ void GamePlayScene::UpdateAlly() {
         control = ReadAllyControl();
         allyIdleSeconds_ = control.any ? 0.0f : allyIdleSeconds_ + gameConstants::kFrameDeltaTime;
         if (allyIdleSeconds_ >= AllyTune().idleSeconds) {
-            LeaveTwoPlayer(L"2P の操作が無いので、味方のボスは自動で戦います");
+            LeaveTwoPlayer(L"2P の操作が無いので、分身は自動で戦います");
         } else {
             controlPtr = &control;
         }
@@ -262,10 +270,13 @@ void GamePlayScene::UpdateArenaAssist() {
     const bool hasWeapons = ArenaAssistWeapons(main, partner);
     if (ally_.IsAssisting()) {
         if (ally_.UpdateArenaAssist() && hasWeapons && enemy_ != nullptr && !enemy_->IsDefeated()) {
-            enemy_->TakeStatusDamage(tune.arenaAssistDamage);
+            // 合体させていれば強く、素材の属性の演出も乗せる
+            enemy_->TakeStatusDamage(tune.arenaAssistDamage * (partner != nullptr ? tune.fusedDamageMult : 1.0f));
             const Vector3 hitPos = hasShadow ? shadow.position : enemy_->GetPosition();
             EmitEnemyHitEffect(hitPos, ColorFromArray(main->effectColor), kAllyHitStrength, 0, 0.0f);
-            EmitElementalHitEffect(partner->element, ColorFromArray(partner->effectColor), hitPos, 1.0f);
+            if (partner != nullptr) {
+                EmitElementalHitEffect(partner->element, ColorFromArray(partner->effectColor), hitPos, 1.0f);
+            }
         }
         return;
     }
@@ -280,7 +291,7 @@ void GamePlayScene::UpdateArenaAssist() {
         const AllyControl control = ReadAllyControl();
         allyIdleSeconds_ = control.any ? 0.0f : allyIdleSeconds_ + gameConstants::kFrameDeltaTime;
         if (allyIdleSeconds_ >= tune.idleSeconds) {
-            LeaveTwoPlayer(L"2P の操作が無いので、味方のボスは自動で援護します");
+            LeaveTwoPlayer(L"2P の操作が無いので、分身は自動で援護します");
         }
         request = control.attack && ally_.TickAssistCooldown(0.0f) <= 0.0f;
     } else if (ally_.TickAssistCooldown(0.0f) <= 0.0f) {
@@ -302,7 +313,7 @@ void GamePlayScene::UpdateArenaAssist() {
     fx.Ring("absorb", appear, { .tint = ColorRgb(ColorFromArray(main->effectColor)) });
 }
 
-/** @brief ラスボス戦で援護に使うボスの武器を返す（刀だけに差し替える前のボスの枠。主軸と相棒がそろっていれば true） */
+/** @brief ラスボス戦で援護に使うボスの武器を返す（刀だけに差し替える前のボスの枠。主軸があれば true。合体していなければ素材は nullptr） */
 bool GamePlayScene::ArenaAssistWeapons(const WeaponData*& main, const WeaponData*& partner) const {
     int mainIndex = -1;
     int partnerIndex = -1;
@@ -311,11 +322,11 @@ bool GamePlayScene::ArenaAssistWeapons(const WeaponData*& main, const WeaponData
     const auto inRange = [&list](int index) {
         return index >= 0 && index < static_cast<int>(list.size());
     };
-    if (!inRange(mainIndex) || !inRange(partnerIndex)) {
+    if (!inRange(mainIndex)) {
         return false;
     }
     main = &list[static_cast<size_t>(mainIndex)];
-    partner = &list[static_cast<size_t>(partnerIndex)];
+    partner = inRange(partnerIndex) ? &list[static_cast<size_t>(partnerIndex)] : nullptr;
     return true;
 }
 
@@ -327,7 +338,7 @@ void GamePlayScene::ApplyAllyHits(const AllySurroundings& around) {
     const Vector4 color = ColorFromArray(main.effectColor);
     for (EnemyEntity* enemy : ally_.CollectHitTargets(around)) {
         // とどめはプレイヤーが刺すので、味方の攻撃では敵の体力を1より下げない
-        enemy->TakeStatusDamage(AllyTune().damage);
+        enemy->TakeStatusDamage(AllyTune().damage * (ally_.IsFused() ? AllyTune().fusedDamageMult : 1.0f));
         if (enemy != enemy_) {
             enemy->ApplyHitstun(AllyTune().hitstunSeconds, true);
         }
@@ -366,7 +377,7 @@ void GamePlayScene::ApplyEnemyAttacksToAlly(const AllySurroundings& around) {
         const HitEffectPlayer fx(pm_, &cameraShaker_, &rng_);
         fx.Ring("defeat", allyPos);
         LeaveTwoPlayer(nullptr);
-        ShowWeaponBanner(L"味方のボスが倒れた", kAllyMessageColor);
+        ShowWeaponBanner(L"分身が倒れた", kAllyMessageColor);
     }
 }
 
@@ -399,38 +410,7 @@ void GamePlayScene::DrawAllyHpBar() {
     allyHpBarFg_->Draw();
 }
 
-/** @brief 2P が操作している時だけ、頭上の 2P の印と画面の右下の操作の案内を出す */
-void GamePlayScene::DrawTwoPlayerHud() {
-    if (allyDevice_ == AllyDevice::kNone) {
-        return;
-    }
-    UILayout& guideLayout = UILayout::Get(kLayoutName);
-    // 闘技場では援護の合図と、次に援護できるまでの秒数だけを出す
-    if (finalBoss_.IsActive()) {
-        const float wait = ally_.TickAssistCooldown(0.0f);
-        const std::wstring button = allyDevice_ == AllyDevice::kKeyboard ? L"." : L"X";
-        const std::wstring guide = wait > 0.0f
-            ? L"2P  援護はあと " + std::to_wstring(static_cast<int>(std::ceil(wait))) + L" 秒"
-            : L"2P  " + button + L" で味方のボスが援護に飛び込む";
-        fontRenderer_.DrawStringW(guide, guideLayout.Pos("two_player.guide_pos", kTwoPlayerGuidePosition).x,
-            guideLayout.Pos("two_player.guide_pos", kTwoPlayerGuidePosition).y, guideLayout.Float("two_player.guide_scale", kTwoPlayerGuideScale),
-            kTwoPlayerGuideColor);
-        return;
-    }
-    if (!ally_.IsActive()) {
-        return;
-    }
-    UILayout& layout = UILayout::Get(kLayoutName);
-    // 画面の右下の操作の案内（2P の機器の表記）
-    const std::wstring guide = allyDevice_ == AllyDevice::kKeyboard
-        ? std::wstring(L"2P  ← → 移動  ↑ ジャンプ  . 攻撃  / 回避  右Shift+右Ctrl 抜ける")
-        : std::wstring(L"2P  スティック 移動  A ジャンプ  X 攻撃  B 回避  L3+R3 抜ける");
-    const Vector2 guidePosition = layout.Pos("two_player.guide_pos", kTwoPlayerGuidePosition);
-    fontRenderer_.DrawStringW(guide, guidePosition.x, guidePosition.y, layout.Float("two_player.guide_scale", kTwoPlayerGuideScale),
-        kTwoPlayerGuideColor);
-}
-
-/** @brief 味方のボスの頭上に、敵と見分ける印を出す（ふだんは 味方、2P が操作している間は 2P） */
+/** @brief 分身の頭上に、プレイヤーと見分ける印を出す */
 void GamePlayScene::DrawAllyMark() {
     if (!ally_.IsActive() || finalBoss_.IsActive() || bossExecution_.IsActive() || clearTriggered_) {
         return;
@@ -440,13 +420,11 @@ void GamePlayScene::DrawAllyMark() {
     float sx = 0.0f;
     float sy = 0.0f;
     sceneShared::WorldToScreen(position.x, position.y, cam.x, cam.y, sx, sy);
-    const bool controlled = allyDevice_ != AllyDevice::kNone;
-    const std::wstring mark = controlled ? L"2P" : L"味方";
+    const std::wstring mark = L"分身";
     UILayout& layout = UILayout::Get(kLayoutName);
     const float markScale = layout.Float("two_player.mark_scale", kTwoPlayerMarkScale);
     const Vector2 markSize = FontRenderer::MeasureStringW(mark, markScale);
-    fontRenderer_.DrawStringW(mark, sx - markSize.x * kCenterFactor, sy - kTwoPlayerMarkRaise, markScale,
-        controlled ? kTwoPlayerMarkColor : kAllyMarkColor);
+    fontRenderer_.DrawStringW(mark, sx - markSize.x * kCenterFactor, sy - kTwoPlayerMarkRaise, markScale, kAllyMarkColor);
 }
 
 /** @brief 味方の体力バーを作る（シーンの初期化で1回。ゲーム中に作ったり消したりしない） */
@@ -460,7 +438,36 @@ void GamePlayScene::InitializeAlly() {
 /** @brief ステージを読み直した時に、味方を引っ込めて 2P を抜けさせる */
 void GamePlayScene::ResetAlly() {
     ally_.Dismiss();
+    allyPutAway_ = false;
+    // ステージに入った時にボスの武器を持っていれば、このステージでは分身を自動で出す
+    // （ステージの途中、ボスのとどめで手に入れた時は出さない。結果画面の前に出てきてしまうため）
+    allyAutoSummon_ = WeaponManager::GetInstance()->HasBossWeapon();
     LeaveTwoPlayer(nullptr);
+}
+
+/** @brief ボスの武器を持ってステージに入っていれば分身を自動で出し、主軸の武器か合体が変わったら出し直す */
+void GamePlayScene::AutoSummonAlly() {
+    const WeaponManager* wm = WeaponManager::GetInstance();
+    if (!allyAutoSummon_ || !wm->HasBossWeapon() || allyPutAway_) {
+        return;
+    }
+    const int mainIndex = wm->GetSlotWeaponIndex(WeaponManager::kBossSlot);
+    if (mainIndex < 0) {
+        return;
+    }
+    const WeaponType mainType = wm->GetList()[static_cast<size_t>(mainIndex)].type;
+    const bool fused = wm->GetFusedWeaponIndex(WeaponManager::kBossSlot) >= 0;
+    // 出ていれば、主軸の武器か合体が変わった時だけ、新しい武器と強さで出し直す
+    if (ally_.IsActive()) {
+        if (ally_.GetWeapon() == mainType && ally_.IsFused() == fused) {
+            return;
+        }
+        ally_.Dismiss();
+    }
+    // 倒れた後の休みが明けていなければ待つ（案内は出さない）
+    if (AllyUnavailableReason().empty()) {
+        SummonAlly();
+    }
 }
 
 } // namespace engine::game

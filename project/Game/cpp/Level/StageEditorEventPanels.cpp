@@ -334,19 +334,9 @@ void StageEditor::RenderGraphPanel() {
     }
     ImGui::TextWrapped("このレベルで動かすノードグラフ（F1で編集）を紐付けます。常駐グラフは読込直後から走り、フラグ起動グラフは指定フラグが立った瞬間に走ります。");
 
-    // 常駐グラフ: パスを入力すると元に戻す履歴を取ってから反映する
+    // 常駐グラフ: 一覧から選ぶ（このレベルのタブと同じ欄）
     ImGui::SeparatorText("常駐グラフ");
-    ImGui::SetNextItemWidth(-1.0f);
-    const bool graphPathChanged = ImGui::InputTextWithHint("##graphPath", "Resources/Graphs/xxx.json（空なら無し）", graphPathBuffer_, sizeof(graphPathBuffer_));
-    if (CaptureItemUndo(graphPathChanged)) {
-        graphPath_ = graphPathBuffer_;
-    }
-    // パスが空の間は開く対象が無いので押せなくする
-    ImGui::BeginDisabled(graphPath_.empty());
-    if (ImGui::Button("ノードエディタで開く##main", ImVec2(-1.0f, 0.0f))) {
-        GraphEditor::GetInstance()->OpenAndShow(graphPath_);
-    }
-    ImGui::EndDisabled();
+    RenderResidentGraphPicker();
 
     // フラグ起動グラフの一覧（x で削除、開くでノードエディタへ）
     ImGui::SeparatorText("フラグ起動グラフ");
@@ -373,6 +363,20 @@ void StageEditor::RenderGraphPanel() {
     // フラグ名とグラフのパスが両方入力されたら紐付けを追加できる
     ImGui::SetNextItemWidth(-1.0f);
     ImGui::InputTextWithHint("##newFlag", "フラグ名（トリガー/条件のフラグ、pickup_<名前> 等）", newFlagGraphFlag_, sizeof(newFlagGraphFlag_));
+    // 紐付けるグラフは一覧から選ぶか、フラグ名から新しく作る（下の欄で直接書き換えもできる）
+    std::string pickedFlagGraph = newFlagGraphPath_;
+    if (RenderGraphPathPicker("##newFlagPathPicker", pickedFlagGraph, false)) {
+        strncpy_s(newFlagGraphPath_, pickedFlagGraph.c_str(), _TRUNCATE);
+    }
+    ImGui::BeginDisabled(newFlagGraphFlag_[0] == '\0');
+    if (ImGui::Button("フラグ名で新しく作る")) {
+        const std::string created = MakeNewGraphPath(newFlagGraphFlag_);
+        strncpy_s(newFlagGraphPath_, created.c_str(), _TRUNCATE);
+        GraphEditor::GetInstance()->OpenAndShow(created);
+        statusMessage_ = "新しいグラフ " + created + " を開きました。ノードエディタで保存してから紐付けを追加してください";
+        statusTimer_ = kStatusSeconds;
+    }
+    ImGui::EndDisabled();
     ImGui::SetNextItemWidth(-1.0f);
     ImGui::InputTextWithHint("##newFlagPath", "グラフJSONのパス", newFlagGraphPath_, sizeof(newFlagGraphPath_));
     const bool canAdd = newFlagGraphFlag_[0] != '\0' && newFlagGraphPath_[0] != '\0';

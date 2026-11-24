@@ -11,6 +11,7 @@
     0
   ],
   "graphPath": "Resources/Graphs/level02_main.json",
+  "sky": "Resources/SkyDome/sky_dusk.png",
   "flagGraphs": [
     {
       "flag": "broken_gate_wall",
@@ -94,14 +95,90 @@
   ],
   "objects": [
     {
+      "name": "bg_ground",
+      "type": "static",
+      "kind": "background",
+      "model": "Resources/block/backdrop/backdrop_dusk_ground.obj",
+      "texture": "Resources/block/backdrop/backdrop_palette_dusk.png",
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "lighting": false,
+      "solid": false
+    },
+    {
+      "name": "bg_near",
+      "type": "static",
+      "kind": "background",
+      "model": "Resources/block/backdrop/backdrop_dusk_near.obj",
+      "texture": "Resources/block/backdrop/backdrop_palette_dusk.png",
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "lighting": false,
+      "solid": false
+    },
+    {
+      "name": "bg_mid",
+      "type": "static",
+      "kind": "background",
+      "model": "Resources/block/backdrop/backdrop_dusk_mid.obj",
+      "texture": "Resources/block/backdrop/backdrop_palette_dusk.png",
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "lighting": false,
+      "solid": false
+    },
+    {
+      "name": "bg_far",
+      "type": "static",
+      "kind": "background",
+      "model": "Resources/block/backdrop/backdrop_dusk_far.obj",
+      "texture": "Resources/block/backdrop/backdrop_palette_dusk.png",
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "lighting": false,
+      "solid": false
+    },
+    {
       "name": "floor",
       "type": "row",
       "kind": "prop",
       "axis": "x",
       "count": 52,
       "step": 1,
-      "model": "Resources/block/block.obj",
-      "texture": "Resources/block/block.png",
+      "model": "Resources/block/terrain/terrain_ground.obj",
+      "texture": "Resources/block/terrain/terrain_palette_dusk.png",
       "position": [
         2,
         -0.98,
@@ -122,8 +199,8 @@
       "axis": "x",
       "count": 53,
       "step": 1,
-      "model": "Resources/block/block.obj",
-      "texture": "Resources/block/block.png",
+      "model": "Resources/block/terrain/terrain_ceiling.obj",
+      "texture": "Resources/block/terrain/terrain_palette_dusk.png",
       "position": [
         2,
         13,
@@ -144,8 +221,8 @@
       "axis": "y",
       "count": 13,
       "step": 1,
-      "model": "Resources/block/block.obj",
-      "texture": "Resources/block/block.png",
+      "model": "Resources/block/terrain/terrain_wall.obj",
+      "texture": "Resources/block/terrain/terrain_palette_dusk.png",
       "position": [
         2,
         0,
@@ -166,8 +243,8 @@
       "axis": "y",
       "count": 14,
       "step": 1,
-      "model": "Resources/block/block.obj",
-      "texture": "Resources/block/block.png",
+      "model": "Resources/block/terrain/terrain_wall.obj",
+      "texture": "Resources/block/terrain/terrain_palette_dusk.png",
       "position": [
         54,
         -0.98,
@@ -180,28 +257,6 @@
       ],
       "lighting": false,
       "solid": true
-    },
-    {
-      "name": "bg_buildings",
-      "type": "row",
-      "kind": "background",
-      "axis": "x",
-      "count": 4,
-      "step": 13,
-      "model": "Resources/DowntownCityMegaKit[Standard]/Exports/glTF (Godot)/Building_Small_1.gltf",
-      "texture": "Resources/DowntownCityMegaKit[Standard]/Textures/T_RedBrick_BaseColor.png",
-      "position": [
-        8,
-        -0.6,
-        6
-      ],
-      "scale": [
-        0.42,
-        0.42,
-        0.42
-      ],
-      "lighting": true,
-      "solid": false
     },
     {
       "name": "guide_s2_a",
@@ -281,8 +336,8 @@
       "axis": "x",
       "count": 2,
       "step": 1,
-      "model": "Resources/block/block.obj",
-      "texture": "Resources/DowntownCityMegaKit[Standard]/Textures/T_Concrete_BaseColor.png",
+      "model": "Resources/block/terrain/terrain_platform.obj",
+      "texture": "Resources/block/terrain/terrain_palette_dusk.png",
       "position": [
         14.5,
         1.2,
@@ -303,8 +358,8 @@
       "axis": "x",
       "count": 2,
       "step": 1,
-      "model": "Resources/block/block.obj",
-      "texture": "Resources/DowntownCityMegaKit[Standard]/Textures/T_Concrete_BaseColor.png",
+      "model": "Resources/block/terrain/terrain_platform.obj",
+      "texture": "Resources/block/terrain/terrain_palette_dusk.png",
       "position": [
         17.5,
         3.2,
@@ -325,8 +380,8 @@
       "axis": "x",
       "count": 6,
       "step": 1,
-      "model": "Resources/block/block.obj",
-      "texture": "Resources/DowntownCityMegaKit[Standard]/Textures/T_Concrete_BaseColor.png",
+      "model": "Resources/block/terrain/terrain_platform.obj",
+      "texture": "Resources/block/terrain/terrain_palette_dusk.png",
       "position": [
         20,
         5,
@@ -487,8 +542,8 @@
       "axis": "x",
       "count": 2,
       "step": 1,
-      "model": "Resources/block/block.obj",
-      "texture": "Resources/DowntownCityMegaKit[Standard]/Textures/T_Concrete_BaseColor.png",
+      "model": "Resources/block/terrain/terrain_platform.obj",
+      "texture": "Resources/block/terrain/terrain_palette_dusk.png",
       "position": [
         37,
         5,
@@ -596,8 +651,8 @@
       "axis": "x",
       "count": 2,
       "step": 1,
-      "model": "Resources/block/block.obj",
-      "texture": "Resources/DowntownCityMegaKit[Standard]/Textures/T_Concrete_BaseColor.png",
+      "model": "Resources/block/terrain/terrain_platform.obj",
+      "texture": "Resources/block/terrain/terrain_palette_dusk.png",
       "position": [
         32.5,
         1.15,
@@ -736,8 +791,8 @@
       "axis": "x",
       "count": 2,
       "step": 1,
-      "model": "Resources/block/block.obj",
-      "texture": "Resources/DowntownCityMegaKit[Standard]/Textures/T_Concrete_BaseColor.png",
+      "model": "Resources/block/terrain/terrain_platform.obj",
+      "texture": "Resources/block/terrain/terrain_palette_dusk.png",
       "position": [
         45,
         3,

@@ -1,17 +1,6 @@
-
-struct GPUParticleState
-{
-    float3 position;
-    float lifeTime;
-    float3 velocity;
-    float currentTime;
-    float4 color;
-    float3 scale;
-    float rotateZ;
-    uint alive;
-    uint curveFlag;
-    float2 pad;
-};
+// エミッター: 決めた間隔ごとに、中心のまわりへ放射状に粒を出す（1スレッドで1粒、枠は空き一覧から取る）
+// 出す時刻の判定だけ CPU が行い、粒の中身はすべて GPU が乱数で決める
+#include "ParticleCompute.hlsli"
 
 cbuffer CBEmitter : register(b0)
 {
@@ -29,74 +18,41 @@ cbuffer CBEmitter : register(b0)
 };
 
 RWStructuredBuffer<GPUParticleState> gParticles : register(u0);
+RWStructuredBuffer<uint> gFreeList : register(u2);
+RWStructuredBuffer<int> gCounter : register(u3);
 
-// -------------------------------------------------------
-//  xoshiro128+ (32-bit output, 128-bit state)
-// -------------------------------------------------------
+static const float kTwoPi = 6.28318530f;
+static const float kSpeedMin = 0.5f; // 飛び出す速さ
+static const float kSpeedMax = 2.0f;
+static const float kScaleMin = 0.15f; // 粒の大きさ
+static const float kScaleMax = 0.45f;
 
-uint rotl32(uint x, int k)
-{
-    return (x << k) | (x >> (32 - k));
-}
-
-// splitmix32 ハッシュで各スレッド独立の初期状態を作る
-uint4 xoshiroSeed(uint seed, uint time, uint idx)
-{
-    uint a = seed ^ (idx * 2654435761u);
-    uint b = time ^ (idx * 2246822519u);
-    a ^= a >> 16;
-    a *= 0x45d9f3bu;
-    a ^= a >> 16;
-    b ^= b >> 16;
-    b *= 0x45d9f3bu;
-    b ^= b >> 16;
-    return uint4(a, b, a ^ 0x9e3779b9u, b ^ 0x6c62272eu);
-}
-
-uint xoshiroNext(inout uint4 s)
-{
-    uint result = s.x + s.w;
-    uint t = s.y << 9;
-    s.z ^= s.x;
-    s.w ^= s.y;
-    s.y ^= s.z;
-    s.x ^= s.w;
-    s.z ^= t;
-    s.w = rotl32(s.w, 11);
-    return result;
-}
-
-// [0, 1)
-float rand01(inout uint4 s)
-{
-    return float(xoshiroNext(s) >> 8) * (1.0f / 16777216.0f);
-}
-
-// -------------------------------------------------------
-
-[numthreads(1, 1, 1)]
+[numthreads(64, 1, 1)]
 void main(uint3 DTid : SV_DispatchThreadID)
 {
-    for (uint i = 0; i < gCount; ++i)
+    uint idx = DTid.x;
+    if (idx >= gCount)
     {
-        uint4 rng = xoshiroSeed(gSeed, gTime, i);
-
-        float angle = rand01(rng) * 6.28318530f;
-        float speed = 0.5f + rand01(rng) * 1.5f; // [0.5, 2.0]
-        float r = rand01(rng) * gRadius; // [0, radius]
-        float scaleV = 0.15f + rand01(rng) * 0.3f; // [0.15, 0.45]
-
-        float3 dir = float3(cos(angle), sin(angle), 0.0f);
-
-        gParticles[i].position = gTranslate + dir * r;
-        gParticles[i].velocity = dir * speed;
-        gParticles[i].scale = float3(scaleV, scaleV, scaleV);
-        gParticles[i].color = gColor;
-        gParticles[i].lifeTime = gLifeTime;
-        gParticles[i].currentTime = 0.0f;
-        gParticles[i].rotateZ = 0.0f;
-        gParticles[i].alive = 1;
-        gParticles[i].curveFlag = 0;
-        gParticles[i].pad = float2(0.0f, 0.0f);
+        return;
     }
+    uint slot = 0u;
+    if (!PopFreeSlot(gCounter, gFreeList, slot))
+    {
+        return;
+    }
+    uint4 rng = XoshiroSeed(gSeed, gTime, idx);
+    float angle = Rand01(rng) * kTwoPi;
+    float speed = RandRange(rng, kSpeedMin, kSpeedMax);
+    float r = Rand01(rng) * gRadius;
+    float scaleV = RandRange(rng, kScaleMin, kScaleMax);
+    float3 dir = float3(cos(angle), sin(angle), 0.0f);
+
+    GPUParticleState p = (GPUParticleState) 0;
+    p.position = gTranslate + dir * r;
+    p.velocity = dir * speed;
+    p.scale = float3(scaleV, scaleV, scaleV);
+    p.color = gColor;
+    p.lifeTime = gLifeTime;
+    p.alive = 1u;
+    gParticles[slot] = p;
 }

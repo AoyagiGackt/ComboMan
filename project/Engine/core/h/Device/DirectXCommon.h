@@ -5,6 +5,8 @@
 #pragma once
 #include <Windows.h>
 #include "FrameUploadAllocator.h"
+#include "ParallelBundleRecorder.h"
+#include "ResourceStateTracker.h"
 #include <cassert>
 #include <chrono>
 #include <d3d12.h>
@@ -46,6 +48,18 @@ public: // メンバ関数
     /** @brief 描画ごとの定数データを書き込む、フレーム別のアップロード領域を取得する */
     FrameUploadAllocator& GetFrameUploadAllocator() {
         return frameUploadAllocator_;
+    }
+    /** @brief 描画パスの宣言からバリアを自動で入れるための、リソースの状態の記録を取得する */
+    ResourceStateTracker& GetResourceStateTracker() {
+        return resourceStateTracker_;
+    }
+    /** @brief 描画の命令を複数のスレッドでバンドルへ記録するための部品を取得する */
+    ParallelBundleRecorder& GetBundleRecorder() {
+        return bundleRecorder_;
+    }
+    /** @brief メインのスレッドで記録しているコマンドリストを返す（バンドルの記録中でもこちらを返す） */
+    ID3D12GraphicsCommandList* GetMainCommandList() {
+        return commandList_.Get();
     }
 
     /**
@@ -132,6 +146,10 @@ public: // メンバ関数
 
     /** @brief グラフィックスコマンドリストの取得 */
     ID3D12GraphicsCommandList* GetCommandList() {
+        // 描画を複数のスレッドでバンドルへ記録している間は、そのスレッドのバンドルへ積ませる
+        if (ID3D12GraphicsCommandList* bundle = ParallelBundleRecorder::ThreadCommandList()) {
+            return bundle;
+        }
         return commandList_.Get();
     }
 
@@ -244,6 +262,24 @@ public: // メンバ関数
         return depthStencilResource_.Get();
     }
 
+    /** @brief 描画先にした深度バッファの種類 */
+    enum class DepthTarget {
+        kBackBuffer, ///< バックバッファへ直接描く時の深度（GetBackBufferDsvHandle）
+        kScene, ///< 固定解像度のオフスクリーン描画の深度（GetDsvHandle）
+    };
+    /** @brief どちらの深度バッファを描画先にしたかを覚える（深度を描画先に設定する所で呼ぶ） */
+    void SetActiveDepthTarget(DepthTarget target) {
+        activeDepthTarget_ = target;
+    }
+    /** @brief 今描画先にしている深度バッファの種類 */
+    DepthTarget GetActiveDepthTarget() const {
+        return activeDepthTarget_;
+    }
+    /** @brief 今描画先にしている深度バッファ（ソフトパーティクルが描き終えた物の深度を写し取るのに使う） */
+    ID3D12Resource* GetActiveDepthResource() const {
+        return activeDepthTarget_ == DepthTarget::kBackBuffer ? backBufferDepthResource_.Get() : depthStencilResource_.Get();
+    }
+
     // フェンス関連
 
     /** @brief フェンスの取得 */
@@ -286,6 +322,7 @@ private:
 
     // 深度バッファリソースとDSVの生成
     void CreateDepthBuffer();
+    /** @brief バックバッファへ直接描く時の深度バッファを作る */
     void CreateBackBufferDepthBuffer();
 
     // GPU同期用フェンスの生成
@@ -311,6 +348,10 @@ private:
 
     /** @brief 描画ごとの定数データを書き込む、フレーム別のアップロード領域 */
     FrameUploadAllocator frameUploadAllocator_;
+    /** @brief 描画パスの宣言からバリアを自動で入れるための、リソースの状態の記録 */
+    ResourceStateTracker resourceStateTracker_;
+    /** @brief 描画の命令を複数のスレッドでバンドルへ記録するための部品 */
+    ParallelBundleRecorder bundleRecorder_;
 
     // DirectX12基盤オブジェクト
     Microsoft::WRL::ComPtr<IDXGIFactory7> dxgiFactory_;
@@ -332,6 +373,7 @@ private:
     Microsoft::WRL::ComPtr<ID3D12Resource> swapChainResources_[2];
     Microsoft::WRL::ComPtr<ID3D12Resource> depthStencilResource_;
     Microsoft::WRL::ComPtr<ID3D12Resource> backBufferDepthResource_;
+    DepthTarget activeDepthTarget_ = DepthTarget::kBackBuffer; ///< 今描画先にしている深度バッファ
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> backBufferDsvHeap_;
     Microsoft::WRL::ComPtr<ID3D12Fence> fence_;
 

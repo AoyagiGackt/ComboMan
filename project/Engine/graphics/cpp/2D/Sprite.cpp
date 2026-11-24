@@ -166,6 +166,14 @@ void Sprite::Draw() {
     // 座標変換
     commandList->SetGraphicsRootConstantBufferView(pipelineHelper::spriteRootSlot::kTransform, spriteCommon_->GetDxCommon()->GetFrameUploadAllocator().Allocate(&transformationMatrix_, sizeof(transformationMatrix_)));
 
+    // バインドレスの時は、テクスチャのデスクリプタヒープ上の番号だけを渡す（シェーダーがヒープから直接引く）
+    if (spriteCommon_->IsBindless()) {
+        const uint32_t textureIndex = useExternalTexture_ ? textureIndex_ : TextureManager::GetInstance()->GetTextureIndexByFilePath(textureFilePath_);
+        commandList->SetGraphicsRoot32BitConstant(pipelineHelper::spriteRootSlot::kTextureIndex, textureIndex, 0);
+        commandList->DrawInstanced(kSpriteVertexCount, 1, 0, 0);
+        return;
+    }
+
     // テクスチャ (TextureManagerからハンドルを取得してセット)
     D3D12_GPU_DESCRIPTOR_HANDLE textureSrvHandle = TextureManager::GetInstance()->GetSrvHandleGPU(textureFilePath_);
     commandList->SetGraphicsRootDescriptorTable(pipelineHelper::spriteRootSlot::kTexture, textureSrvHandle);

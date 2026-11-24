@@ -97,6 +97,7 @@ void GamePlayScene::InitializeRenderFoundation() {
 
     skydome_ = std::make_unique<Skydome>();
     skydome_->InitializeDefault(modelCommon_.get());
+    sceneShared::ConnectStageSkyToEditor(GetStageEditor(), skydome_.get());
 }
 
 /** @brief InitializeCoreSystems()の下請け レンダーテクスチャとクリア演出用オーバーレイスプライトを初期化する */
@@ -428,6 +429,8 @@ void GamePlayScene::Update() {
     floorElapsedSeconds_ += gameConstants::kFrameDeltaTime; // プレイログ用。ヒットストップの影響を受けない実時間換算
 
     UpdateCombat();
+    // 吹き飛んだ敵どうしの衝突・跳ね返りの演出・部屋の最後の1体（敵が動いた後のこのフレームの様子で見る）
+    UpdateActionFeel();
     // ラスボス戦はプレイヤーの更新と攻撃の判定の後に、ボスの技と闘技場を進める
     if (finalBoss_.IsActive()) {
         finalBoss_.UpdateFight(dt);
@@ -749,6 +752,15 @@ void GamePlayScene::UpdateCombat() {
         if (const EnemyEntity* rampageTarget = RampageTargetEnemy(); rampageTarget != nullptr && rampageTarget->JustLanded()) {
             player_->EndRampage();
         }
+        // 地形との当たり判定の後でも、戦闘の処理（被弾の吹き飛び・技の動き・とどめなど）で位置が動くので、
+        // フレームの最後にもう一度、このフレームの間に壁や閉じた扉の真ん中を横切っていないか確かめる
+        // （壁際のボスに重なった時に、壁の向こうへ出て落ちていた）
+        if (DidPlayerCrossWall(positionBeforeUpdate, player_->GetPosition())) {
+            Vector3 kept = player_->GetPosition();
+            kept.x = positionBeforeUpdate.x;
+            player_->SetPosition(kept);
+            player_->RefreshVisualTransforms();
+        }
         skydome_->Update(camera_.get());
     } else {
         // 止まっている間も締め演出の時間は進め、軌跡はその場に留める
@@ -778,6 +790,7 @@ void GamePlayScene::Finalize() {
     // 描画先と演出の資源を片付ける
     renderTexture_->Finalize(srvManager_);
     pm_->ClearAllGroups();
+    pm_->ClearFields();
     finisherEffects::FinalizeAll(glassShatter_, finisherShatter_, spaceWarp_, bladeFlash_);
     comboFeel_.Finalize();
     // 音を全部止める（BGM・SE どちらも）

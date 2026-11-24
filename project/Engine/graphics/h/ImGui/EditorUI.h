@@ -25,6 +25,15 @@ std::string ToProjectRelativePath(const std::string& absolutePath);
 /** @brief 直前のウィジェットの右に (?) を表示し、ホバーで説明ツールチップを出す */
 void HelpMarker(const char* desc);
 
+/** @brief 箇条書きの1行を、窓の幅で折り返して出す（ImGui::BulletText は折り返さないため） */
+void BulletWrapped(const char* format, ...) IM_FMTARGS(1);
+
+/** @brief 薄い色の文字を、窓の幅で折り返して出す（ImGui::TextDisabled は折り返さないため） */
+void TextDisabledWrapped(const char* format, ...) IM_FMTARGS(1);
+
+/** @brief 幅を決めて折り返すツールチップを出す（ImGui::SetTooltip は長い説明で画面の端まで伸びるため） */
+void TooltipWrapped(const char* format, ...) IM_FMTARGS(1);
+
 enum class ConfirmResult {
     kNone, ///< モーダル表示中 or 未表示（何も確定していない）
     kOk,

@@ -99,10 +99,13 @@ namespace {
         { nullptr, "graphPath", &FlagGraphBinding::graphPath },
     };
 
+    constexpr const char* kCommentKey = "_comment"; // ファイルの説明書きの項目名
+
     constexpr JsonField<LevelData> kLevelFields[] = {
         { nullptr, "playerSpawn", &LevelData::playerSpawn },
         { nullptr, "enemySpawn", &LevelData::enemySpawn },
         { nullptr, "graphPath", &LevelData::graphPath },
+        { nullptr, "sky", &LevelData::sky },
     };
 
     /** @brief JSON配列の各要素を対応表で読み、読んだ後に extra で個別の項目を足す */
@@ -155,6 +158,10 @@ LevelData levelLoader::Load(const std::string& path) {
     }
 
     ReadJsonFields(j, kLevelFields, data);
+    const auto comment = j.find(kCommentKey);
+    if (comment != j.end() && comment->is_string()) {
+        data.comment = comment->get<std::string>();
+    }
     data.objects = ReadList(j.value("objects", nlohmann::json::array()), kObjectFields,
         [](const nlohmann::json& item, ObjectDesc& desc) {
             desc.type = ParseLevelEnum(item.value("type", std::string()), kPlacementTypeNames, desc.type);
@@ -176,6 +183,10 @@ LevelData levelLoader::Load(const std::string& path) {
 /** @brief レベルデータをファイルへ保存する */
 bool levelLoader::Save(const std::string& path, const LevelData& data) {
     nlohmann::json j = nlohmann::json::object();
+    // 説明書きは書いてあったファイルにだけ残す（無いファイルに空の項目を増やさない）
+    if (!data.comment.empty()) {
+        j[kCommentKey] = data.comment;
+    }
     WriteJsonFields(j, kLevelFields, data);
     j["objects"] = WriteList(data.objects, kObjectFields, [](nlohmann::json& item, const ObjectDesc& desc) {
         item["type"] = LevelEnumName(desc.type, kPlacementTypeNames);

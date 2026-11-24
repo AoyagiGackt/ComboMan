@@ -20,6 +20,7 @@ public:
     enum class BossAcquireResult {
         kAdded, ///< ボスの枠が空いていたので入れた
         kSame, ///< ボスの枠の武器か、その相棒と同じ種類だった（そのまま）
+        kFusedSame, ///< 合体していないボスの枠の武器と同じ種類だったので、同じ種類どうしで合体した
         kNeedsMainChoice, ///< 別の種類だったので、合体の主軸をどちらにするか選ぶ
     };
 
@@ -137,9 +138,10 @@ public:
     /**
      * @brief ボスから奪った武器をボスの枠へ入れる（ボスの枠の武器は入れ替わらず、合体しても砕けない）
      * @param type ボスから奪った武器の種類
-     * @return 入れたか・同じだったか・主軸を選ぶ必要があるか
+     * @param allowFusion 合体してよいか（設定で合体を切っている時は false。同じ種類でも合体せず kSame になる）
+     * @return 入れたか・同じだったか・同じ種類どうしで合体したか・主軸を選ぶ必要があるか
      */
-    BossAcquireResult AcquireBossWeapon(WeaponType type);
+    BossAcquireResult AcquireBossWeapon(WeaponType type, bool allowFusion = true);
     /** @brief ボスの枠に武器が入っているか */
     bool HasBossWeapon() const {
         return bossWeaponIndex_ >= 0;

@@ -84,6 +84,8 @@ constexpr float kCenterFactor = 0.5f; // 枠の中央にそろえる
 constexpr float kGunLabelScale = 0.85f;
 
 // 合体している枠（相棒の色で枠が脈打って光り、枠の下の内側に耐久のバーを出す）
+constexpr float kFusedIconShrink = 0.6f; // 合体している時は2本ぶんの長さになるので、枠に収まるよう小さくする
+constexpr float kFusedPartnerScale = 0.8f; // 素材の武器を土台に対してどれだけの大きさで付けるか
 constexpr float kFusionGlowBase = 0.35f; // 枠へ混ぜる相棒の色の基本の強さ
 constexpr float kFusionGlowPulse = 0.25f; // 脈打つ幅
 constexpr float kFusionGlowSpeed = 4.0f; // 脈打つ速さ
@@ -108,20 +110,28 @@ void WeaponSlotHud::Initialize(const HudServices& services) {
     InitializeFrames();
     const auto assets = sceneShared::LoadWeaponIconAssets("Resources/Config/weapon_icons.json");
     const auto& list = weapons_->GetList();
-    modelIcons_.resize(list.size());
-    for (size_t i = 0; i < list.size(); ++i) {
-        for (const auto& asset : assets) {
-            if (asset.type != list[i].type) {
-                continue;
+    // 枠ごとに、武器の数だけモデルのアイコンと、合体の素材として付ける分を作っておく
+    // （ゲーム中に作ると描画中の資源を消す恐れがあるため、ここで全部作る）
+    auto createIcon = [this](ModelIcon& icon, const sceneShared::WeaponIconAsset& asset) {
+        icon.scale = asset.scale;
+        icon.baseYaw = asset.baseYaw;
+        icon.object = std::make_unique<Object3d>();
+        icon.object->Initialize(models_);
+        icon.object->SetModel(ModelManager::GetInstance()->GetOrLoad(models_, asset.modelPath, asset.texturePath));
+        icon.object->SetEnableLighting(true);
+    };
+    for (int slot = 0; slot <= kSlotCount; ++slot) {
+        modelIcons_[slot].resize(list.size());
+        partnerIcons_[slot].resize(list.size());
+        for (size_t i = 0; i < list.size(); ++i) {
+            for (const auto& asset : assets) {
+                if (asset.type != list[i].type) {
+                    continue;
+                }
+                createIcon(modelIcons_[slot][i], asset);
+                createIcon(partnerIcons_[slot][i], asset);
+                break;
             }
-            auto& icon = modelIcons_[i];
-            icon.scale = asset.scale;
-            icon.baseYaw = asset.baseYaw;
-            icon.object = std::make_unique<Object3d>();
-            icon.object->Initialize(models_);
-            icon.object->SetModel(ModelManager::GetInstance()->GetOrLoad(models_, asset.modelPath, asset.texturePath));
-            icon.object->SetEnableLighting(true);
-            break;
         }
     }
 }
@@ -189,9 +199,10 @@ void WeaponSlotHud::ApplyLayout() {
     gunIcon_->Update();
 }
 /** @brief 指定したスロットに表示できるモデルのアイコンがあるかを返す */
-bool WeaponSlotHud::HasModelIcon(int index) const {
-    return index >= 0 && index < static_cast<int>(modelIcons_.size())
-        && weapons_->IsUnlocked(index) && modelIcons_[index].object;
+bool WeaponSlotHud::HasModelIcon(int slotIndex, int weaponIndex) const {
+    return slotIndex >= 0 && slotIndex <= kSlotCount
+        && weaponIndex >= 0 && weaponIndex < static_cast<int>(modelIcons_[slotIndex].size())
+        && modelIcons_[slotIndex][weaponIndex].object;
 }
 /** @brief 武器を手に入れた知らせを受けたら枠を光らせる */
 void WeaponSlotHud::Notify(HudEvent event) {
@@ -234,23 +245,17 @@ void WeaponSlotHud::Update(const HudFrame& frame) {
         // アイコンの見せ方を決めるための、このスロットの状態をまとめる
         const int index = weapons_->GetSlotWeaponIndex(i);
         const SlotIconState state = {
+            .slotIndex = i,
             .weaponIndex = index,
             .active = active,
             .unlocked = index >= 0 && index < static_cast<int>(list.size()) && (i == WeaponManager::kBossSlot || weapons_->IsUnlocked(index)),
             .pulse = pulse,
             .flash = flash,
+            .partnerIndex = weapons_->GetFusedWeaponIndex(i),
             .cameraPosition = cam,
         };
-        // ボスの枠は色のアイコンを使う
-        if (i == WeaponManager::kBossSlot) {
-            if (state.unlocked) {
-                ShowColorIcon(slot, state);
-            } else {
-                ShowLockedIcon(slot, state);
-            }
-            slot.icon->Update();
-            continue;
-        }
+        slot.modelIcon = -1;
+        slot.partnerIcon = -1;
         // 上の行から順に見て、最初に当てはまった見せ方で出す（最後の行は必ず当てはまる）
         /** @brief アイコンの表示方法と適用条件 */
         struct IconStyle {
@@ -258,10 +263,10 @@ void WeaponSlotHud::Update(const HudFrame& frame) {
             void (WeaponSlotHud::*show)(Slot&, const SlotIconState&);
         };
         static constexpr IconStyle kIconStyles[] = {
-            // 3Dモデルのアイコンがある武器はモデルで出す
+            // 手に入れた武器で3Dモデルのアイコンがあればモデルで出す（ボスの枠も同じ）
             {
                 [](const WeaponSlotHud& hud, const SlotIconState& s) {
-                    return hud.HasModelIcon(s.weaponIndex);
+                    return s.unlocked && hud.HasModelIcon(s.slotIndex, s.weaponIndex);
                 }, &WeaponSlotHud::ShowModelIcon
             },
             // モデルが無くても解放済みなら武器の色で出す
@@ -337,21 +342,42 @@ void WeaponSlotHud::ShowModelIcon(Slot& slot, const SlotIconState& state) {
     const float modelIdleBrightness = layout.Float("weapon_slots.model_idle_brightness", kModelIdleBrightness);
     const float modelFlashGain = layout.Float("weapon_slots.model_flash_gain", kModelFlashGain);
     slot.icon->SetColor(kHiddenColor);
-    auto& icon = modelIcons_[state.weaponIndex];
+    auto& icon = modelIcons_[state.slotIndex][state.weaponIndex];
+    slot.modelIcon = state.weaponIndex;
     // 枠の中心の画面座標を、カメラ手前の奥行きのワールド座標へ写す
     const Vector3& cam = state.cameraPosition;
     const float sx = slot.position.x + size * 0.5f;
     const float sy = slot.position.y + size * 0.5f;
-    icon.object->SetPosition({
+    const Vector3 iconPosition = {
         cam.x + (sx - gameConstants::kScreenCenterX) / gameConstants::kScreenCenterX * gameConstants::kCameraHalfW * kDepthScale,
         cam.y - (sy - gameConstants::kScreenCenterY) / gameConstants::kScreenCenterY * gameConstants::kCameraHalfH * kDepthScale,
-        cam.z + kIconDepth });
-    icon.object->SetRotation({ kIconTilt, icon.baseYaw + std::sin(pulseTime_ * kIconSwingSpeed) * kIconSwingAmplitude, 0.0f });
-    const float scale = icon.scale * kDepthScale;
+        cam.z + kIconDepth };
+    const Vector3 iconRotation = { kIconTilt, icon.baseYaw + std::sin(pulseTime_ * kIconSwingSpeed) * kIconSwingAmplitude, 0.0f };
+    icon.object->SetPosition(iconPosition);
+    icon.object->SetRotation(iconRotation);
+    // 合体している時は、手に持つ武器と同じく素材の武器を柄頭から逆向きに付け、2本ぶんが枠に収まるよう縮める
+    std::vector<ModelIcon>& partners = partnerIcons_[state.slotIndex];
+    const bool fused = state.partnerIndex >= 0 && state.partnerIndex < static_cast<int>(partners.size()) && partners[state.partnerIndex].object;
+    const float scale = icon.scale * kDepthScale * (fused ? kFusedIconShrink : 1.0f);
     icon.object->SetScale({ scale, scale, scale });
     const float b = (state.active ? (modelActiveBrightness + state.pulse * modelActivePulseGain) : modelIdleBrightness) + state.flash * modelFlashGain;
     icon.object->SetColor({ b, b, b, 1.0f });
     icon.object->Update();
+    if (fused) {
+        ModelIcon& partner = partners[state.partnerIndex];
+        // 土台のモデルの空間で、X軸で半回転して刃を下へ向ける（向きの補正は素材と土台の差だけ足す）
+        const float partnerScale = partner.scale / icon.scale * kFusedPartnerScale;
+        const Vector3 partnerScales = { partnerScale, partnerScale, partnerScale };
+        const Vector3 partnerRotation = { gameConstants::kPi, partner.baseYaw - icon.baseYaw, 0.0f };
+        const Vector3 partnerOffset = { 0.0f, 0.0f, 0.0f };
+        const Matrix4x4 local = MakeAffineMatrix(partnerScales, partnerRotation, partnerOffset);
+        const Vector3 iconScales = { scale, scale, scale };
+        const Matrix4x4 baseWorld = MakeAffineMatrix(iconScales, iconRotation, iconPosition);
+        partner.object->SetLocalMatrix(Multiply(local, baseWorld));
+        partner.object->SetColor({ b, b, b, 1.0f });
+        partner.object->Update();
+        slot.partnerIcon = state.partnerIndex;
+    }
 }
 
 /** @brief 武器の色で塗ったアイコンを出す */
@@ -445,10 +471,17 @@ void WeaponSlotHud::Draw() {
     gunFrame_->Draw();
     models_->CommonDrawSettings();
     Object3d::RebindCommonLighting(graphics_->GetCommandList());
-    for (int i = 0; i < kSlotCount; ++i) {
-        const int index = weapons_->GetSlotWeaponIndex(i);
-        if (HasModelIcon(index)) {
-            modelIcons_[index].object->Draw();
+    for (int i = 0; i <= kSlotCount; ++i) {
+        if (i == WeaponManager::kBossSlot && !weapons_->HasBossWeapon()) {
+            continue;
+        }
+        const Slot& slot = slots_[i];
+        if (slot.modelIcon < 0) {
+            continue;
+        }
+        modelIcons_[i][slot.modelIcon].object->Draw();
+        if (slot.partnerIcon >= 0) {
+            partnerIcons_[i][slot.partnerIcon].object->Draw();
         }
     }
     sprites_->CommonDrawSettings();

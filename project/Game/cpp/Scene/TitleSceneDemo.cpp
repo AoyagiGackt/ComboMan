@@ -215,6 +215,8 @@ void TitleScene::InitializeDemo() {
 
     skydome_ = std::make_unique<Skydome>();
     skydome_->InitializeDefault(modelCommon_.get());
+    sceneShared::ApplyStageSky(skydome_.get(), GetEditorLevelPath());
+    sceneShared::ConnectStageSkyToEditor(GetStageEditor(), skydome_.get());
 
     // 床と背景のビルはレベルJSON（Resources/Levels/title.json）に置き、F2のステージエディタで編集する
 

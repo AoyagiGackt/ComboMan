@@ -339,7 +339,31 @@ void StageEditor::RenderEditorToolbar() {
     }
     ImGui::PopStyleColor();
     ImGui::Separator();
-    // 2段目: 追加ボタンと、補助パネルを開くメニュー
+    // 2段目: よく使う補助パネルの開け閉め（開いているパネルのボタンは色を変える）
+    auto panelToggle = [](const char* label, bool& open) {
+        const bool wasOpen = open;
+        if (wasOpen) {
+            ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
+        }
+        if (ImGui::Button(label)) {
+            open = !open;
+        }
+        if (wasOpen) {
+            ImGui::PopStyleColor();
+        }
+        ImGui::SameLine();
+    };
+    ImGui::TextUnformatted("パネル");
+    ImGui::SameLine();
+    panelToggle("このレベル", showLevelPanel_);
+    panelToggle("グラフ", showGraphPanel_);
+    panelToggle("イベントをつなぐ", showNoCodeEventPanel_);
+    panelToggle("敵の出現", showWavePanel_);
+    panelToggle("フラグ", showFlagsPanel_);
+    panelToggle("保存前チェック", showWorkflowPanel_);
+    ImGui::NewLine();
+    ImGui::Separator();
+    // 3段目: 追加ボタンと、表示の切り替えのメニュー
     ImGui::BeginDisabled(playTestMode_);
     if (ImGui::Button("文章UIを追加")) {
         AddUITextAt(editorUi::kScreenCenterPosition);
@@ -356,7 +380,7 @@ void StageEditor::RenderEditorToolbar() {
         showEnemyTypeEditor_ = !showEnemyTypeEditor_;
     }
     ImGui::SameLine();
-    if (ImGui::Button("追加機能")) {
+    if (ImGui::Button("表示・その他")) {
         ImGui::OpenPopup("編集追加機能");
     }
     if (ImGui::BeginPopup("編集追加機能")) {
@@ -386,14 +410,7 @@ void StageEditor::RenderEditorToolbar() {
         ImGui::TextDisabled("自動保存され、次回のDebug起動に反映します");
         ImGui::Separator();
 #endif
-        // 補助パネルの表示切り替え（チェックの付いたパネルが開く）
-        ImGui::MenuItem("制作・保存前チェック", nullptr, &showWorkflowPanel_);
-        ImGui::MenuItem("イベントをつなぐ", nullptr, &showNoCodeEventPanel_);
-        ImGui::MenuItem("敵の出現を作る", nullptr, &showWavePanel_);
-        ImGui::Separator();
-        // 状態の確認と表示の切り替え
-        ImGui::MenuItem("フラグを確認", nullptr, &showFlagsPanel_);
-        ImGui::MenuItem("グラフを編集", nullptr, &showGraphPanel_);
+        // 表示の切り替え（補助パネルはツールバーの2段目のボタンで開く）
         ImGui::MenuItem("配置したテキストを表示", nullptr, &showUIText_);
         ImGui::MenuItem("グリッド線を表示", nullptr, &showGrid_);
         // 画面UIの印が配置物のクリックの邪魔になる時に隠す

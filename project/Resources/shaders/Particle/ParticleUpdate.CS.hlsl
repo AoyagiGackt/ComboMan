@@ -1,27 +1,6 @@
 // パーティクルの物理演算と WVP 行列計算を GPU 上で行う Compute Shader
-
-struct GPUParticleState
-{
-    float3 position; // 12
-    float lifeTime; //  4 -> 16
-    float3 velocity; // 12
-    float currentTime; //  4 -> 32
-    float4 color; // 16 -> 48
-    float3 scale; // 12
-    float rotateZ; //  4 -> 64
-    uint alive; //  4
-    uint curveFlag; //  4  (1 = enemyDeath 螺旋回転, 2 = flicker)
-    float2 pad; //  8 -> 80
-};
-
-struct ParticleForGPU
-{
-    float4x4 WVP;
-    float4x4 World;
-    float4 color;
-    float4 uvRect; // xy=UV のずらし zw=UV の倍率（コマ送り・左右反転）
-    float4 params; // x=焼け具合 y=熱さ z=1なら丸く切り抜かない
-};
+// 寿命が尽きた粒はその場で空き一覧へ枠を返す（出し直すグループは、その場で新しい粒に生まれ変わらせる）
+#include "ParticleCompute.hlsli"
 
 cbuffer UpdateConstants : register(b0)
 {
@@ -29,7 +8,52 @@ cbuffer UpdateConstants : register(b0)
     float4x4 gViewProj; // 64
     float gDeltaTime; //  4
     uint gMaxParticles; //  4
-    float2 gPad; //  8 -> 144
+    uint gFrame; //  4  フレームの通し番号（生まれ変わりの乱数の種）
+    float gPad; //  4 -> 144
+};
+
+// 寿命が尽きた粒を同じ範囲に出し直すグループの設定（C++ の ParticleLoopConfig と同じ並び）
+cbuffer LoopConstants : register(b1)
+{
+    float3 gLoopCenter; // 中心
+    float gLoopRadius; // 横と奥行きに広がる半径
+    float4 gLoopColor; // 色
+    float gLoopLifeTimeMin; // 寿命の幅
+    float gLoopLifeTimeMax;
+    float gLoopScale; // 大きさ
+    uint gLoopEnabled; // 1 なら出し直す
+    float gLoopHeight; // 中心から上へ広がる高さ
+    float gLoopDriftXZ; // 横に流れる速さの幅
+    float gLoopRiseMin; // 昇る速さの幅
+    float gLoopRiseMax;
+    uint gLoopSeed; // グループごとの乱数の種
+    float gFieldScale; // 場の効き方の倍率（0 で効かない）
+    float2 gLoopPad;
+};
+
+// 範囲の中の粒に力を掛ける場（C++ の ParticleField と同じ並び。48 バイト）
+struct ParticleField
+{
+    float3 center; // 中心
+    float radius; // 効く半径
+    float3 direction; // kFieldDirectional の流す向き
+    float strength; // 加速度（放射の場は正で押し広げ、負で引き寄せる）
+    float swirl; // 中心のまわりを回す加速度
+    float drag; // 範囲の中で速さを抜く強さ
+    uint type; // 0=放射 1=一方向
+    float pad;
+};
+
+static const uint kMaxFields = 16u; // C++ の ParticleManager::kMaxFields と同じ
+static const uint kFieldDirectional = 1u;
+static const float kFieldMinDistance = 0.0001f; // 中心にぴったり重なった粒は上へ押す
+
+// このフレームに効かせる場（全グループで同じもの）
+cbuffer FieldConstants : register(b2)
+{
+    uint gFieldCount;
+    float3 gFieldPad;
+    ParticleField gFields[kMaxFields];
 };
 
 static const float kPi = 3.14159265f;
@@ -78,46 +102,80 @@ static const float kCrackleJump = 0.35f; // 跳ぶ幅（粒の大きさに対す
 static const float kCrackleOnRate = 0.65f; // 点いている確率
 static const float kCrackleWhite = 0.7f; // 点いた時に白へ寄せる最大の割合
 
+// 魂（curveFlag == 9）— 倒れた敵から抜け出して、揺れながら昇っていく
+static const float kSoulRise = 2.2f; // 上向きに足す加速度
+static const float kSoulDrag = 1.5f; // 横の勢いが抜ける速さ
+static const float kSoulSwayHz = 3.0f; // 左右に揺れる速さ
+static const float kSoulSway = 2.5f; // 左右に揺れる強さ
+static const float kSoulGrow = 0.6f; // 消えるまでにふくらむ割合
+static const float kSoulWhiten = 0.5f; // 出た直後に白へ寄せる割合
+
+// 粘液（curveFlag == 10）— 重く落ち、飛ぶ向きへ伸びて潰れる
+static const float kGooGravity = 18.0f; // 落ちる加速度
+static const float kGooStretch = 0.9f; // 速さに応じて飛ぶ向きへ伸ばす割合
+static const float kGooStretchSpeed = 6.0f; // 伸びきる速さ
+static const float kGooMinThin = 0.55f; // 伸びた時に細る下限（伸びた分だけ細くして量を保つ）
+static const float kGooFadeStart = 0.6f; // 薄れ始める時（寿命の割合）
+
+// 舞い落ちる破片（curveFlag == 11）— ゆっくり落ちながら左右に揺れ、くるくる裏返る
+static const float kFlutterGravity = 2.5f; // 落ちる加速度
+static const float kFlutterDrag = 2.2f; // 速さが抜ける速さ
+static const float kFlutterSwayHz = 4.0f; // 左右に揺れる速さ
+static const float kFlutterSway = 5.0f; // 左右に揺れる強さ
+static const float kFlutterSpin = 7.0f; // 回る速さ（ラジアン毎秒）
+static const float kFlutterFlipHz = 6.0f; // 裏返る速さ
+static const float kFlutterMinWidth = 0.15f; // 裏返って細く見える時の幅の下限
+
 RWStructuredBuffer<GPUParticleState> gParticles : register(u0);
 RWStructuredBuffer<ParticleForGPU> gInstancing : register(u1);
+RWStructuredBuffer<uint> gFreeList : register(u2);
+RWStructuredBuffer<int> gCounter : register(u3);
 
-// -------------------------------------------------------
-//  xoroshiro128+
-// -------------------------------------------------------
-uint rotl32u(uint x, int k)
+// 場の力で速さを変える（中心から離れるほど弱く、半径の外では効かない）
+float3 ApplyFields(float3 position, float3 velocity)
 {
-    return (x << k) | (x >> (32 - k));
+    for (uint i = 0u; i < gFieldCount; ++i)
+    {
+        ParticleField field = gFields[i];
+        float3 offset = position - field.center;
+        float dist = length(offset);
+        if (dist >= field.radius)
+        {
+            continue;
+        }
+        float falloff = (1.0f - dist / field.radius) * gFieldScale;
+        float3 accel;
+        if (field.type == kFieldDirectional)
+        {
+            accel = field.direction * field.strength;
+        }
+        else
+        {
+            float3 outward = dist > kFieldMinDistance ? offset / dist : float3(0.0f, 1.0f, 0.0f);
+            // 押し広げる・引き寄せる力に、画面の奥行きの軸まわりに回す力を足して渦にする
+            float3 tangent = float3(-outward.y, outward.x, 0.0f);
+            accel = outward * field.strength + tangent * field.swirl;
+        }
+        velocity += accel * falloff * gDeltaTime;
+        velocity *= saturate(1.0f - field.drag * falloff * gDeltaTime);
+    }
+    return velocity;
 }
 
-uint4 xoshiroSeed(uint seed, uint time, uint idx)
+// 出し直すグループで、寿命が尽きた枠に新しい粒を作る（中心のまわりの円柱の中に置き、横に流れながら昇る）
+GPUParticleState RespawnLoopParticle(uint idx)
 {
-    uint a = seed ^ (idx * 2654435761u);
-    uint b = time ^ (idx * 2246822519u);
-    a ^= a >> 16;
-    a *= 0x45d9f3bu;
-    a ^= a >> 16;
-    b ^= b >> 16;
-    b *= 0x45d9f3bu;
-    b ^= b >> 16;
-    return uint4(a, b, a ^ 0x9e3779b9u, b ^ 0x6c62272eu);
-}
-
-uint xoshiroNext(inout uint4 s)
-{
-    uint result = s.x + s.w;
-    uint t = s.y << 9;
-    s.z ^= s.x;
-    s.w ^= s.y;
-    s.y ^= s.z;
-    s.x ^= s.w;
-    s.z ^= t;
-    s.w = rotl32u(s.w, 11);
-    return result;
-}
-
-float rand01(inout uint4 s)
-{
-    return float(xoshiroNext(s) >> 8) * (1.0f / 16777216.0f);
+    uint4 rng = XoshiroSeed(gLoopSeed, gFrame, idx);
+    GPUParticleState p = (GPUParticleState) 0;
+    p.position = gLoopCenter + float3(RandRange(rng, -gLoopRadius, gLoopRadius),
+        Rand01(rng) * gLoopHeight, RandRange(rng, -gLoopRadius, gLoopRadius));
+    p.lifeTime = RandRange(rng, gLoopLifeTimeMin, gLoopLifeTimeMax);
+    p.velocity = float3(RandRange(rng, -gLoopDriftXZ, gLoopDriftXZ),
+        RandRange(rng, gLoopRiseMin, gLoopRiseMax), RandRange(rng, -gLoopDriftXZ, gLoopDriftXZ));
+    p.color = gLoopColor;
+    p.scale = float3(gLoopScale, gLoopScale, gLoopScale);
+    p.alive = 1u;
+    return p;
 }
 
 // -------------------------------------------------------
@@ -144,54 +202,41 @@ float4x4 MakeRotateZ(float a)
     );
 }
 
-// -------------------------------------------------------
-//  groupshared: スレッドグループ内の生存パーティクル数
-//  GroupMemoryBarrierWithGroupSync を使うには全スレッドが
-//  必ず同じ回数バリアを通過しなければならないため、
-//  early return を避けたフラグベースの構造にしている
-// -------------------------------------------------------
-groupshared uint gs_aliveCount;
-
 [numthreads(64, 1, 1)]
-void main(uint3 DTid : SV_DispatchThreadID, uint3 GTid : SV_GroupThreadID)
+void main(uint3 DTid : SV_DispatchThreadID)
 {
-    // --- Sync 1: 共有変数をスレッド 0 が初期化し、全スレッドに同期 ---
-    if (GTid.x == 0)
-        gs_aliveCount = 0u;
-    GroupMemoryBarrierWithGroupSync();
-
     uint idx = DTid.x;
-    bool active = (idx < gMaxParticles);
-
-    GPUParticleState p = (GPUParticleState) 0;
-    bool alive = false;
-
-    if (active)
+    if (idx >= gMaxParticles)
     {
-        p = gParticles[idx];
-        alive = (p.alive != 0 && p.currentTime < p.lifeTime);
+        return;
+    }
 
-        if (!alive)
+    GPUParticleState p = gParticles[idx];
+    bool wasAlive = p.alive != 0u;
+    bool alive = wasAlive && p.currentTime < p.lifeTime;
+
+    // 寿命が尽きた瞬間に1回だけ、出し直すグループなら生まれ変わらせ、そうでなければ枠を空き一覧へ返す
+    if (wasAlive && !alive)
+    {
+        if (gLoopEnabled != 0u)
         {
-            p.alive = 0;
+            p = RespawnLoopParticle(idx);
+            alive = true;
+        }
+        else
+        {
+            p.alive = 0u;
             gParticles[idx] = p;
-            gInstancing[idx].color = float4(0, 0, 0, 0);
+            PushFreeSlot(gCounter, gFreeList, idx);
         }
     }
 
-    // --- 不可分操作: 生存パーティクルをグループ単位でカウント ---
-    if (alive)
-        InterlockedAdd(gs_aliveCount, 1u);
-
-    // --- Sync 2: 全スレッドの InterlockedAdd 完了を待つ ---
-    GroupMemoryBarrierWithGroupSync();
-
-    // gs_aliveCount 確定（このスレッドグループ内の生存数）
-    // 現状は使用しないが、将来的な LOD / カリング等に活用可能
-
-    // dead / 範囲外スレッドはここで終了（2 つのバリアはすでに通過済み）
-    if (!active || !alive)
+    // 死んでいる枠は透明にしておく（頂点シェーダーが描かずに捨てる）
+    if (!alive)
+    {
+        gInstancing[idx].color = float4(0.0f, 0.0f, 0.0f, 0.0f);
         return;
+    }
 
     // --- 生存パーティクルのみ以下を処理 ---
 
@@ -241,6 +286,34 @@ void main(uint3 DTid : SV_DispatchThreadID, uint3 GTid : SV_GroupThreadID)
         p.rotateZ += kMistSpin * spinSign * gDeltaTime;
     }
 
+    // curveFlag == 9: 魂 — 加速しながら昇り、横の勢いは抜けて、左右に揺れる
+    if (p.curveFlag == 9)
+    {
+        p.velocity.y += kSoulRise * gDeltaTime;
+        p.velocity.xz *= saturate(1.0f - kSoulDrag * gDeltaTime);
+        p.velocity.x += sin(p.currentTime * kSoulSwayHz + phase) * kSoulSway * gDeltaTime;
+    }
+
+    // curveFlag == 10: 粘液 — 重く落ちる
+    if (p.curveFlag == 10)
+    {
+        p.velocity.y -= kGooGravity * gDeltaTime;
+    }
+
+    // curveFlag == 11: 舞い落ちる破片 — 速さが抜けてゆっくり落ち、左右に揺れながら回る
+    if (p.curveFlag == 11)
+    {
+        p.velocity.y -= kFlutterGravity * gDeltaTime;
+        p.velocity *= saturate(1.0f - kFlutterDrag * gDeltaTime);
+        p.velocity.x += sin(p.currentTime * kFlutterSwayHz + phase) * kFlutterSway * gDeltaTime;
+        p.rotateZ += kFlutterSpin * spinSign * gDeltaTime;
+    }
+
+    // 場の力（衝撃で押し広げる・渦へ吸い込む・突進に引きずられる）
+    if (gFieldScale > 0.0f)
+    {
+        p.velocity = ApplyFields(p.position, p.velocity);
+    }
     p.position += p.velocity * gDeltaTime;
     p.currentTime += gDeltaTime;
     gParticles[idx] = p;
@@ -275,15 +348,36 @@ void main(uint3 DTid : SV_DispatchThreadID, uint3 GTid : SV_GroupThreadID)
         renderScale *= 1.0f + kMistGrow * t;
     }
 
+    // 魂: 昇るにつれてふくらむ
+    if (p.curveFlag == 9)
+    {
+        renderScale *= 1.0f + kSoulGrow * t;
+    }
+    // 粘液: 飛ぶ向きへ伸ばし、伸びた分だけ細くする
+    if (p.curveFlag == 10)
+    {
+        float speed = length(p.velocity.xy);
+        float stretch = 1.0f + kGooStretch * saturate(speed / kGooStretchSpeed);
+        renderScale.y *= stretch;
+        renderScale.x *= max(1.0f / stretch, kGooMinThin);
+        // 板の縦（+Y）を飛ぶ向きへ合わせる
+        renderRot = speed > 0.0001f ? atan2(p.velocity.y, p.velocity.x) - kPi * 0.5f : p.rotateZ;
+    }
+    // 舞い落ちる破片: 裏返るように幅を縮めたり戻したりする
+    if (p.curveFlag == 11)
+    {
+        renderScale.x *= max(abs(cos(p.currentTime * kFlutterFlipHz + phase)), kFlutterMinWidth);
+    }
+
     // 放電: 一定間隔ごとに位置と向きを跳ばす（積み上げずに描く時だけずらす）
     uint crackleSlot = (uint) (p.currentTime * kCrackleHz);
-    uint4 crackleRng = xoshiroSeed(crackleSlot, idx * 2654435761u, idx);
+    uint4 crackleRng = XoshiroSeed(crackleSlot, idx * 2654435761u, idx);
     if (p.curveFlag == 8)
     {
         float jump = kCrackleJump * max(p.scale.x, p.scale.y);
-        renderPos.x += (rand01(crackleRng) * 2.0f - 1.0f) * jump;
-        renderPos.y += (rand01(crackleRng) * 2.0f - 1.0f) * jump;
-        renderRot = rand01(crackleRng) * kTwoPi;
+        renderPos.x += (Rand01(crackleRng) * 2.0f - 1.0f) * jump;
+        renderPos.y += (Rand01(crackleRng) * 2.0f - 1.0f) * jump;
+        renderRot = Rand01(crackleRng) * kTwoPi;
     }
 
     // ワールド行列: scale * rotateZ * billboard、row3 に平行移動を直接書く
@@ -321,8 +415,8 @@ void main(uint3 DTid : SV_DispatchThreadID, uint3 GTid : SV_GroupThreadID)
     {
         float flickerHz = 2.0f + float(idx % 7u) * 0.857142857f; // 2〜8 Hz でばらつかせる
         uint timeSlot = (uint) (p.currentTime * flickerHz);
-        uint4 rng = xoshiroSeed(timeSlot, idx * 3141592653u, idx);
-        float r = rand01(rng);
+        uint4 rng = XoshiroSeed(timeSlot, idx * 3141592653u, idx);
+        float r = Rand01(rng);
         gInstancing[idx].color = float4(p.color.rgb, p.color.a * (r < 0.75f ? 1.0f : 0.0f));
     }
     else if (p.curveFlag == 5)
@@ -347,9 +441,20 @@ void main(uint3 DTid : SV_DispatchThreadID, uint3 GTid : SV_GroupThreadID)
     else if (p.curveFlag == 8)
     {
         // 間隔ごとに点いたり消えたりし、点いた時は白へ寄せる
-        bool lit = rand01(crackleRng) < kCrackleOnRate;
-        float3 rgb = lerp(p.color.rgb, float3(1.0f, 1.0f, 1.0f), rand01(crackleRng) * kCrackleWhite);
+        bool lit = Rand01(crackleRng) < kCrackleOnRate;
+        float3 rgb = lerp(p.color.rgb, float3(1.0f, 1.0f, 1.0f), Rand01(crackleRng) * kCrackleWhite);
         gInstancing[idx].color = float4(rgb, lit ? p.color.a * (1.0f - t * t) : 0.0f);
+    }
+    else if (p.curveFlag == 9)
+    {
+        // 魂: 白く抜け出して指定色になり、ふわっと現れてふわっと消える
+        float3 rgb = lerp(float3(1.0f, 1.0f, 1.0f), p.color.rgb, saturate(t * 2.0f + (1.0f - kSoulWhiten)));
+        gInstancing[idx].color = float4(rgb, p.color.a * sin(t * kPi));
+    }
+    else if (p.curveFlag == 10)
+    {
+        // 粘液: しばらくはっきり見せてから薄れる
+        gInstancing[idx].color = float4(p.color.rgb, p.color.a * (1.0f - saturate((t - kGooFadeStart) / (1.0f - kGooFadeStart))));
     }
     else
     {

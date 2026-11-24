@@ -15,4 +15,5 @@ inline constexpr std::size_t kName = 96; ///< オブジェクト名とフラグ�
 inline constexpr std::size_t kLabel = 128; ///< 詳細を含む一覧ラベル
 inline constexpr std::size_t kRelativePath = 160; ///< グラフの相対パス入力
 inline constexpr std::size_t kPath = 256; ///< アセットやファイルのパス入力
+inline constexpr std::size_t kParagraph = 1024; ///< 説明書きなどの数行の文章の入力
 } // namespace engine::TextBufferCapacity

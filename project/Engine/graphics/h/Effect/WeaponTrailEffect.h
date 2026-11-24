@@ -7,6 +7,7 @@
 #include "MakeAffine.h"
 #include <cstdint>
 #include <deque>
+#include <vector>
 #include <wrl/client.h>
 
 namespace engine::graphics {
@@ -121,13 +122,11 @@ private:
     Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> pipelineState_;
 
-    Microsoft::WRL::ComPtr<ID3D12Resource> vertexBuffer_;
-    D3D12_VERTEX_BUFFER_VIEW vbv_ { };
-    TrailVertex* vertexData_ = nullptr;
+    // 頂点と定数は CPU 側で組み、描く時にこのフレーム用のアップロード領域へ写す
+    // （Map したままの1本を毎フレーム書き換えると、GPU が前のフレームを読んでいる間に上書きする恐れがあるため）
+    std::vector<TrailVertex> vertices_; ///< 組み立てた頂点（先頭から vertexCount_ 個が有効）
     uint32_t vertexCount_ = 0;
-
-    Microsoft::WRL::ComPtr<ID3D12Resource> sceneCB_;
-    SceneCB* sceneCBData_ = nullptr;
+    SceneCB sceneCB_ { }; ///< ビュー射影行列
 
     std::deque<Sample> samples_; ///< 古い順（末尾が最新）
     uint32_t strokeId_ = 0;

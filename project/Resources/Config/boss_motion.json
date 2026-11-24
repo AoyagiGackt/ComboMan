@@ -299,6 +299,35 @@
             {"t": 1, "lean": 6, "weapon": 18, "reaches": [["Torso",[0,1,0.1],0.6],["Neck",[0,1,0.2],0.7],["UpperArm.R",[0,-0.6,0.7],1],["LowerArm.R",[0,-0.2,1],1],["UpperArm.L",[0,-0.6,0.7],1],["LowerArm.L",[0,-0.2,1],1]]}
           ]
         }
+      },
+      "vortex": {
+        "windup": {
+          "anim": "Idle_swordRight",
+          "animSpeed": 0.5,
+          "keys": [
+            {"t": 0, "lean": 6, "weapon": 18, "reaches": [["Torso",[0,1,0.1],0.6],["Neck",[0,1,0.2],0.7],["UpperArm.R",[0,-0.6,0.7],1],["LowerArm.R",[0,-0.2,1],1],["UpperArm.L",[0,-0.6,0.7],1],["LowerArm.L",[0,-0.2,1],1]]},
+            {"t": 1, "lean": 22, "lift": -0.04, "spin": -40, "weapon": 215, "reaches": [["Torso",[0,0.7,0.8],0.6],["Neck",[0,0.8,1],0.7],["UpperArm.R",[0,-0.8,-0.6],1],["LowerArm.R",[0,-0.6,-0.8],1],["UpperArm.L",[0,-0.8,-0.5],1],["LowerArm.L",[0,-0.6,-0.8],1]]}
+          ]
+        },
+        "action": {
+          "anim": "Idle_swordRight",
+          "animSpeed": 0.5,
+          "loopSeconds": 0.45,
+          "keys": [
+            {"t": 0, "lean": 10, "spin": 0, "weapon": 90, "reaches": [["Torso",[0,1,0.1],0.6],["Neck",[0,1,0.2],0.7],["UpperArm.R",[0,-0.6,0.7],1],["LowerArm.R",[0,-0.2,1],1],["UpperArm.L",[0,-0.6,0.7],1],["LowerArm.L",[0,-0.2,1],1]]},
+            {"t": 0.5, "lean": 10, "spin": 180, "weapon": 90, "reaches": [["Torso",[0,1,0.1],0.6],["Neck",[0,1,0.2],0.7],["UpperArm.R",[0,-0.6,0.7],1],["LowerArm.R",[0,-0.2,1],1],["UpperArm.L",[0,-0.6,0.7],1],["LowerArm.L",[0,-0.2,1],1]]},
+            {"t": 1, "lean": 10, "spin": 360, "weapon": 90, "reaches": [["Torso",[0,1,0.1],0.6],["Neck",[0,1,0.2],0.7],["UpperArm.R",[0,-0.6,0.7],1],["LowerArm.R",[0,-0.2,1],1],["UpperArm.L",[0,-0.6,0.7],1],["LowerArm.L",[0,-0.2,1],1]]}
+          ]
+        },
+        "recover": {
+          "anim": "Idle_swordRight",
+          "animSpeed": 0.5,
+          "keys": [
+            {"t": 0, "lean": -16, "lift": 0.04, "spin": 30, "weapon": -8, "reaches": [["Torso",[0,1,-0.3],0.6],["Neck",[0,1,-0.3],0.7],["UpperArm.R",[0,1,0.5],1],["LowerArm.R",[0,1,0.3],1],["UpperArm.L",[0,1,0.5],1],["LowerArm.L",[0,1,0.3],1]]},
+            {"t": 0.55, "lean": -12, "lift": 0.03, "spin": 25, "weapon": -5, "reaches": [["Torso",[0,1,-0.3],0.6],["UpperArm.R",[0,1,0.5],1],["LowerArm.R",[0,1,0.3],1],["UpperArm.L",[0,1,0.5],1],["LowerArm.L",[0,1,0.3],1]]},
+            {"t": 1, "lean": 6, "weapon": 18, "reaches": [["Torso",[0,1,0.1],0.6],["Neck",[0,1,0.2],0.7],["UpperArm.R",[0,-0.6,0.7],1],["LowerArm.R",[0,-0.2,1],1],["UpperArm.L",[0,-0.6,0.7],1],["LowerArm.L",[0,-0.2,1],1]]}
+          ]
+        }
       }
     },
     "Scythe": {
