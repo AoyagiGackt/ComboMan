@@ -3,6 +3,7 @@
  * @brief 実行中のライブパラメータ調整パネル（SceneEditor、Stateパターンによる選択種別ごとの表示切替）の実装
  */
 #include "SceneEditor.h"
+#include "EngineContext.h"
 #include "TextBufferCapacity.h"
 #include "GameConstants.h"
 #include "Input.h"
@@ -16,7 +17,9 @@
 #include <iterator>
 #include <string>
 #ifdef USE_IMGUI
+#include "EditorHub.h"
 #include "EditorUI.h"
+#include "FieldMemory.h"
 #include <imgui.h>
 #endif
 using namespace engine::graphics;
@@ -65,9 +68,16 @@ constexpr int kMinSmoothFrames = 1;
 constexpr int kMaxSmoothFrames = 60;
 
 #ifdef USE_IMGUI
+/** @brief シーンエディタの項目の、開いた時の値を覚えておく入れ物（パネルを開き直すと覚え直す） */
+engine::editor::FieldMemory& SceneFields() {
+    static engine::editor::FieldMemory sFields;
+    return sFields;
+}
+
 /** @brief カメラの平滑化のフレーム数のスライダーを出す（変えたら古い平均が混ざらないよう履歴を消す） */
 void DrawSmoothFramesSlider(const SceneEditor::EditContext& ctx) {
-    if (ImGui::SliderInt("Smooth Frames", ctx.cameraSmoothFrames, kMinSmoothFrames, kMaxSmoothFrames)) {
+    if (SceneFields().Track(ImGui::SliderInt("なめらかさ(フレーム)", ctx.cameraSmoothFrames, kMinSmoothFrames, kMaxSmoothFrames),
+            *ctx.cameraSmoothFrames, "カメラが目標へ追いつくまでのフレーム数です。大きいほどゆっくり、なめらかに動きます")) {
         ctx.cameraPosHistory->clear();
         ctx.cameraRotHistory->clear();
     }
@@ -75,13 +85,13 @@ void DrawSmoothFramesSlider(const SceneEditor::EditContext& ctx) {
 
 /** @brief 回転体メッシュに共通する位置・回転・拡大率を編集し、変化した値を実体へ反映する */
 void RenderMeshTransform(RevolvedMeshBase& mesh, Vector3& position, Vector3& rotation, float& scale) {
-    if (ImGui::DragFloat3("Position", &position.x, kDragStepPosition)) {
+    if (SceneFields().Track(ImGui::DragFloat3("位置", &position.x, kDragStepPosition), position, "置く場所です（横・高さ・奥行き）")) {
         mesh.SetPosition(position);
     }
-    if (ImGui::DragFloat3("Rotation", &rotation.x, kDragStepRotation)) {
+    if (SceneFields().Track(ImGui::DragFloat3("向き", &rotation.x, kDragStepRotation), rotation, "それぞれの軸まわりの回転です")) {
         mesh.SetRotation(rotation);
     }
-    if (ImGui::DragFloat("Scale", &scale, kDragStepScale, kMinEditableSize, kMaxObjectScale)) {
+    if (SceneFields().Track(ImGui::DragFloat("大きさ", &scale, kDragStepScale, kMinEditableSize, kMaxObjectScale), scale, "全体を何倍にするかです")) {
         mesh.SetScale(scale);
     }
 }
@@ -153,8 +163,14 @@ void SceneEditor::ChangeState(Selection sel) {
 // リリースビルドでは引数を無視して何もしない
 void SceneEditor::Update(const EditContext& ctx, engine::Input* input) {
 #ifdef USE_IMGUI
-    if (input && input->TriggerKey(DIK_F3)) {
+    // F3 か、F8 のエディタ一覧のボタンで開閉する
+    const bool hubToggle = editor::EditorHub::GetInstance()->Offer("scene", "シーンエディタ", "F3",
+        "画面に出ている物の位置やカメラを動かし、スコアやシーンの切り替えも試せます", visible_);
+    if ((input && input->TriggerKey(DIK_F3)) || hubToggle) {
         visible_ = !visible_;
+        if (visible_) {
+            SceneFields().Forget();
+        }
     }
     if (!visible_) {
         return;
@@ -332,8 +348,8 @@ void SceneEditor::RenderCameraControl(const EditContext& ctx) {
     ImGui::Begin("Camera Control");
 
     // ドラッグスライダーで目標座標・角度を変更する
-    ImGui::DragFloat3("Pos", &ctx.cameraTargetPos->x, kDragStepPosition);
-    ImGui::DragFloat3("Rot", &ctx.cameraTargetRot->x, kDragStepRotation);
+    SceneFields().Track(ImGui::DragFloat3("位置", &ctx.cameraTargetPos->x, kDragStepPosition), *ctx.cameraTargetPos, "カメラが向かう場所です");
+    SceneFields().Track(ImGui::DragFloat3("向き", &ctx.cameraTargetRot->x, kDragStepRotation), *ctx.cameraTargetRot, "カメラが向く角度です");
 
     DrawSmoothFramesSlider(ctx);
 
@@ -387,8 +403,8 @@ void SceneEditor::CameraState::RenderInspector(const EditContext& ctx, SceneEdit
 #ifdef USE_IMGUI
     ImGui::TextColored(ImVec4(1, 1, 0, 1), "[Camera]");
     ImGui::Separator();
-    ImGui::DragFloat3("Position", &ctx.cameraTargetPos->x, kDragStepPosition); // ドラッグで位置を変更
-    ImGui::DragFloat3("Rotation", &ctx.cameraTargetRot->x, kDragStepRotation); // ドラッグで角度を変更
+    SceneFields().Track(ImGui::DragFloat3("位置", &ctx.cameraTargetPos->x, kDragStepPosition), *ctx.cameraTargetPos, "カメラが向かう場所です"); // ドラッグで位置を変更
+    SceneFields().Track(ImGui::DragFloat3("向き", &ctx.cameraTargetRot->x, kDragStepRotation), *ctx.cameraTargetRot, "カメラが向く角度です"); // ドラッグで角度を変更
     DrawSmoothFramesSlider(ctx);
     ImGui::Separator();
     if (ImGui::Button("Save##inspCam")) {
@@ -408,14 +424,16 @@ void SceneEditor::RingState::RenderInspector(const EditContext& ctx, SceneEditor
     }
     RenderMeshTransform(*ctx.ring, *ctx.ringPosition, *ctx.ringRotation, *ctx.ringScale);
     ImGui::Separator();
-    if (ImGui::DragFloat("Inner Radius", ctx.ringInnerRadius, kDragStepRadius, kMinEditableSize, *ctx.ringOuterRadius - kRadiusGap)) {
+    if (SceneFields().Track(ImGui::DragFloat("内側の半径", ctx.ringInnerRadius, kDragStepRadius, kMinEditableSize, *ctx.ringOuterRadius - kRadiusGap),
+            *ctx.ringInnerRadius, "輪の穴の大きさです。外側の半径より小さくなります")) {
         ctx.ring->SetInnerRadius(*ctx.ringInnerRadius);
     }
-    if (ImGui::DragFloat("Outer Radius", ctx.ringOuterRadius, kDragStepRadius, *ctx.ringInnerRadius + kRadiusGap, kMaxRadius)) {
+    if (SceneFields().Track(ImGui::DragFloat("外側の半径", ctx.ringOuterRadius, kDragStepRadius, *ctx.ringInnerRadius + kRadiusGap, kMaxRadius),
+            *ctx.ringOuterRadius, "輪の外側の大きさです")) {
         ctx.ring->SetOuterRadius(*ctx.ringOuterRadius);
     }
     ImGui::Separator();
-    if (ImGui::ColorEdit4("Color", &ctx.ringColor->x)) {
+    if (SceneFields().Track(ImGui::ColorEdit4("色", &ctx.ringColor->x), *ctx.ringColor, "輪の色と透明度です")) {
         ctx.ring->SetColor(*ctx.ringColor);
     }
 #endif
@@ -432,20 +450,24 @@ void SceneEditor::CylinderState::RenderInspector(const EditContext& ctx, SceneEd
     }
     RenderMeshTransform(*ctx.cylinder, *ctx.cylinderPosition, *ctx.cylinderRotation, *ctx.cylinderScale);
     ImGui::Separator();
-    if (ImGui::DragFloat("Top Radius", ctx.cylinderTopRadius, kDragStepRadius, kMinEditableSize, kMaxRadius)) {
+    if (SceneFields().Track(ImGui::DragFloat("上の半径", ctx.cylinderTopRadius, kDragStepRadius, kMinEditableSize, kMaxRadius),
+            *ctx.cylinderTopRadius, "円柱の上の面の大きさです")) {
         ctx.cylinder->SetTopRadius(*ctx.cylinderTopRadius);
     }
-    if (ImGui::DragFloat("Bottom Radius", ctx.cylinderBottomRadius, kDragStepRadius, kMinEditableSize, kMaxRadius)) {
+    if (SceneFields().Track(ImGui::DragFloat("下の半径", ctx.cylinderBottomRadius, kDragStepRadius, kMinEditableSize, kMaxRadius),
+            *ctx.cylinderBottomRadius, "円柱の下の面の大きさです")) {
         ctx.cylinder->SetBottomRadius(*ctx.cylinderBottomRadius);
     }
-    if (ImGui::DragFloat("Height", ctx.cylinderHeight, kDragStepRadius, kMinEditableSize, kMaxRadius)) {
+    if (SceneFields().Track(ImGui::DragFloat("高さ", ctx.cylinderHeight, kDragStepRadius, kMinEditableSize, kMaxRadius),
+            *ctx.cylinderHeight, "円柱の高さです")) {
         ctx.cylinder->SetHeight(*ctx.cylinderHeight);
     }
     ImGui::Separator();
-    if (ImGui::ColorEdit4("Color", &ctx.cylinderColor->x)) {
+    if (SceneFields().Track(ImGui::ColorEdit4("色", &ctx.cylinderColor->x), *ctx.cylinderColor, "円柱の色と透明度です")) {
         ctx.cylinder->SetColor(*ctx.cylinderColor);
     }
-    if (ImGui::SliderFloat("Alpha Reference", ctx.cylinderAlphaRef, 0.0f, 1.0f)) {
+    if (SceneFields().Track(ImGui::SliderFloat("切り抜きの境目", ctx.cylinderAlphaRef, 0.0f, 1.0f),
+            *ctx.cylinderAlphaRef, "この値より薄い所を描かずに切り抜きます")) {
         ctx.cylinder->SetAlphaReference(*ctx.cylinderAlphaRef);
     }
 #endif
@@ -457,11 +479,12 @@ void SceneEditor::SkydomeState::RenderInspector(const EditContext& ctx, SceneEdi
     ImGui::TextColored(kSkydomeHeaderColor, "[Skydome]");
     ImGui::Separator();
     if (ctx.skydome) {
-        if (ImGui::ColorEdit4("Sky Color", &ctx.skyColor->x)) {
+        if (SceneFields().Track(ImGui::ColorEdit4("空の色", &ctx.skyColor->x), *ctx.skyColor, "空に掛ける色です")) {
             ctx.skydome->SetSkyColor(*ctx.skyColor);
         }
         // 天球を Y 軸回転させることで、朝夕方夜のような方角の変化を演出できる
-        if (ImGui::SliderFloat("Rotation Offset Y", ctx.skyRotOffsetY, -gameConstants::kPi, gameConstants::kPi)) {
+        if (SceneFields().Track(ImGui::SliderFloat("空の回転", ctx.skyRotOffsetY, -gameConstants::kPi, gameConstants::kPi),
+                *ctx.skyRotOffsetY, "空をぐるりと回して、見える方角を変えます")) {
             ctx.skydome->SetRotationOffsetY(*ctx.skyRotOffsetY);
         }
         if (ImGui::Button("Reset Offset")) {
@@ -483,17 +506,19 @@ void SceneEditor::HumanState::RenderInspector(const EditContext& ctx, SceneEdito
         ImGui::TextDisabled("Human is disabled.");
         return;
     }
-    if (ImGui::DragFloat3("Position", &ctx.humanPosition->x, kDragStepFinePosition)) {
+    if (SceneFields().Track(ImGui::DragFloat3("位置", &ctx.humanPosition->x, kDragStepFinePosition), *ctx.humanPosition, "置く場所です")) {
         ctx.human->SetPosition(*ctx.humanPosition);
     }
-    if (ImGui::DragFloat3("Rotation", &ctx.humanRotation->x, kDragStepRotation)) {
+    if (SceneFields().Track(ImGui::DragFloat3("向き", &ctx.humanRotation->x, kDragStepRotation), *ctx.humanRotation, "体の向きです")) {
         ctx.human->SetRotation(*ctx.humanRotation);
     }
-    if (ImGui::DragFloat3("Scale", &ctx.humanScale->x, kDragStepScale, kMinEditableHumanScale, kMaxHumanScale)) {
+    if (SceneFields().Track(ImGui::DragFloat3("大きさ", &ctx.humanScale->x, kDragStepScale, kMinEditableHumanScale, kMaxHumanScale),
+            *ctx.humanScale, "横・高さ・奥行きの倍率です")) {
         ctx.human->SetScale(*ctx.humanScale);
     }
     ImGui::Separator();
-    if (ImGui::SliderFloat("Anim Speed", ctx.humanAnimSpeed, 0.0f, kMaxAnimSpeed)) {
+    if (SceneFields().Track(ImGui::SliderFloat("動きの速さ", ctx.humanAnimSpeed, 0.0f, kMaxAnimSpeed),
+            *ctx.humanAnimSpeed, "動きを何倍の速さで再生するかです。0で止まります")) {
         ctx.human->SetAnimSpeed(*ctx.humanAnimSpeed);
     }
     ImGui::Separator();
@@ -509,7 +534,7 @@ void SceneEditor::HumanState::RenderInspector(const EditContext& ctx, SceneEdito
         ctx.human->SetAnimSpeed(*ctx.humanAnimSpeed);
     }
     ImGui::Separator();
-    ImGui::Checkbox("Show Skeleton", ctx.showSkeleton);
+    SceneFields().Track(ImGui::Checkbox("骨を見せる", ctx.showSkeleton), *ctx.showSkeleton, "体を動かす骨の並びを線で重ねて見せます");
 #endif
 }
 
@@ -522,13 +547,14 @@ void SceneEditor::ParticlesState::RenderInspector(const EditContext& ctx, SceneE
         ImGui::TextDisabled("White Particles are disabled.");
         return;
     }
-    ImGui::DragFloat3("Position", &ctx.whiteParticlePos->x, kDragStepPosition);
-    ImGui::ColorEdit4("Color", &ctx.whiteParticleColor->x);
-    ImGui::DragFloat("Scale", ctx.whiteParticleScale, kDragStepScale, kMinEditableSize, kMaxParticleScale);
-    ImGui::SliderInt("Count", ctx.whiteParticleCount, 1, kMaxParticleCount);
+    SceneFields().Track(ImGui::DragFloat3("位置", &ctx.whiteParticlePos->x, kDragStepPosition), *ctx.whiteParticlePos, "粒を出す場所です");
+    SceneFields().Track(ImGui::ColorEdit4("色", &ctx.whiteParticleColor->x), *ctx.whiteParticleColor, "粒の色です");
+    SceneFields().Track(ImGui::DragFloat("大きさ", ctx.whiteParticleScale, kDragStepScale, kMinEditableSize, kMaxParticleScale),
+        *ctx.whiteParticleScale, "粒1つの大きさです");
+    SceneFields().Track(ImGui::SliderInt("数", ctx.whiteParticleCount, 1, kMaxParticleCount), *ctx.whiteParticleCount, "出す粒の数です。出し直すと反映されます");
     ImGui::Separator();
     if (ImGui::Button("Re-emit", ImVec2(-1, 0))) {
-        ParticleManager::GetInstance()->EmitScatterLoop(
+        engine::Services().particles->EmitScatterLoop(
             "white", *ctx.whiteParticlePos, kWhiteParticleSpread,
             static_cast<uint32_t>(*ctx.whiteParticleCount),
             *ctx.whiteParticleColor, kWhiteParticleSpeedMin, kWhiteParticleSpeedMax, *ctx.whiteParticleScale);

@@ -61,18 +61,12 @@ void BattleTestSceneRenderer::Draw(BattleTestScene& scene) {
     scene.comboFeel_.DrawTrail();
     scene.GetStageEditor().DrawObjects();
 
-    // バックバッファへ直接描画する場合だけUIより先に空間歪みを合成する
-    if (scene.spaceWarp_.IsActive() && drawingToBackBuffer) {
-        PipelineStateGuard restoreTarget([&scene] {
+    // トーンマップ・空間のゆがみ・締めの放射ブラーを、post_process.json の順に UI より先に掛ける
+    // （画面を写し取って掛けるので、バックバッファへ直接描いている時だけ。1つ掛けるごとに描画先を戻す）
+    if (drawingToBackBuffer) {
+        scene.postProcess_.Execute([&scene] {
             scene.SetupMainRenderTarget();
         });
-        scene.spaceWarp_.CaptureAndApply();
-    }
-    if (scene.comboFeel_.HasScreenEffects() && drawingToBackBuffer) {
-        PipelineStateGuard restoreTarget([&scene] {
-            scene.SetupMainRenderTarget();
-        });
-        scene.comboFeel_.ApplyScreenEffects();
     }
 
     // 画面座標で管理する訓練HUDをまとめて描画する

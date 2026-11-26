@@ -2,9 +2,11 @@
  * @file ParticleManager.cpp
  * @brief GPUで更新するパーティクル（ParticleManager）の資源と更新・描画の実装
  * @note 1フレームの流れ（グループごと）:
- *       空にする（頼まれた時だけ）→ 頼まれた粒を出す → エミッター → 動かして寿命を判定し、尽きた枠を空き一覧へ返す → 描く
+ *       空にする（頼まれた時だけ）→ 頼まれた粒を出す → エミッター → 動かして寿命を判定し、尽きた枠を空き一覧へ返す
+ *       （生きている粒の番号を一覧へ積む）→ 一覧の数から間接描画の引数を作る → 生きている粒の数だけ描く
  */
 #include "ParticleManager.h"
+#include "PoolOverflowCounter.h"
 #include "EngineAssert.h"
 #include "EngineConstants.h"
 #include "GraphicsTuning.h"
@@ -13,6 +15,7 @@
 #include "TextureManager.h"
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
 #include <d3dx12.h>
 
 namespace engine::graphics {
@@ -61,6 +64,7 @@ void ParticleManager::Initialize(DirectXCommon* dxCommon) {
     CreateRootSignature();
     CreatePipelineState();
     CreateComputePipelines();
+    CreateDrawCommandSignature();
     CreateQuadGeometry();
 }
 
@@ -72,6 +76,8 @@ void ParticleManager::Finalize() {
     quadIndexBuffer_.Reset();
     quadVertexBuffer_.Reset();
     updatePass_ = {};
+    buildArgsPass_ = {};
+    drawCommandSignature_.Reset();
     emitPass_ = {};
     spawnPass_ = {};
     initPass_ = {};
@@ -93,6 +99,7 @@ void ParticleManager::CreateParticleGroup(const std::string& name,
 
     CreateParticleBuffers(group);
     CreateParticleInstancingResource(group);
+    CreateDrawListResources(group);
     // 中身は最初の更新で GPU が空にする（CPU から初期値を送らない）
     group.needsReset = true;
     group.emitter.lifeTime = 1.0f; // デフォルト 1 秒
@@ -107,6 +114,24 @@ void ParticleManager::CreateParticleBuffers(ParticleGroup& group) {
         sizeof(uint32_t) * ParticleGroup::kNumMaxInstance);
     group.counterBuffer = pipelineHelper::CreateUnorderedAccessBuffer(device,
         sizeof(int32_t) * kCounterElementCount);
+}
+
+/** @brief 生きている粒の一覧・間接描画の引数・数を読み戻す先を作る */
+void ParticleManager::CreateDrawListResources(ParticleGroup& group) {
+    ID3D12Device* device = dxCommon_->GetDevice();
+    // 一覧は全部の枠が生きていても入る大きさ、引数はインデックス付きの描画1回分
+    group.drawListBuffer = pipelineHelper::CreateUnorderedAccessBuffer(device, sizeof(uint32_t) * ParticleGroup::kNumMaxInstance);
+    group.drawArgsBuffer = pipelineHelper::CreateUnorderedAccessBuffer(device, sizeof(D3D12_DRAW_INDEXED_ARGUMENTS));
+
+    // 読み戻す先は画像の番号ごとに1つずつ持ち、開いたままにする（GPU が書き終えた番号の所だけ読む）
+    D3D12_HEAP_PROPERTIES heap { D3D12_HEAP_TYPE_READBACK };
+    const D3D12_RESOURCE_DESC desc = pipelineHelper::MakeBufferDesc(sizeof(uint32_t) * dxCommon_->GetBufferCount());
+    const HRESULT hr = device->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &desc,
+        D3D12_RESOURCE_STATE_COPY_DEST, nullptr, IID_PPV_ARGS(&group.aliveCountReadback));
+    ENGINE_ASSERT(SUCCEEDED(hr));
+    void* mapped = nullptr;
+    group.aliveCountReadback->Map(0, nullptr, &mapped);
+    group.aliveCountMapped = static_cast<const uint32_t*>(mapped);
 }
 
 /** @brief パーティクルのインスタンス描画用のリソースを生成する */
@@ -167,8 +192,14 @@ void ParticleManager::TransitionInstancingToUAV(ParticleGroup& group, ID3D12Grap
     if (!group.instancingInSRV) {
         return;
     }
-    DirectXCommon::TransitionBarrier(cmd, group.instancingResource.Get(),
-        D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    // 描画用・生きている粒の一覧・間接描画の引数を、計算用シェーダーが書ける状態へ戻す
+    constexpr UINT kBarrierCount = 3;
+    const D3D12_RESOURCE_BARRIER barriers[kBarrierCount] = {
+        DirectXCommon::MakeTransitionBarrier(group.instancingResource.Get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
+        DirectXCommon::MakeTransitionBarrier(group.drawListBuffer.Get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
+        DirectXCommon::MakeTransitionBarrier(group.drawArgsBuffer.Get(), D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
+    };
+    cmd->ResourceBarrier(kBarrierCount, barriers);
     group.instancingInSRV = false;
 }
 
@@ -177,8 +208,9 @@ void ParticleManager::TransitionBuffersToUAV(ParticleGroup& group, ID3D12Graphic
     if (!group.buffersFresh) {
         return;
     }
-    constexpr size_t kBufferCount = 3; // 粒・空き一覧・空きの数
-    const std::array<ID3D12Resource*, kBufferCount> buffers = { group.particleStateBuffer.Get(), group.freeListBuffer.Get(), group.counterBuffer.Get() };
+    constexpr size_t kBufferCount = 5; // 粒・空き一覧・空きの数・生きている粒の一覧・間接描画の引数
+    const std::array<ID3D12Resource*, kBufferCount> buffers = { group.particleStateBuffer.Get(), group.freeListBuffer.Get(), group.counterBuffer.Get(),
+        group.drawListBuffer.Get(), group.drawArgsBuffer.Get() };
     std::array<D3D12_RESOURCE_BARRIER, kBufferCount> barriers {};
     for (size_t i = 0; i < buffers.size(); ++i) {
         barriers[i] = DirectXCommon::MakeTransitionBarrier(buffers[i], D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
@@ -202,7 +234,7 @@ void ParticleManager::DispatchInitCS(ParticleGroup& group, ID3D12GraphicsCommand
     CountConstants constants {};
     constants.count = ParticleGroup::kNumMaxInstance;
     cmd->SetComputeRootSignature(initPass_.rootSignature.Get());
-    cmd->SetPipelineState(initPass_.pipeline.Get());
+    cmd->SetPipelineState(PipelineCache::Resolve(initPass_.pipeline.Get()));
     cmd->SetComputeRootConstantBufferView(slot::kConstants, UploadFrameData(&constants, sizeof(constants)));
     cmd->SetComputeRootUnorderedAccessView(slot::kParticles, group.particleStateBuffer->GetGPUVirtualAddress());
     cmd->SetComputeRootUnorderedAccessView(slot::kInstances, group.instancingResource->GetGPUVirtualAddress());
@@ -225,7 +257,7 @@ void ParticleManager::DispatchSpawnCS(ParticleGroup& group, ID3D12GraphicsComman
     constants.count = count;
     const D3D12_GPU_VIRTUAL_ADDRESS requests = UploadFrameData(group.pendingSpawns.data(), sizeof(GPUParticleState) * count);
     cmd->SetComputeRootSignature(spawnPass_.rootSignature.Get());
-    cmd->SetPipelineState(spawnPass_.pipeline.Get());
+    cmd->SetPipelineState(PipelineCache::Resolve(spawnPass_.pipeline.Get()));
     cmd->SetComputeRootConstantBufferView(slot::kConstants, UploadFrameData(&constants, sizeof(constants)));
     cmd->SetComputeRootShaderResourceView(slot::kRequests, requests);
     cmd->SetComputeRootUnorderedAccessView(slot::kParticles, group.particleStateBuffer->GetGPUVirtualAddress());
@@ -260,7 +292,7 @@ void ParticleManager::DispatchEmitCS(ParticleGroup& group, ID3D12GraphicsCommand
 
     // エミッターの CS で、空き一覧から枠を取って新しい粒を書き込む（1スレッドで1粒）
     cmd->SetComputeRootSignature(emitPass_.rootSignature.Get());
-    cmd->SetPipelineState(emitPass_.pipeline.Get());
+    cmd->SetPipelineState(PipelineCache::Resolve(emitPass_.pipeline.Get()));
     cmd->SetComputeRootConstantBufferView(slot::kEmitter, UploadFrameData(&e, sizeof(e)));
     cmd->SetComputeRootUnorderedAccessView(slot::kParticles, group.particleStateBuffer->GetGPUVirtualAddress());
     cmd->SetComputeRootUnorderedAccessView(slot::kFreeList, group.freeListBuffer->GetGPUVirtualAddress());
@@ -279,7 +311,7 @@ void ParticleManager::DispatchUpdateCS(ParticleGroup& group, ID3D12GraphicsComma
     D3D12_GPU_VIRTUAL_ADDRESS constants, D3D12_GPU_VIRTUAL_ADDRESS fields) {
     namespace slot = pipelineHelper::particleComputeSlot::update;
     cmd->SetComputeRootSignature(updatePass_.rootSignature.Get());
-    cmd->SetPipelineState(updatePass_.pipeline.Get());
+    cmd->SetPipelineState(PipelineCache::Resolve(updatePass_.pipeline.Get()));
     cmd->SetComputeRootConstantBufferView(slot::kConstants, constants);
     cmd->SetComputeRootConstantBufferView(slot::kLoop, UploadFrameData(&group.loop, sizeof(group.loop)));
     cmd->SetComputeRootConstantBufferView(slot::kFields, fields);
@@ -287,13 +319,56 @@ void ParticleManager::DispatchUpdateCS(ParticleGroup& group, ID3D12GraphicsComma
     cmd->SetComputeRootUnorderedAccessView(slot::kInstances, group.instancingResource->GetGPUVirtualAddress());
     cmd->SetComputeRootUnorderedAccessView(slot::kFreeList, group.freeListBuffer->GetGPUVirtualAddress());
     cmd->SetComputeRootUnorderedAccessView(slot::kCounter, group.counterBuffer->GetGPUVirtualAddress());
+    cmd->SetComputeRootUnorderedAccessView(slot::kDrawList, group.drawListBuffer->GetGPUVirtualAddress());
     cmd->Dispatch(ThreadGroupsFor(ParticleGroup::kNumMaxInstance), 1, 1);
     UavBarrier(cmd);
 
-    // instancingResource: UAV → NON_PIXEL_SHADER_RESOURCE（VS が SRV として読む）
-    DirectXCommon::TransitionBarrier(cmd, group.instancingResource.Get(),
-        D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    // 生きている粒の数から間接描画の引数を作る
+    DispatchBuildDrawArgsCS(group, cmd);
+
+    // 描画用と一覧は頂点シェーダーが読む状態へ、引数は間接描画が読む状態へ
+    constexpr UINT kBarrierCount = 3;
+    const D3D12_RESOURCE_BARRIER barriers[kBarrierCount] = {
+        DirectXCommon::MakeTransitionBarrier(group.instancingResource.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
+        DirectXCommon::MakeTransitionBarrier(group.drawListBuffer.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
+        DirectXCommon::MakeTransitionBarrier(group.drawArgsBuffer.Get(), D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT),
+    };
+    cmd->ResourceBarrier(kBarrierCount, barriers);
     group.instancingInSRV = true;
+}
+
+/** @brief 生きている粒の数から間接描画の引数を作り、数を CPU へ写す（数は次のフレームのために 0 へ戻す） */
+void ParticleManager::DispatchBuildDrawArgsCS(ParticleGroup& group, ID3D12GraphicsCommandList* cmd) {
+    namespace slot = pipelineHelper::particleComputeSlot::buildArgs;
+    // 1回の描画は板1枚分のインデックス数で、生きている粒の数だけ繰り返す
+    CountConstants constants {};
+    constants.count = kQuadIndexCount;
+    cmd->SetComputeRootSignature(buildArgsPass_.rootSignature.Get());
+    cmd->SetPipelineState(PipelineCache::Resolve(buildArgsPass_.pipeline.Get()));
+    cmd->SetComputeRootConstantBufferView(slot::kConstants, UploadFrameData(&constants, sizeof(constants)));
+    cmd->SetComputeRootUnorderedAccessView(slot::kCounter, group.counterBuffer->GetGPUVirtualAddress());
+    cmd->SetComputeRootUnorderedAccessView(slot::kDrawArgs, group.drawArgsBuffer->GetGPUVirtualAddress());
+    cmd->Dispatch(1, 1, 1);
+    UavBarrier(cmd);
+
+    // この番号の所は、前にこの番号を使ったフレームの分を GPU が書き終えている（PreDraw がその完了を待つ）ので、写す前に読む
+    const UINT frameSlot = dxCommon_->GetSwapChain()->GetCurrentBackBufferIndex();
+    if (group.aliveCountMapped != nullptr) {
+        group.gpuAliveCount = group.aliveCountMapped[frameSlot];
+    }
+    // 引数のうち繰り返す数（生きている粒の数）だけを、読み戻す先へ写す
+    DirectXCommon::TransitionBarrier(cmd, group.drawArgsBuffer.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_SOURCE);
+    cmd->CopyBufferRegion(group.aliveCountReadback.Get(), sizeof(uint32_t) * frameSlot, group.drawArgsBuffer.Get(),
+        offsetof(D3D12_DRAW_INDEXED_ARGUMENTS, InstanceCount), sizeof(uint32_t));
+}
+
+/** @brief GPU が数えた、全グループの生きている粒の数 */
+uint32_t ParticleManager::GetGpuAliveParticleCount() const {
+    uint32_t total = 0;
+    for (const auto& [name, group] : particleGroups_) {
+        total += group.gpuAliveCount;
+    }
+    return total;
 }
 
 /** @brief グループの粒を描く必要があるか */
@@ -322,8 +397,9 @@ void ParticleManager::Update(Camera* camera) {
     D3D12_GPU_VIRTUAL_ADDRESS constants = 0;
     for (auto& [name, group] : particleGroups_) {
         group.groupTime += deltaSeconds;
-        // 粒も頼みも無いグループは GPU の仕事を積まない
+        // 粒も頼みも無いグループは GPU の仕事を積まない（生きている粒も無い）
         if (!NeedsUpdate(group)) {
+            group.gpuAliveCount = 0;
             continue;
         }
         if (constants == 0) {
@@ -367,6 +443,9 @@ D3D12_GPU_VIRTUAL_ADDRESS ParticleManager::UploadFields(float dt) {
     const auto push = [&constants](const ParticleField& field) {
         if (constants.count < kMaxFields) {
             constants.fields[constants.count++] = field;
+        } else {
+            // 場の上限超過を数える。
+            engine::poolOverflowCounter::Count("particle_fields");
         }
     };
     // このフレームだけの場（追いかける渦など）を先に、秒数を決めた場（衝撃など）を後に入れる
@@ -428,7 +507,7 @@ void ParticleManager::Draw(Camera* camera) {
             ? graphicsPipelineState_.Get()
             : graphicsPipelineStateAlpha_.Get();
         if (pso != activePSO) {
-            cmd->SetPipelineState(pso);
+            cmd->SetPipelineState(PipelineCache::Resolve(pso));
             activePSO = pso;
         }
 
@@ -441,8 +520,9 @@ void ParticleManager::Draw(Camera* camera) {
         cmd->SetGraphicsRootDescriptorTable(pipelineHelper::particleRootSlot::kSceneDepth,
             depth != nullptr ? SrvManager::GetInstance()->GetGPUDescriptorHandle(depth->srvIndex) : texH);
 
-        // 枠は空き一覧で飛び飛びに使うので全部の枠を描き、死んでいる枠は頂点シェーダーが画面の外へ捨てる
-        cmd->DrawIndexedInstanced(kQuadIndexCount, ParticleGroup::kNumMaxInstance, 0, 0, 0);
+        // 生きている粒の番号の一覧を渡し、GPU が数えた生きている粒の数だけ描く（CPU は数を知らなくてよい）
+        cmd->SetGraphicsRootShaderResourceView(pipelineHelper::particleRootSlot::kDrawList, group.drawListBuffer->GetGPUVirtualAddress());
+        cmd->ExecuteIndirect(drawCommandSignature_.Get(), 1, group.drawArgsBuffer.Get(), 0, nullptr, 0);
     }
 }
 

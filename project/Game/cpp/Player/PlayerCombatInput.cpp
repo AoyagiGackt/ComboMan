@@ -4,6 +4,9 @@
  * @note Player の戦闘入力だけを Player.cpp から分けて置いている（クラスは Player のまま）
  */
 #include "Player.h"
+#include "GameActions.h"
+#include "TestCoverage.h"
+
 #include "CombatTuning.h"
 #include "CharacterVisuals.h"
 #include "GameSettings.h"
@@ -82,14 +85,14 @@ void Player::HandleRangedCombat(Input* input) {
 
     // ── 銃切り替え（G キー、循環）────────────────────────────────────
     // 銃は最初の1丁だけを使う（切り替えを許す設定の時だけ受け付ける）
-    if (GameRules::GetInstance()->Get().gunSwitchEnabled && input->TriggerAction(Input::Action::kGunSwitch)) {
+    if (GameRules::GetInstance()->Get().gunSwitchEnabled && input->TriggerAction(GameAction::kGunSwitch)) {
         wm->SelectNextRanged();
         gunCombo_.Reset(); // 撃ちかけのコンボは持ち越さない
     }
 
     // ── 射撃コンボ（K キー、水上のみ）────────────────────────────────
     // 押下の瞬間ではなく段の shotTime で発砲する。段数・弾数・リコイルは銃種別の GunShotDef が持つ
-    if (!inWater_ && !finisherCharging_ && input->TriggerAction(Input::Action::kShoot)) {
+    if (!inWater_ && !finisher_.charging && input->TriggerAction(GameAction::kShoot)) {
         gunCombo_.TryShoot(wm->GetRanged().type);
     }
     gunCombo_.Update(gameConstants::kFrameDeltaTime);
@@ -123,25 +126,27 @@ void Player::HandleMeleeCombat(Input* input, const Vector3& enemyPos) {
     // ── 格闘コンボ / 打ち上げ / 乱舞（L キー、水上のみ）─────────────
     // S(↓)+L は打ち上げ技。覚醒ソードの L は従来どおり乱舞へ
     // 乱舞は押した瞬間の入力で段を進めるため、オートコンボの長押し連続入力は通常コンボにだけ使う
-    const bool attackTriggered = input->TriggerAction(Input::Action::kAttack);
+    const bool attackTriggered = input->TriggerAction(GameAction::kAttack);
     const bool startsRampage = BehaviorFor(wm->GetCurrent().type).StartsRampage(*this);
     const bool rampageAttack = IsRampaging() || startsRampage;
     const bool attackPressed = rampageAttack
         ? attackTriggered
-        : autoCombo_.WantsAttack(attackTriggered, input->PushAction(Input::Action::kAttack));
-    if (!inWater_ && !finisherCharging_ && !meleeCombo_.IsSequenceActive() && attackPressed) {
+        : autoCombo_.WantsAttack(attackTriggered, input->PushAction(GameAction::kAttack));
+    if (!inWater_ && !finisher_.charging && !meleeCombo_.IsSequenceActive() && attackPressed) {
         if (IsRampaging()) {
             rampage_->HandleAttackInput(*this, input, enemyPos);
         } else if (startsRampage) {
             // 乱舞開始 まず敵に向かって突進（打ち上げフェーズ）
             meleeCombo_.Reset();
             rampage_ = &LaunchRampage();
-            juggleSlashCount_ = 0;
-            juggleAngleIdx_ = 0;
-            rampageTimer_ = 0.0f;
+            rampageData_.juggleSlashCount = 0;
+            rampageData_.juggleAngleIdx = 0;
+            rampageData_.timer = 0.0f;
+            // 自動テストの網羅のまとめに数える
+            testCoverage::Cover("player_action", "rampage");
             SetFrameEvent(FrameEvent::kRampageStarted);
         } else {
-            const bool launcherInput = input->PushAction(Input::Action::kDown)
+            const bool launcherInput = input->PushAction(GameAction::kDown)
                 || autoCombo_.WantsLauncher(wm->GetCurrent().type, meleeCombo_, !onGround_);
             // 合体していれば、コンボの最後に素材の武器の締めが1段増える
             // ボスの枠の武器を振っている時は、ボスの武器の専用のコンボを使う（素材もボスの武器）
@@ -160,7 +165,7 @@ void Player::HandleMeleeCombat(Input* input, const Vector3& enemyPos) {
 
     // ── 近接コンボ進行（段の開始・ヒット発火・前進・打ち上げ追撃猶予）──
     // 覚醒中は1段の振りで多段ヒットさせる
-    meleeCombo_.SetExtraHits(isAwakened_ ? Tuning().awakenExtraHits : 0, Tuning().awakenExtraHitInterval);
+    meleeCombo_.SetExtraHits(awaken_.isAwakened ? Tuning().awakenExtraHits : 0, Tuning().awakenExtraHitInterval);
     meleeCombo_.Update(gameConstants::kFrameDeltaTime);
     if (const MeleeAttackDef* atk = meleeCombo_.GetActive()) {
         if (meleeCombo_.JustStartedStep()) {
@@ -210,12 +215,14 @@ void Player::HandleFinisherSlash(Input* input) {
 
     // ── フィニッシャースラッシュ（F キー、水上のみ、覚醒ゲージ満タン時のみ）─────
     // 静止して集中 → 溜め切ったら一閃、の2段構成にする
-    if (!inWater_ && !isAwakened_ && !finisherCharging_
-        && input->TriggerAction(Input::Action::kFinisher) && awakenGauge_ >= 1.0f) {
+    if (!inWater_ && !awaken_.isAwakened && !finisher_.charging
+        && input->TriggerAction(GameAction::kFinisher) && awaken_.gauge >= 1.0f) {
+        // 自動テストの網羅のまとめに数える
+        testCoverage::Cover("player_action", "finisher");
         SetFrameEvent(FrameEvent::kFinisherSlash);
-        awakenGauge_ = 0.0f; // ゲージを全消費
-        finisherCharging_ = true;
-        finisherChargeTimer_ = CombatTune().FinisherChargeDuration();
+        awaken_.gauge = 0.0f; // ゲージを全消費
+        finisher_.charging = true;
+        finisher_.chargeTimer = CombatTune().FinisherChargeDuration();
         meleeCombo_.Reset(); // 進行中のコンボは打ち切って静止に入る
         {
             // 銃は常時左手に追従表示されるため、構え系近接武器と同様に扱う（UpdateAnimationStateと同じ判定）
@@ -228,10 +235,10 @@ void Player::HandleFinisherSlash(Input* input) {
     }
 
     // ── フィニッシャー溜めの経過 → 解放（一閃）─────────────────────
-    if (finisherCharging_) {
-        finisherChargeTimer_ -= gameConstants::kFrameDeltaTime;
-        if (finisherChargeTimer_ <= 0.0f) {
-            finisherCharging_ = false;
+    if (finisher_.charging) {
+        finisher_.chargeTimer -= gameConstants::kFrameDeltaTime;
+        if (finisher_.chargeTimer <= 0.0f) {
+            finisher_.charging = false;
             PlayAttackAnim(rig_->slashAnim, Tuning().finisherReleaseAnimSpeed);
         }
     }
@@ -245,11 +252,11 @@ void Player::HandleWeaponSkill(Input* input) {
     }
 
     // ── スペースキー（武器タイプ別）──────────────────────────────
-    if (!inWater_ && !finisherCharging_) {
+    if (!inWater_ && !finisher_.charging) {
         // 固有技のクールダウン/バフや手元を離れた技は、武器切替中も凍結させず常に進める
         // 覚醒中は武器ごとの倍率（weapons.jsonのawakened.skillCooldownMult）ぶん早く回る
         const float cooldownStep = gameConstants::kFrameDeltaTime
-            / (isAwakened_ ? wm->GetCurrent().awakened.skillCooldownMult : 1.0f);
+            / (awaken_.isAwakened ? wm->GetCurrent().awakened.skillCooldownMult : 1.0f);
         TickWeaponSkills(input, cooldownStep);
 
         IWeaponBehavior& behavior = BehaviorFor(wm->GetCurrent().type);
@@ -280,28 +287,30 @@ void Player::UpdateRampagePhysics(const Vector3& enemyPos) {
 /** @brief 覚醒の発動判定（Rキー）とゲージ消費、時間切れ/ゲージ切れによる覚醒終了を処理する */
 void Player::UpdateAwakenState(Input* input) {
     // ── 覚醒発動（R キー）────────────────────────────────────────
-    if (!finisherCharging_ && input->TriggerAction(Input::Action::kAwaken)
-        && awakenGauge_ >= Tuning().awakenActivationThreshold && !isAwakened_) {
-        isAwakened_ = true;
+    if (!finisher_.charging && input->TriggerAction(GameAction::kAwaken)
+        && awaken_.gauge >= Tuning().awakenActivationThreshold && !awaken_.isAwakened) {
+        awaken_.isAwakened = true;
+        // 自動テストの網羅のまとめに数える
+        testCoverage::Cover("player_action", "awaken");
         SetFrameEvent(FrameEvent::kAwakened);
-        awakenTimer_ = Tuning().awakenDuration;
+        awaken_.timer = Tuning().awakenDuration;
     }
 
     // ── 覚醒ゲージ管理 ────────────────────────────────────────────
     // 覚醒中のみ消費する未覚醒時は自然減衰させず、溜めた分を維持する
-    if (isAwakened_) {
-        awakenTimer_ -= gameConstants::kFrameDeltaTime;
-        awakenGauge_ = (std::max)(awakenGauge_ - gameConstants::kFrameDeltaTime / Tuning().awakenDuration, 0.0f);
-        if (awakenTimer_ <= 0.0f || awakenGauge_ <= 0.0f) {
-            isAwakened_ = false;
-            awakenTimer_ = 0.0f;
-            awakenGauge_ = 0.0f;
+    if (awaken_.isAwakened) {
+        awaken_.timer -= gameConstants::kFrameDeltaTime;
+        awaken_.gauge = (std::max)(awaken_.gauge - gameConstants::kFrameDeltaTime / Tuning().awakenDuration, 0.0f);
+        if (awaken_.timer <= 0.0f || awaken_.gauge <= 0.0f) {
+            awaken_.isAwakened = false;
+            awaken_.timer = 0.0f;
+            awaken_.gauge = 0.0f;
         }
     }
 
     // ── 覚醒フォーム切り替え（覚醒中はメカモデルへ丸ごと差し替え）──────
     // visualPreset_（-1=自動 0=通常 1=覚醒）の順。自動は覚醒しているかで決める
-    CharacterRig* const presetRigs[] = { isAwakened_ ? &awakenedRig_ : &normalRig_, &normalRig_, &awakenedRig_ };
+    CharacterRig* const presetRigs[] = { awaken_.isAwakened ? &awakenedRig_ : &normalRig_, &normalRig_, &awakenedRig_ };
     CharacterRig* desiredRig = presetRigs[visualPreset_ + 1];
     if (rig_ != desiredRig) {
         rig_ = desiredRig;

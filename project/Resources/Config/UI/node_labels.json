@@ -1,5 +1,90 @@
 {
   "_comment": "ノードエディタ(F1)に出すノード名とパラメータ名の日本語表示。キーはグラフJSONに書く type 名とパラメータ名（ここを変えても保存されるJSONは変わらない）。書いていないものは英語名のまま出る",
+  "_summary": {
+    "SetVariable": "変数 {name} を {value} にする",
+    "If": "変数 {var} が {op} {value} かで分かれる",
+    "Wait": "{seconds} 秒待つ",
+    "EmitEvent": "イベント {event} を送る",
+    "SetFlag": "フラグ {flag} を {value} にする",
+    "GetFlag": "フラグ {flag} を読む",
+    "WaitForFlag": "フラグ {flag} が {value} になるまで待つ",
+    "WaitAllEnemiesDefeated": "今いる敵が全員倒されるまで待つ",
+    "WaitEnemyDefeated": "{target} が倒されるまで待つ",
+    "WaitPlayerInArea": "プレイヤーが ({x}, {y}) の周り（幅 {width}・高さ {height}）に入るまで待つ",
+    "WaitForScore": "点数が {value} 以上になるまで待つ",
+    "RequestStageClear": "ステージをクリアにする",
+    "RequestGameOver": "ゲームオーバーにする",
+    "ShowMessage": "{text} と {seconds} 秒出す",
+    "PlaySE": "効果音 {path} を鳴らす",
+    "PlayBGM": "曲 {path} を流す",
+    "StopBGM": "曲を止める",
+    "ScreenFlash": "画面を光らせる",
+    "HitStop": "{frames} フレーム止める",
+    "ShakeCamera": "カメラを {seconds} 秒揺らす",
+    "SlowMotion": "{seconds} 秒ゆっくりにする",
+    "FocusCamera": "カメラを ({x}, {y}) へ向ける",
+    "SetObjectVisible": "{target} の表示を {visible} にする",
+    "SetObjectEnabled": "{target} を {enabled} にする",
+    "TeleportObject": "{target} を ({x}, {y}) へ移す",
+    "MoveObject": "{target} を ({x}, {y}) へ {seconds} 秒で動かす",
+    "SpawnEnemy": "{target} から敵を出す",
+    "DamagePlayer": "プレイヤーに {amount} ダメージ",
+    "HealPlayer": "プレイヤーを {amount} 回復",
+    "TeleportPlayer": "プレイヤーを ({x}, {y}) へ移す",
+    "ChangeScene": "シーン {scene} へ移る",
+    "GiveWeapon": "武器 {weapon} を渡す",
+    "LockPlayerControl": "プレイヤーの操作を止める（{locked}）",
+    "IfPlayerInArea": "プレイヤーが ({x}, {y}) の周りにいるかで分かれる",
+    "IfPlayerHp": "プレイヤーの体力が {op} {value} かで分かれる",
+    "Repeat": "{interval} 秒ごとに {count} 回くり返す",
+    "Subgraph": "部品のグラフ {path} を動かす"
+  },
+  "_paramHelp": {
+    "event": "発生させるイベントの名前",
+    "min": "選ばれる数の下限",
+    "max": "選ばれる数の上限",
+    "volume": "再生する音の大きさ",
+    "r": "色に含める赤の強さ",
+    "g": "色に含める緑の強さ",
+    "enabled": "オンで配置物を有効にする",
+    "scene": "移動先のシーンの名前",
+    "fadeOut": "画面を暗くする秒数",
+    "fadeIn": "画面を明るくする秒数",
+    "group": "輪に使う粒子のグループ名",
+    "radius": "広がる輪の半径",
+    "flag": "ステージエディタのトリガーと共有するフラグ名",
+    "name": "グラフ内で値を識別するための変数名",
+    "var": "グラフ内で値を識別するための変数名",
+    "into": "グラフ内で値を識別するための変数名",
+    "value": "保存、比較、または設定する値",
+    "seconds": "その動作を続ける時間。単位は秒",
+    "duration": "その動作を続ける時間。単位は秒",
+    "frames": "処理を止める時間  単位はフレーム",
+    "path": "読み込むグラフ、音声などのファイルパス",
+    "target": "ステージに配置した敵などの名前",
+    "amount": "効果の強さや増減する量",
+    "op": "計算または比較に使う記号",
+    "x": "移動先または位置のワールド座標",
+    "y": "移動先または位置のワールド座標",
+    "z": "移動先または位置のワールド座標",
+    "a": "計算や比較へ渡す入力値",
+    "b": "計算や比較へ渡す入力値",
+    "loop": "ONなら停止するまで繰り返し再生する",
+    "visible": "ONなら表示し、OFFなら非表示にする",
+    "text": "画面に出す文字",
+    "scale": "ゲームを進める速さの倍率  1で通常",
+    "count": "くり返す回数  0ならずっと",
+    "interval": "次の回までの間隔  単位は秒",
+    "weapon": "武器の種類名  Sword Spear Hammer Dagger Ball Greatsword Scythe Axe",
+    "locked": "ONなら操作を止め、OFFなら戻す",
+    "width": "範囲の横幅  ワールド座標の単位",
+    "height": "範囲の高さ  ワールド座標の単位",
+    "condition": "真偽を決める入力  CompareやAndの出力をつなぐ"
+  },
+  "_paramHelpByType": {
+    "ScreenFlash": { "b": "色に含める青の強さ", "a": "画面に重ねる色の濃さ" },
+    "EmitRing": { "b": "色に含める青の強さ" }
+  },
   "types": {
     "SetVariable": {
       "name": "変数に代入",
@@ -280,6 +365,24 @@
       "params": {
         "condition": "条件"
       }
+    },
+    "WaitPlayerInArea": {
+      "name": "ゴールに着くのを待つ",
+      "params": {
+        "x": "中心X",
+        "y": "中心Y",
+        "width": "幅",
+        "height": "高さ"
+      }
+    },
+    "WaitForScore": {
+      "name": "点数を待つ",
+      "params": {
+        "value": "目標の点数"
+      }
+    },
+    "RequestGameOver": {
+      "name": "ゲームオーバーにする"
     },
     "WaitForFlag": {
       "name": "フラグを待つ",

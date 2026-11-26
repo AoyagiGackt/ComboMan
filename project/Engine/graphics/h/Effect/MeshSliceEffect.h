@@ -11,6 +11,7 @@
 #include <string>
 #include <vector>
 #include <wrl/client.h>
+#include "DeferredReleaseQueue.h"
 
 namespace engine::graphics {
 
@@ -140,12 +141,12 @@ private:
     Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> pipelineState_;
 
-    Microsoft::WRL::ComPtr<ID3D12Resource> vertexBuffer_;
+    DeferredComPtr<ID3D12Resource> vertexBuffer_;
     D3D12_VERTEX_BUFFER_VIEW vbv_ { };
     uint32_t vertexCapacity_ = 0;
     SliceVertex* vertexData_ = nullptr;
 
-    Microsoft::WRL::ComPtr<ID3D12Resource> pieceCB_;
+    DeferredComPtr<ID3D12Resource> pieceCB_;
     uint8_t* pieceCBData_ = nullptr;
 
     std::vector<Piece> pieces_;

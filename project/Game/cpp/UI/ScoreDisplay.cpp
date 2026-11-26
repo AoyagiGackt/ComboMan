@@ -3,6 +3,7 @@
  * @brief 数値・ランキング一覧を桁ごとのスプライトで描画する（ScoreDisplay）の実装
  */
 #include "ScoreDisplay.h"
+#include "EngineContext.h"
 #include "TextureManager.h"
 #include <algorithm>
 #include <cassert>
@@ -30,7 +31,7 @@ static std::string DigitPath(int digit) {
 void ScoreDisplay::Initialize(SpriteCommon* spriteCommon) {
     // 全桁テクスチャ (0〜9) をキャッシュに登録しておく
     for (int i = 0; i < kDecimalDigitCount; ++i) {
-        TextureManager::GetInstance()->LoadTexture(DigitPath(i));
+        engine::Services().textures->LoadTexture(DigitPath(i));
     }
 
     // スプライトを全て初期化

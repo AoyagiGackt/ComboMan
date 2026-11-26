@@ -1,0 +1,13 @@
+{
+  "_comment": "3D を描き終えた後・UI の前に画面全体へ掛けるエフェクトの順番。stacks の下は場面ごとの列で、order の上から順に掛ける。disabled に書いた物は掛けない。bloom と toneMap はエンジンの物、spaceWarp（空間のゆがみ）と comboFeel（締めの放射ブラー）はゲームが登録する物。トーンマップは 1 を超えた明るさを丸めるので、明るさを足すブルームより後に置く。order に無い登録済みの物は最後に掛ける。訓練場は今のところブルームを掛けないので disabled に入れてある。",
+  "stacks": {
+    "gameplay": {
+      "order": ["bloom", "toneMap", "spaceWarp", "comboFeel"],
+      "disabled": []
+    },
+    "training": {
+      "order": ["bloom", "toneMap", "spaceWarp", "comboFeel"],
+      "disabled": ["bloom"]
+    }
+  }
+}

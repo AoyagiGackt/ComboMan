@@ -4,6 +4,7 @@
  */
 #include "SmokeTestRunner.h"
 #include "CrashBreadcrumbs.h"
+#include "DirectXCommon.h"
 #include "FrameProfiler.h"
 #include "GameConstants.h"
 #include "GameRules.h"
@@ -12,10 +13,12 @@
 #include "Logger.h"
 #include "MapScene.h"
 #include "WeaponManager.h"
+#include "RandomSeed.h"
 #include "RunData.h"
 #include "SaveData.h"
 #include "SceneManager.h"
 #include "ScoreManager.h"
+#include "TestCoverage.h"
 #include <Windows.h>
 #include <algorithm>
 #include <cmath>
@@ -25,6 +28,7 @@
 #include <cwchar>
 #include <filesystem>
 #include <fstream>
+#include <thread>
 
 namespace engine::game {
 namespace {
@@ -33,7 +37,11 @@ constexpr const wchar_t* kBugHuntFlag = L"--bug-hunt";
 constexpr const char* kDefaultScriptPath = "Resources/Config/smoke_test.json";
 constexpr const char* kBugHuntScriptPath = "BugHunt/bug_hunt.json"; // バグ探しの手順は BugHunt プロジェクトのフォルダに置く
 constexpr const wchar_t* kScriptOption = L"--script"; // 手順の表を別の場所から読む時に、続けて場所を書く
-constexpr const char* kReportDirectory = "smoke_test";
+constexpr const wchar_t* kReplayOption = L"--replay"; // 再生ファイルから同じ動きをもう一度見る時に、続けて場所を書く
+constexpr const char* kNextWeaponName = "next"; // grantBossWeapon の weapon にこう書くと、一覧の順に次の種類を渡す
+constexpr const wchar_t* kAllowInputFlag = L"--allow-input"; // 自動テストの間も本物の入力を使う（同じ動きの再現はできなくなる）
+constexpr float kDefaultReplayLeadSeconds = 10.0f; // 再生で、見つけた所のこれだけ手前からふつうの速さにする
+constexpr float kDefaultReplayAfterSeconds = 5.0f; // 再生で、見つけた所の後これだけ見せてから終える
 constexpr const char* kGameplaySceneName = "GAMEPLAY";
 constexpr uint64_t kChoiceAnswerIntervalFrames = 90; // 選ぶ画面が出ている時に決定を押す間隔（約1.5秒。見張りの15秒より十分短く）
 constexpr float kDefaultTimeoutSeconds = 20.0f;
@@ -43,7 +51,6 @@ constexpr float kDefaultRandomHoldSeconds = 0.4f;
 constexpr float kDefaultRandomChance = 0.35f;
 constexpr float kHitchSeconds = 1.0f; // 画面が落ち着いている時に1フレームでこれ以上かかったら固まりかけとみなす
 constexpr int kMaxRepeatDepth = 4; // 繰り返しの入れ子の深さの上限（書き間違いで無限に展開しないように）
-constexpr size_t kReportPathCapacity = 256;
 constexpr int kMillisecondsPerSecond = 1000;
 constexpr int kMaxUpdatesPerDraw = 16; // 1回描くごとに進める回数の上限（上げすぎると画面がほとんど動かず様子が見えない）
 constexpr int kKeepAliveHpDivisor = 2; // keepPlayerAlive の時、体力がこの分の1を切ったら全快させる
@@ -81,13 +88,13 @@ void SuppressErrorDialogs() {
     _CrtSetReportMode(_CRT_ERROR, _CRTDBG_MODE_DEBUG);
 }
 
-/** @brief コマンド引数の --script の後ろに書いた場所を取り出す（無ければ空。空白を含む場所は "" で囲む） */
-std::string ScriptOptionValue(const std::wstring& commandLine) {
-    const size_t option = commandLine.find(kScriptOption);
+/** @brief コマンド引数の optionName の後ろに書いた値を取り出す（無ければ空。空白を含む場所は "" で囲む） */
+std::string OptionValue(const std::wstring& commandLine, const wchar_t* optionName) {
+    const size_t option = commandLine.find(optionName);
     if (option == std::wstring::npos) {
         return std::string();
     }
-    size_t begin = commandLine.find_first_not_of(L' ', option + std::wcslen(kScriptOption));
+    size_t begin = commandLine.find_first_not_of(L' ', option + std::wcslen(optionName));
     if (begin == std::wstring::npos) {
         return std::string();
     }
@@ -107,22 +114,12 @@ std::string ScriptOptionValue(const std::wstring& commandLine) {
     WideCharToMultiByte(CP_UTF8, 0, wide.c_str(), static_cast<int>(wide.size()), utf8.data(), length, nullptr, nullptr);
     return utf8;
 }
-
-/** @brief 今の時刻を入れた報告ファイルの場所を作る（prefix は result や bugs） */
-std::string TimestampedReportPath(const char* prefix) {
-    SYSTEMTIME st;
-    GetLocalTime(&st);
-    char path[kReportPathCapacity];
-    std::snprintf(path, sizeof(path), "%s/%s_%04d%02d%02d_%02d%02d%02d.txt", kReportDirectory, prefix,
-        st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond);
-    return path;
-}
 } // namespace
 
 /** @brief 手順の表の場所をコマンド引数から決める */
 std::string SmokeTestRunner::ScriptPathFromCommandLine(const std::wstring& commandLine) {
     if (commandLine.find(kBugHuntFlag) != std::wstring::npos) {
-        const std::string custom = ScriptOptionValue(commandLine);
+        const std::string custom = OptionValue(commandLine, kScriptOption);
         return custom.empty() ? std::string(kBugHuntScriptPath) : custom;
     }
     if (commandLine.find(kCommandLineFlag) != std::wstring::npos) {
@@ -131,21 +128,61 @@ std::string SmokeTestRunner::ScriptPathFromCommandLine(const std::wstring& comma
     return std::string();
 }
 
-/** @brief コマンド引数に --smoke-test か --bug-hunt があれば手順を読み込んで始める */
-bool SmokeTestRunner::StartIfRequested(engine::Input* input) {
-    scriptPath_ = ScriptPathFromCommandLine(GetCommandLineW());
-    if (scriptPath_.empty()) {
-        return false;
+/** @brief 自動テストで起動していれば、乱数の元の種を決める */
+void SmokeTestRunner::ApplySeedFromCommandLine() {
+    const std::wstring commandLine = GetCommandLineW();
+    // 種を書いてあるファイル（再生ファイルか手順の表）を決める。どちらも無ければ自動テストではない
+    std::string seedSource = OptionValue(commandLine, kReplayOption);
+    if (seedSource.empty()) {
+        seedSource = ScriptPathFromCommandLine(commandLine);
+    }
+    if (seedSource.empty()) {
+        return;
+    }
+    const nlohmann::json file = JsonHelper::Load(seedSource);
+    uint32_t seed = file.is_object() ? file.value("seed", 0u) : 0u;
+    // 0 なら毎回変える（決めた種は報告と再生ファイルに残るので、あとで同じ動きを試せる）
+    if (seed == 0) {
+        seed = std::random_device {}();
+    }
+    // 元の種の 0 は決まっていない印なので使わない
+    if (seed == 0) {
+        seed = 1;
+    }
+    sStartSeed = seed;
+    engine::randomSeed::SetBase(seed);
+}
+
+/** @brief コマンド引数に --smoke-test か --bug-hunt か --replay があれば手順を読み込んで始める */
+bool SmokeTestRunner::StartIfRequested(engine::Input* input, engine::DirectXCommon* dxCommon) {
+    const std::wstring commandLine = GetCommandLineW();
+    // 再生の時は、再生ファイルに入れておいた手順の表を使う（あとで表を書き換えても同じ手順になる）
+    replayPath_ = OptionValue(commandLine, kReplayOption);
+    nlohmann::json script;
+    if (!replayPath_.empty()) {
+        if (!replay_.Load(replayPath_)) {
+            Logger::LogError("[SmokeTest] 再生ファイルを読めませんでした: " + replayPath_);
+            return false;
+        }
+        script = replay_.Data().script;
+        scriptPath_ = replay_.Data().scriptPath;
+    } else {
+        scriptPath_ = ScriptPathFromCommandLine(commandLine);
+        if (scriptPath_.empty()) {
+            return false;
+        }
+        script = JsonHelper::Load(scriptPath_);
     }
     input_ = input;
-    const nlohmann::json script = JsonHelper::Load(scriptPath_);
+    dxCommon_ = dxCommon;
     if (!script.is_object() || !script.contains("steps")) {
         Logger::LogError("[SmokeTest] 手順のファイルを読めませんでした: " + scriptPath_);
         return false;
     }
+    script_ = script;
     settleFrames_ = SecondsToFrames(script.value("settleSeconds", kDefaultSettleSeconds));
-    // 種を決めておくと、おかしな所が見つかった時に同じ動きでもう一度試せる（0 なら毎回変える）
-    seed_ = script.value("seed", 0u);
+    // 種は起動の最初に決めてある（ApplySeedFromCommandLine）。呼ばれていなければここで決める
+    seed_ = sStartSeed != 0 ? sStartSeed : script.value("seed", 0u);
     if (seed_ == 0) {
         seed_ = std::random_device {}();
     }
@@ -162,15 +199,35 @@ bool SmokeTestRunner::StartIfRequested(engine::Input* input) {
             visitSkipKinds_.push_back(kind.get<std::string>());
         }
     }
-    // バグ探しの時は、前回の記録から変えた所だけを遊ぶ
-    const std::wstring commandLine = GetCommandLineW();
-    bugHunt_ = commandLine.find(kBugHuntFlag) != std::wstring::npos;
+    // バグ探しの時は、前回の記録から変えた所だけを遊ぶ（再生の時は、記録した時と同じ所を回す）
+    bugHunt_ = replay_.IsPlaying() ? replay_.Data().bugHunt : commandLine.find(kBugHuntFlag) != std::wstring::npos;
     if (bugHunt_) {
-        PrepareChanges(commandLine);
+        PrepareChanges(commandLine, replay_.IsPlaying() ? &replay_.Data().selection : nullptr);
     }
+    LoadMonkeyMoves(script.value("monkeyMoves", nlohmann::json::array()));
     steps_.clear();
     AppendSteps(script["steps"], 0);
     SuppressErrorDialogs();
+    // 本物の入力を切り、人の操作が混ざらないようにする（混ざると同じ動きを再現できない）
+    if (commandLine.find(kAllowInputFlag) == std::wstring::npos) {
+        input_->SetPhysicalInputEnabled(false);
+    }
+    // 再生の時は、見つけた所の少し手前まで速回しで進める
+    if (replay_.IsPlaying()) {
+        replayTargetFrame_ = replay_.TargetFrame();
+        replayLeadFrames_ = static_cast<uint64_t>(SecondsToFrames(script.value("replayLeadSeconds", kDefaultReplayLeadSeconds)));
+        replayAfterFrames_ = static_cast<uint64_t>(SecondsToFrames(script.value("replayAfterSeconds", kDefaultReplayAfterSeconds)));
+    }
+    // ゲームの中身とは別の見張りを始める（決め事は手順の表で変えられる）
+    SmokeTestMonitors::Settings monitorSettings;
+    monitorSettings.updateSpikeMs = script.value("updateSpikeMs", monitorSettings.updateSpikeMs);
+    monitorSettings.slowUpdateMs = script.value("slowUpdateMs", monitorSettings.slowUpdateMs);
+    monitorSettings.memoryGrowthMb = script.value("memoryGrowthMb", monitorSettings.memoryGrowthMb);
+    monitorSettings.maxScreenshots = script.value("maxScreenshots", monitorSettings.maxScreenshots);
+    runTag_ = std::filesystem::path(ReportPath(replay_.IsPlaying() ? "replay_view" : "run", "txt")).stem().string();
+    monitors_.Start(dxCommon_, monitorSettings, runTag_);
+    sMonitors = &monitors_;
+    sMainThread = std::this_thread::get_id();
     // NEW GAME やクリアで書き換わるので、テスト中はプレイヤーのセーブとランキングをファイルへ書かない
     SaveDataManager::GetInstance()->SetWritesEnabled(false);
     ScoreManager::GetInstance()->SetWritesEnabled(false);
@@ -181,6 +238,9 @@ bool SmokeTestRunner::StartIfRequested(engine::Input* input) {
     stepFrame_ = 0;
     lastSwitchCount_ = SceneManager::GetInstance()->GetSceneSwitchCount();
     switchCountAtStep_ = lastSwitchCount_;
+    if (replay_.IsPlaying()) {
+        log_.push_back("再生: " + replayPath_ + "（frame " + std::to_string(replayTargetFrame_) + " で見つけた所を見せる）");
+    }
     Logger::LogInfo("[SmokeTest] 自動テストを始めます（" + scriptPath_ + "、手順 " + std::to_string(steps_.size())
         + " 個、種 " + std::to_string(seed_) + "、速さ " + std::to_string(updatesPerDraw_) + " 倍）");
     if (bugHunt_) {
@@ -250,6 +310,8 @@ void SmokeTestRunner::AppendSteps(const nlohmann::json& steps, int depth) {
         step.expectProgress = value.value("expectProgress", false);
         step.sameStage = value.value("sameStage", false);
         step.weapon = value.value("weapon", std::string());
+        step.moveNames = value.value("moves", std::vector<std::string>());
+        step.makeMain = value.value("makeMain", false);
         if (value.contains("key")) {
             step.keys = ParseKeys(value["key"]);
         }
@@ -285,6 +347,22 @@ bool SmokeTestRunner::Update() {
     } else {
         ++framesSinceSwitch_;
     }
+    // 1回の更新の重さを数え、プールが溢れていないかを見る
+    const SceneManager* scenes = SceneManager::GetInstance();
+    const bool settled = !scenes->IsChangingScene() && framesSinceSwitch_ >= settleFrames_;
+    monitors_.EndUpdate(settled, scenes->GetCurrentSceneName());
+    monitors_.CheckPools(totalFrames_);
+    // 状態の指紋: 再生の時は記録と比べ、そうでなければ残す
+    if (replay_.IsPlaying()) {
+        if (const std::optional<std::string> divergence = replay_.VerifyCheckpoint(totalFrames_)) {
+            ReportIssue("再現のずれ", "状態の指紋", *divergence);
+        }
+    } else {
+        replay_.RecordCheckpoint(totalFrames_);
+    }
+    if (UpdateReplay()) {
+        return true;
+    }
     CheckFrameHitch();
     KeepPlayerAlive();
     // enterNextStage で入ったステージが落ち着いたら、その時の切り替え回数を覚える（以後に変わったらステージを出たとみなす）
@@ -292,13 +370,17 @@ bool SmokeTestRunner::Update() {
         pendingStageEntry_ = false;
         inStage_ = true;
         stageSwitchCount_ = switchCount;
+        // 入るたびにメモリの量を測り、出入りで増え続けていないかを見る
+        monitors_.OnStageEntered(RunData::GetInstance()->IsTutorialActive()
+                ? std::string("チュートリアル")
+                : "ステージ " + std::to_string(RunData::GetInstance()->GetPlayFloor() + 1));
     }
 
     if (stepIndex_ >= steps_.size()) {
         ReleaseKeys();
         sExpectProgress = false;
+        Finish();
         WriteReport(true, "");
-        finished_ = true;
         return true;
     }
     AnswerWeaponChoice();
@@ -398,6 +480,9 @@ bool SmokeTestRunner::UpdateStep(const Step& step) {
     if (step.action == "random") {
         return UpdateRandom(step);
     }
+    if (step.action == "monkey") {
+        return UpdateMonkey(step);
+    }
     if (step.action == "wait") {
         return stepFrame_ + 1 >= step.frames;
     }
@@ -418,7 +503,11 @@ bool SmokeTestRunner::UpdateStep(const Step& step) {
         return UpdateVisit(step);
     }
     if (step.action == "grantBossWeapon") {
-        return GrantBossWeapon(step.weapon);
+        return GrantBossWeapon(step.weapon, step.makeMain);
+    }
+    if (step.action == "resetTrainingWeapons" || step.action == "visitTrainingPickup"
+        || step.action == "expectWeapon" || step.action == "expectDuplicateWeapon" || step.action == "checkLastFusion") {
+        return CheckTrainingWeapon(step);
     }
     if (step.action == "mark") {
         Logger::LogInfo("[SmokeTest] " + step.label);
@@ -517,7 +606,7 @@ bool SmokeTestRunner::EnterTutorial() {
 }
 
 /** @brief ボスを倒さずにボスの武器を渡す（ボスの枠が埋まっていれば、主軸を選ぶ画面が出る） */
-bool SmokeTestRunner::GrantBossWeapon(const std::string& weaponName) {
+bool SmokeTestRunner::GrantBossWeapon(const std::string& weaponName, bool makeMain) {
     WeaponManager* weapons = WeaponManager::GetInstance();
     const auto& list = weapons->GetList();
     if (list.empty()) {
@@ -526,7 +615,15 @@ bool SmokeTestRunner::GrantBossWeapon(const std::string& weaponName) {
     }
     // 名前が無ければ、今のボスの枠の主軸とも相棒とも違う種類を、一覧の順に選ぶ（主軸を選ぶ画面を通すため）
     WeaponType type = list.front().type;
-    if (!weaponName.empty()) {
+    if (weaponName == kNextWeaponName) {
+        // 一覧の順に1つずつ次の種類を渡す（今の主軸と同じならもう1つ先へ。どの武器のボスのコンボも順に試せる）
+        const int main = weapons->GetSlotWeaponIndex(WeaponManager::kBossSlot);
+        size_t index = grantRotation_++ % list.size();
+        if (static_cast<int>(index) == main) {
+            index = grantRotation_++ % list.size();
+        }
+        type = list[index].type;
+    } else if (!weaponName.empty()) {
         type = ParseWeaponTypeName(weaponName);
     } else {
         const int main = weapons->GetSlotWeaponIndex(WeaponManager::kBossSlot);
@@ -539,7 +636,13 @@ bool SmokeTestRunner::GrantBossWeapon(const std::string& weaponName) {
         }
     }
     const WeaponManager::BossAcquireResult result = weapons->AcquireBossWeapon(type);
-    log_.push_back("    ボスの武器を渡す（結果 " + std::to_string(static_cast<int>(result)) + "）");
+    // 頼まれていれば、主軸を選ぶ画面を通さずに渡した武器を主軸にする（前の主軸は相棒になる）
+    const bool chose = makeMain && weapons->HasPendingBossChoice();
+    if (chose) {
+        weapons->ChooseBossMain(false);
+    }
+    log_.push_back("    ボスの武器を渡す（" + std::string(WeaponTypeName(type)) + "、結果 " + std::to_string(static_cast<int>(result))
+        + (chose ? "、主軸にした）" : "）"));
     return true;
 }
 
@@ -613,6 +716,7 @@ void SmokeTestRunner::ReportIssue(const std::string& kind, const std::string& su
     if (!sActive) {
         return;
     }
+    const std::lock_guard<std::mutex> lock(sIssueMutex);
     for (Issue& issue : sIssues) {
         if (issue.kind == kind && issue.subject == subject) {
             ++issue.count;
@@ -626,6 +730,10 @@ void SmokeTestRunner::ReportIssue(const std::string& kind, const std::string& su
     issue.context = sContext;
     issue.firstFrame = sFrame;
     issue.count = 1;
+    // 初めて見つけた時の画面を保存する（描画を記録するスレッドから届いた時は、画面の保存を頼めないので飛ばす）
+    if (sMonitors != nullptr && std::this_thread::get_id() == sMainThread) {
+        issue.screenshot = sMonitors->RequestScreenshot(sIssues.size() + 1);
+    }
     sIssues.push_back(std::move(issue));
     Logger::LogWarning("[SmokeTest] おかしな所: " + kind + " " + subject + ": " + detail);
     CrashBreadcrumbs::Add("smoke", "おかしな所: " + kind + " " + subject);
@@ -649,58 +757,8 @@ void SmokeTestRunner::Fail(const std::string& reason) {
     ReleaseKeys();
     sExpectProgress = false;
     log_.push_back("NG  手順 " + std::to_string(stepIndex_ + 1) + ": " + reason);
+    Finish();
     WriteReport(false, reason);
-    finished_ = true;
-}
-
-/** @brief 結果のファイルを書き出す */
-void SmokeTestRunner::WriteReport(bool passed, const std::string& reason) const {
-    const std::string headline = passed ? "[SmokeTest] 成功: 全部の手順を終えました" : "[SmokeTest] 失敗: " + reason;
-    if (passed) {
-        Logger::LogInfo(headline);
-    } else {
-        Logger::LogError(headline);
-    }
-    CrashBreadcrumbs::Add("smoke", passed ? "自動テスト成功" : "自動テスト失敗");
-
-    std::error_code error;
-    std::filesystem::create_directories(kReportDirectory, error);
-    const std::string path = TimestampedReportPath("result");
-    std::ofstream report(path);
-    if (!report) {
-        return;
-    }
-    report << (passed ? "成功" : "失敗") << '\n';
-    if (!passed) {
-        report << "理由: " << reason << '\n';
-    }
-    report << "手順の表: " << scriptPath_ << "  ランダムの種: " << seed_ << '\n';
-    if (bugHunt_) {
-        report << "回した所: " << changes_.Summary() << "、近くで試した配置物 " << visitedCount_ << " 個\n";
-        // 最後まで回った時だけ、次に比べる記録を書く（起動役が全部の回を終えてから置き換える）
-        if (passed) {
-            changes_.WriteNextState();
-        }
-    }
-    report << "かかったフレーム数: " << totalFrames_ << "（約 " << static_cast<int>(static_cast<float>(totalFrames_) * gameConstants::kFrameDeltaTime) << " 秒）\n";
-    report << "見つけたおかしな所: " << sIssues.size() << " 件\n";
-    report << "--- 見つけたおかしな所（見つけた順） ---\n";
-    for (const Issue& issue : sIssues) {
-        report << "[" << issue.kind << "] " << issue.subject << "（" << issue.count << " 回、最初は frame " << issue.firstFrame << "）\n";
-        report << "    様子: " << issue.detail << '\n';
-        report << "    その時: " << issue.context << '\n';
-    }
-    report << "--- 手順の記録 ---\n";
-    for (const std::string& line : log_) {
-        report << line << '\n';
-    }
-    if (!passed) {
-        report << "--- 直前の出来事（古い順） ---\n";
-        CrashBreadcrumbs::ForEach([&](const CrashBreadcrumbs::Entry& entry) {
-            report << "[frame " << entry.frame << "] " << entry.category << ": " << entry.text << '\n';
-        });
-    }
-    Logger::LogInfo("[SmokeTest] 結果を書き出しました: " + path);
 }
 
 } // namespace engine::game

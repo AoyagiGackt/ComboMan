@@ -4,6 +4,8 @@
  * @note 調整値は Resources/Config/action_feel.json（ActionFeelTuning）。演出の名前は hit_effects.json、音の名前は sounds.json
  */
 #include "GamePlayScene.h"
+#include "TestCoverage.h"
+
 #include "ActionFeelTuning.h"
 #include "Collision.h"
 #include "GameSounds.h"
@@ -173,6 +175,10 @@ void GamePlayScene::UpdateRoomClearFinale() {
             state.defeated[enemy.name] = enemy.defeated;
         }
         const bool justMet = state.initialized && watch.met && !state.met;
+        // 自動テストの網羅のまとめに数える
+        if (justMet) {
+            testCoverage::Cover("room_clear", watch.conditionName);
+        }
         state.met = watch.met;
         state.initialized = true;
         if (!justMet || !canStart || !state.hasLastDefeated) {

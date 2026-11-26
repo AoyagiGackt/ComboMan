@@ -20,6 +20,7 @@
 #include <utility>
 #include <vector>
 #ifdef USE_IMGUI
+#include "EditorHub.h"
 #include "EditorUI.h"
 #include <imgui.h>
 #endif
@@ -28,6 +29,13 @@ namespace engine::game {
 namespace {
 #ifdef USE_IMGUI
 namespace editorUI = engine::graphics::editorUI;
+
+/** @brief 直前の部品にマウスが乗っていれば、説明を折り返して出す */
+void ShowItemHelp(const char* help) {
+    if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort)) {
+        editorUI::TooltipWrapped("%s", help);
+    }
+}
 constexpr ImVec2 kInitialWindowSize = { 460.0f, 680.0f }; // 初めて開いた時のウィンドウの大きさ
 #endif
 // リグの軸に合わない場合は各成分の符号をここで調整する
@@ -112,8 +120,10 @@ bool IsFingerBone(const std::string& name) {
 /** @brief F7で開閉し、開いていればパネルを描いてプレビューを進める（Updateフェーズから呼ぶこと） */
 bool ComboMotionEditor::Update(Input* input, Player& player, WeaponType weaponType) {
 #ifdef USE_IMGUI
-    // F7 でエディタの表示を切り替える
-    if (input != nullptr && input->TriggerKey(DIK_F7)) {
+    // F7 か、F8 のエディタ一覧のボタンでエディタの表示を切り替える
+    const bool hubToggle = editor::EditorHub::GetInstance()->Offer("motion", "モーションエディタ", "F7",
+        "武器の技ごとに、体の動きを時間の流れに沿って直します", open_);
+    if ((input != nullptr && input->TriggerKey(DIK_F7)) || hubToggle) {
         open_ = !open_;
     }
 
@@ -136,11 +146,13 @@ bool ComboMotionEditor::Update(Input* input, Player& player, WeaponType weaponTy
         if (ImGui::Begin("モーションエディタ (F7)", &open_)) {
             HandlePlaybackKeys();
             ImGui::Checkbox("プレビュー（ゲームを止める）", &previewing_);
+            ShowItemHelp("ゲームを止めて、選んだ段の動きだけを繰り返し見せます");
             ImGui::SameLine();
             bool enabled = library->IsEnabled();
             if (ImGui::Checkbox("加算モーションを掛ける", &enabled)) {
                 library->SetEnabled(enabled);
             }
+            ShowItemHelp("作った動きを元の技の動きに足します。切ると元の動きだけになり、見比べられます");
             ImGui::TextDisabled("武器はQ/Eで切り替え。角度を動かすと今の時刻にキーが打たれます");
             ImGui::TextDisabled("Space: 再生/停止  左右キー: 時刻送り  時間軸の黄色いキーはドラッグで移動");
             // 長い一覧に隠れないよう、保存は上に置く
@@ -530,10 +542,13 @@ void ComboMotionEditor::DrawTimeline(const MeleeAttackDef& attack, MotionClip& c
     // 再生・速さ・時刻のスライダー
     ImGui::SeparatorText("時間軸");
     ImGui::Checkbox("再生", &playing_);
+    ShowItemHelp("時刻を自動で進めて動きを再生します。止めると時刻のスライダーで1コマずつ見られます");
     ImGui::SameLine();
     ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * kPlaySpeedWidthRatio);
     ImGui::SliderFloat("速さ", &playSpeed_, kMinPlaySpeed, kMaxPlaySpeed);
+    ShowItemHelp("再生の速さです。1で本番と同じ速さ、小さいほどゆっくり見られます");
     ImGui::SliderFloat("時刻", &time_, 0.0f, 1.0f);
+    ShowItemHelp("段の始まりを0、終わりを1とした今の位置です。角度を動かすとこの時刻にキーが打たれます");
 
     // ヒットとキャンセルの時刻を、段の長さに対する割合にする
     const float duration = (attack.duration > 0.0f) ? attack.duration : 1.0f;
@@ -584,6 +599,7 @@ void ComboMotionEditor::DrawBoneList(const Player& player, const MotionClip& cli
     constexpr float kBoneListHeight = 160.0f;
     ImGui::SeparatorText("ボーン");
     ImGui::Checkbox("指の骨も出す", &showFingers_);
+    ShowItemHelp("一覧に指の細かい骨も並べます");
     ImGui::SameLine();
     ImGui::SetNextItemWidth(-FLT_MIN);
     ImGui::InputTextWithHint("##boneFilter", "ボーンを探す", boneFilter_, sizeof(boneFilter_));
@@ -628,6 +644,7 @@ void ComboMotionEditor::DrawKeyEditor(MotionClip& clip) {
 
     ImGui::Text("%s  /  時刻 %.2f", selectedBone_.c_str(), time_);
     const bool angleChanged = ImGui::DragFloat3("角度 (度)", &angle.x, kAngleDragSpeed, -kMaxAngle, kMaxAngle);
+    ShowItemHelp("選んだ骨を、元の動きにどれだけ足して曲げるかです（度）。Ctrl+Z で元に戻せます");
     // 掴んでから離すまでを1回分の履歴にする
     EditorHistory<MotionClip>& history = CurrentHistory();
     if (ImGui::IsItemActivated()) {

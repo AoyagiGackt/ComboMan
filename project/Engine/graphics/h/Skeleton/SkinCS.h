@@ -6,6 +6,7 @@
 #include "DirectXCommon.h"
 #include <d3d12.h>
 #include <wrl/client.h>
+#include "DeferredReleaseQueue.h"
 namespace engine::graphics {
 
 // Compute Shader による GPU スキニングを管理するクラス
@@ -64,7 +65,7 @@ private:
     Microsoft::WRL::ComPtr<ID3D12PipelineState> csPSO_;
 
     // CS 出力バッファ (DEFAULT heap, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS)
-    Microsoft::WRL::ComPtr<ID3D12Resource> outputBuffer_;
+    DeferredComPtr<ID3D12Resource> outputBuffer_;
     D3D12_VERTEX_BUFFER_VIEW outputVBV_ { };
 
     D3D12_GPU_VIRTUAL_ADDRESS inputGpuVA_ = 0; // 入力バッファの GPU VA

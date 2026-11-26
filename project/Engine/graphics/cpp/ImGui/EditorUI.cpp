@@ -276,6 +276,8 @@ void ShowHotkeyOverlay(bool nodeEditorOpen, bool stageEditorOpen, const char* ex
     if (ImGui::Begin("##EditorHotkeyOverlay", nullptr, flags)) {
         ImGui::Text("F1: ノードエディタ%s", nodeEditorOpen ? " (表示中)" : "");
         ImGui::Text("F2: ステージエディタ%s", stageEditorOpen ? " (表示中)" : "");
+        // ほかのエディタとシーンの移動は F8 の一覧から開ける
+        ImGui::TextUnformatted("F8: エディタの一覧・シーンの移動");
         if (extraLine) {
             ImGui::TextUnformatted(extraLine);
         }

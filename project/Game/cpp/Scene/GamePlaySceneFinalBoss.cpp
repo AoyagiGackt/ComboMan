@@ -4,6 +4,7 @@
  * @note 分割ファイル。クラスは GamePlayScene のまま、ラスボス戦まわりの定義だけをここに置く
  */
 #include "GamePlayScene.h"
+#include "StageEditorPlaytest.h"
 #include "CrashBreadcrumbs.h"
 #include "GameConstants.h"
 #include "HitEffectLibrary.h"
@@ -124,7 +125,11 @@ bool GamePlayScene::UpdateFinalBossCinematic() {
     finalBoss_.UpdateCinematic();
     UpdateCamera();
     player_->RefreshVisualTransforms();
-    SlashMark::GetInstance()->Update(TimeManager::GetInstance()->GetDeltaTime());
+    // フィニッシャーで段階が変わって演出に入った時も、切断の演出を進めて本体を戻す（戻さないと演出の間ボスが消えたままになる）
+    const float dt = TimeManager::GetInstance()->GetDeltaTime();
+    enemySlice_.Update(dt, camera_.get());
+    RestoreEnemyAfterSlice();
+    SlashMark::GetInstance()->Update(dt);
     return true;
 }
 
@@ -158,6 +163,9 @@ bool GamePlayScene::StrikePlayerFromBoss(const AABB& box, const Vector3& effectP
     }
     RunData::GetInstance()->TakeDamage(damage);
     player_->OnHit();
+#ifdef USE_IMGUI
+    stagePlaytest::Hit(GetStageEditor(), player_->GetPosition());
+#endif
     const HitEffectPlayer fx(pm_, &cameraShaker_, &rng_);
     fx.Impact("enemy_swing");
     fx.Sparks("player_hit", player_->GetPosition());

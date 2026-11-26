@@ -118,7 +118,7 @@ void EnemyEntity::PlaceKneelWeapon() {
     const BossKneelTuning& kneel = BossExecutionTuningStore::Get().kneel;
     const float facingYaw = facingSign_ >= 0.0f ? gameConstants::kHalfPi : -gameConstants::kHalfPi;
     weaponObject_->SetPosition({ pos_.x + facingSign_ * kneel.weaponOffset.x, pos_.y + kneel.weaponOffset.y, pos_.z + kneel.weaponOffset.z });
-    weaponObject_->SetRotation({ 0.0f, facingYaw, kneel.weaponTilt });
+    weaponObject_->SetRotation({ 0.0f, facingYaw + weaponBaseYaw_, kneel.weaponTilt });
     weaponObject_->SetScale(weaponScale_);
     // 撃破後の灰色ではなく、白と淡い青の間で明滅させて抜き取れることを目立たせる
     constexpr float kHalf = 0.5f;
@@ -260,7 +260,7 @@ void EnemyEntity::UpdateScripted() {
     // 向きと位置を反映して行列を更新する
     const float facingYaw = facingSign_ >= 0.0f ? gameConstants::kHalfPi : -gameConstants::kHalfPi;
     object_->SetRotation({ 0.0f, facingYaw, 0.0f });
-    weaponObject_->SetRotation({ 0.0f, facingYaw, kWeaponRestTilt });
+    weaponObject_->SetRotation({ 0.0f, facingYaw + weaponBaseYaw_, kWeaponRestTilt });
     const Vector3 visualPos = VisualPosition();
     object_->SetPosition(visualPos);
     PlaceWeapon(visualPos);

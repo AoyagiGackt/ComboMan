@@ -17,6 +17,7 @@
 #include <memory>
 #include <cstdint>
 #include <string>
+#include <vector>
 namespace engine::game {
 using engine::Audio;
 using engine::DirectXCommon;
@@ -83,6 +84,25 @@ public:
     static const char* GetDebugStartSceneName(int index);
     /** @brief 指定した番号の開始シーンのエディタでの表示名を返す */
     static const char* GetDebugStartSceneLabel(int index);
+    /** @brief 名前から開始シーンの番号を探す（一覧に無ければ -1） */
+    static int FindDebugStartSceneIndex(const std::string& sceneName);
+    /** @brief エディタに出すシーンの表示名を返す（一覧に無いシーンは名前そのもの） */
+    static std::string SceneLabelFor(const std::string& sceneName);
+    /**
+     * @brief エディタからシーンを開く（ラン中でないと開けない画面なら、先に新しいランを始める）
+     * @param sceneName 開くシーンの名前
+     */
+    void OpenSceneFromEditor(const std::string& sceneName);
+    /** @brief 1つ前に開いていたシーンへ戻れるかを返す */
+    bool CanGoBack() const {
+        return !sceneHistory_.empty();
+    }
+    /** @brief 1つ前に開いていたシーンの名前を返す（無ければ空） */
+    std::string PreviousSceneName() const {
+        return sceneHistory_.empty() ? std::string() : sceneHistory_.back();
+    }
+    /** @brief 1つ前に開いていたシーンへ戻る（戻った分は履歴から消える） */
+    void GoBack();
 
     static constexpr float kDefaultFadeSeconds = 0.38f; // シーン切り替えの既定のフェード秒数
 
@@ -163,6 +183,8 @@ private:
     std::string currentSceneName_; ///< 今の画面の名前（GetCurrentSceneName 参照）
     uint32_t sceneSwitchCount_ = 0; ///< 画面が切り替わった回数
     std::string debugStartScene_ = "TITLE";
+    std::vector<std::string> sceneHistory_; ///< これまでに開いたシーンの名前（古い順、エディタの戻るに使う）
+    bool goingBack_ = false; ///< 戻る操作で切り替えている最中か（その時は履歴に積まない）
 
 };
 

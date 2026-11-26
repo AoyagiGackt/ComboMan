@@ -3,6 +3,9 @@
  * @brief 組み込みノードの定義と実行関数の登録（NodeRegistry）の実装
  */
 #include "NodeRegistry.h"
+#include "EngineContext.h"
+// 乱数の種を共通の窓口から取得する。
+#include "RandomSeed.h"
 #include "NodeParamHelpers.h"
 #include "AudioBridge.h"
 #include "EnemyEntity.h"
@@ -32,8 +35,6 @@ using namespace engine;
 namespace engine::game {
 using namespace nodeParams;
 namespace {
-// GraphValueTypeの並び順（Float/Bool/String/Any）に対応する、初期値を省略した時の既定値
-const GraphValue kTypeDefaults[] = { 0.0f, false, std::string { }, 0.0f };
 // ノード追加時の初期値で共通して使う値
 const GraphValue kDefaultVariable = Text("var");
 const GraphValue kDefaultObjectTarget = Text("obj_0");
@@ -174,7 +175,7 @@ NodeResult ExecRandom(GraphRuntime& rt, const GraphNode& node, std::string& outN
     if (mn > mx) {
         std::swap(mn, mx);
     }
-    static std::mt19937 sRng { std::random_device { }() };
+    static std::mt19937 sRng { engine::randomSeed::Next() };
     std::uniform_real_distribution<float> dist(mn, mx);
     rt.SetNodeOutput(node.id, GraphValue { dist(sRng) });
     outNextId = node.next;
@@ -477,21 +478,23 @@ NodeResult ExecEmitRing(GraphRuntime& rt, const GraphNode& node, std::string& ou
     float g = AsFloat(rt.ResolveParam(node, "g", GraphValue { 1.0f }));
     float b = AsFloat(rt.ResolveParam(node, "b", GraphValue { 1.0f }));
     /** @brief 共有インスタンスを取得する */
-    engine::graphics::ParticleManager::GetInstance()->EmitRing(group, position, radius,
+    engine::Services().particles->EmitRing(group, position, radius,
         { r, g, b, 1.0f }, kRingParticleCount, kRingLifetime, kRingSize);
     outNextId = node.next;
     return NodeResult::kContinue;
 }
 
 } // namespace
-/** @brief 唯一のNodeRegistryインスタンスを取得する（未生成なら生成し、組み込みノードを登録する） */
+/** @brief 唯一のNodeRegistryインスタンスを取得する（初めて呼ばれた時にゲームのノードを登録する） */
 NodeRegistry* NodeRegistry::GetInstance() {
     static NodeRegistry sInstance;
+    // 登録は最初の1回だけ（関数内の static の初期化はスレッドをまたいでも1回だけ走る）
+    static const bool kRegistered = [] {
+        sInstance.RegisterBuiltins();
+        return true;
+    }();
+    static_cast<void>(kRegistered);
     return &sInstance;
-}
-/** @brief 組み込みノードを登録して初期化する */
-NodeRegistry::NodeRegistry() {
-    RegisterBuiltins();
 }
 /** @brief 組み込みノードの定義と実行関数を登録する */
 void NodeRegistry::RegisterBuiltins() {
@@ -575,36 +578,7 @@ void NodeRegistry::RegisterBuiltins() {
     RegisterSpec("EmitRing", { { { "group", VT::kString, Text("hit_ring") }, { "x", VT::kFloat }, { "y", VT::kFloat }, { "z", VT::kFloat }, { "radius", VT::kFloat, graphNodeDefaults::kRingRadius }, { "r", VT::kFloat, kOne }, { "g", VT::kFloat, kOne }, { "b", VT::kFloat, kOne } }, false, VT::kAny, "座標(x,y,z)に色(r,g,b)のリング状パーティクルを出す（groupはparticles JSONのグループ名）", "演出・音声" });
     // 進行の流れ・演出の追加・プレイヤーの状態を扱うノードは別のファイルで登録する
     RegisterProgressNodes();
-}
-/** @brief エディタでノードを追加した時に入れる初期値を返す */
-GraphValue NodeParamSpec::InitialValue() const {
-    return defaultValue ? *defaultValue : kTypeDefaults[static_cast<size_t>(type)];
-}
-/** @brief 新しいノード種別を登録する（同名で上書きも可） */
-void NodeRegistry::Register(const std::string& type, NodeExecuteFn fn) {
-    executors_[type] = std::move(fn);
-}
-/** @brief ノード種別のピン情報を登録する（データ配線を使わないノードは省略可） */
-void NodeRegistry::RegisterSpec(const std::string& type, NodeTypeSpec spec) {
-    specs_[type] = std::move(spec);
-}
-/** @brief 型名から実行ロジックを引く登録が無ければnullptr */
-const NodeExecuteFn* NodeRegistry::Find(const std::string& type) const {
-    auto it = executors_.find(type);
-    return (it != executors_.end()) ? &it->second : nullptr;
-}
-/** @brief 型名からピン情報を引く登録が無ければnullptr（エディタはAny扱いにする） */
-const NodeTypeSpec* NodeRegistry::FindSpec(const std::string& type) const {
-    auto it = specs_.find(type);
-    return (it != specs_.end()) ? &it->second : nullptr;
-}
-/** @brief 登録済みの型名一覧を返す（GraphEditorのノード追加メニュー用） */
-std::vector<std::string> NodeRegistry::GetRegisteredTypes() const {
-    std::vector<std::string> types;
-    types.reserve(executors_.size());
-    for (const auto& [type, fn] : executors_) {
-        types.push_back(type);
-    }
-    return types;
+    // 勝ち負けの条件（ゴール・点数・ゲームオーバー）のノード
+    RegisterRuleNodes();
 }
 } // namespace engine::game

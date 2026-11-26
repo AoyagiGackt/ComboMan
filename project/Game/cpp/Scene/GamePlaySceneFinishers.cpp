@@ -3,6 +3,7 @@
  * @brief 地上コンボの最後の段が当たった時に出す、武器ごとの締めの動作（突き飛ばし・衝撃波・叩きつけ・引き寄せ・回り込み・投げ）
  */
 #include "GamePlayScene.h"
+#include "CombatDepth.h"
 #include "CombatTuning.h"
 #include "GameConstants.h"
 #include "HitEffectLibrary.h"
@@ -20,7 +21,6 @@ namespace {
 constexpr float kStageHalfDepth = 0.5f; // 2.5Dステージの奥行き半分
 constexpr const char* kThrownWeaponModel = "Resources/MedievalWeaponsPack/OBJ/Axe_Double.obj";
 constexpr const char* kThrownWeaponTexture = "Resources/MedievalWeaponsPack/OBJ/Axe_DoublePalette.png";
-constexpr float kThrowHeight = 0.6f; // 投げる武器を足元からこの高さで飛ばす
 constexpr float kWarpBodyHalfWidth = 0.3f; // 引き寄せた敵が壁の中かを調べる時の体の半分の幅
 constexpr float kWarpBodyBottom = 0.2f; // 足元の床を数えないよう、この高さより上だけを調べる
 constexpr float kWarpBodyTop = 1.2f; // 体の上端（足元から）
@@ -127,8 +127,9 @@ void GamePlayScene::ApplyPendingWeaponFinisher() {
 void GamePlayScene::ForEachTargetInFront(float length, float halfHeight, const std::function<void(const FinisherTarget&)>& visit) {
     const Vector3& ppos = player_->GetPosition();
     const float dirX = player_->GetLastDirX();
-    const AABB area = { { (std::min)(ppos.x, ppos.x + dirX * length), ppos.y - halfHeight, -kStageHalfDepth },
+    AABB area = { { (std::min)(ppos.x, ppos.x + dirX * length), ppos.y - halfHeight, -kStageHalfDepth },
         { (std::max)(ppos.x, ppos.x + dirX * length), ppos.y + halfHeight, kStageHalfDepth } };
+    combatDepth::Apply(area, ppos.z);
     for (const FinisherTarget& target : CollectFinisherTargets()) {
         if (Collision::CheckCollision(area, EnemyHitBoxAt(target.enemy->GetPosition()))) {
             visit(target);
@@ -264,7 +265,7 @@ void GamePlayScene::FinishThrow(const WeaponFinisherData& data) {
     params.hitRadius = data.throwHitRadius;
     params.maxSeconds = data.throwMaxSeconds;
     params.scale = data.throwScale;
-    const Vector3 start = { ppos.x, ppos.y + kThrowHeight, ppos.z };
+    const Vector3 start = { ppos.x, ppos.y + ThrownWeaponParams::kLaunchHeight, ppos.z };
     if (thrownWeapons_.Launch(start, player_->GetLastDirX(), params)) {
         const HitEffectPlayer fx(pm_, &cameraShaker_, &rng_);
         fx.Sparks(data.sparks, start);
@@ -278,6 +279,19 @@ void GamePlayScene::InitializeThrownWeapons() {
 
 /** @brief 投げた武器を進め、当たった敵にダメージを与える（毎フレーム呼ぶ） */
 void GamePlayScene::UpdateThrownWeapons() {
+    if (player_->HasWeaponInFlight()) {
+        for (const FinisherTarget& target : CollectFinisherTargets()) {
+            const Vector3& pos = target.enemy->GetPosition();
+            const float damage = player_->ConsumeWeaponThrowHit(EnemyHitBoxAt(pos));
+            if (damage > 0.0f) {
+                constexpr float kDiscardThrowDamageMult = 1.5f;
+                const float baseDamage = (std::max)(1.0f, damage / CombatTune().meleeDamageDivisor * CurrentDamageMult());
+                target.enemy->TakeDamageScaled(baseDamage * kDiscardThrowDamageMult);
+                HitEffectPlayer(pm_, &cameraShaker_, &rng_).Sparks("gate_dust", pos);
+                break;
+            }
+        }
+    }
     if (!thrownWeapons_.HasActive()) {
         return;
     }
@@ -295,7 +309,7 @@ void GamePlayScene::UpdateThrownWeapons() {
         return hits;
     };
     const Vector3& ppos = player_->GetPosition();
-    const Vector3 returnTarget = { ppos.x, ppos.y + kThrowHeight, ppos.z };
+    const Vector3 returnTarget = { ppos.x, ppos.y + ThrownWeaponParams::kLaunchHeight, ppos.z };
     const HitEffectPlayer fx(pm_, &cameraShaker_, &rng_);
     for (const ThrownWeaponHit& hit : thrownWeapons_.Update(gameConstants::kFrameDeltaTime, returnTarget, query)) {
         // 当たった時にまだ生きているかを見直す（同じフレームの別の当たりで倒れていることがある）

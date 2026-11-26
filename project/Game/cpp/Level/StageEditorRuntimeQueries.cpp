@@ -3,7 +3,9 @@
  * @brief 配置物の描画・衝突形状・実行時情報の取得
  */
 #include "StageEditor.h"
+#include "EngineContext.h"
 #include "GimmickMotion.h"
+#include "GroundSupport.h"
 #include "ObjectKind.h"
 #include "Camera.h"
 #include "DirectXCommon.h"
@@ -70,7 +72,7 @@ engine::AABB MakeRotatedBounds(const Vector3& center, const Vector3& halfExtent,
 } // namespace
 
 /** @brief 描画資源の所有権を保持したまま色と描画行列を更新する */
-void BreakableRef::SetColor(const Vector4& color) const {
+void stageEditor::BreakableRef::SetColor(const Vector4& color) const {
     object_->SetColor(color);
     object_->Update();
 }
@@ -109,12 +111,13 @@ std::vector<engine::AABB> StageEditor::GetClosedGateColliders() const {
 }
 
 /** @brief solid=trueの配置物のワールドAABB一覧（includeEnemyBodies=falseなら敵の体を、includeGates=falseなら条件で開く扉を除く） */
-std::vector<engine::AABB> StageEditor::CollectSolidColliders(bool includeEnemyBodies, bool includeGates) const {
+std::vector<engine::AABB> StageEditor::CollectSolidColliders(bool includeEnemyBodies, bool includeGates,
+    const ObjectDesc* ignored, bool extendGates) const {
     // 当たり判定を持ち、今ゲーム中で有効な（回収・破壊されていない）配置物だけを対象にする
     std::vector<engine::AABB> result;
     std::vector<size_t> gateIndices;
     for (const auto& entry : objects_) {
-        if (!entry.desc.solid || !entry.runtimeActive || !entry.visibleOverride
+        if (&entry.desc == ignored || !entry.desc.solid || !entry.runtimeActive || !entry.visibleOverride
             || entry.pickupCollected || entry.breakableDestroyed) {
             continue;
         }
@@ -151,7 +154,7 @@ std::vector<engine::AABB> StageEditor::CollectSolidColliders(bool includeEnemyBo
         if (desc.kind == objectKindName::kTerrain && desc.meshCollider) {
             const std::string key = desc.model + '|' + desc.texture;
             auto modelIt = modelCache_.find(key);
-            if (modelIt != modelCache_.end()) {
+            if (modelIt != modelCache_.end() && modelIt->second) {
                 const auto& vertices = modelIt->second->GetVertices();
                 const auto& indices = modelIt->second->GetIndices();
                 // 頂点を拡縮 → 回転 → 配置位置への移動の順でワールド座標にする
@@ -186,7 +189,7 @@ std::vector<engine::AABB> StageEditor::CollectSolidColliders(bool includeEnemyBo
             const Vector3 pos = PlacementInstancePosition(desc, basePos, i);
             result.push_back(MakeRotatedBounds(pos, { hx, hy, hz }, colliderRotation));
             // 条件を満たすまで閉じている扉なら、上を跳び越えられないよう後でステージ上端まで伸ばす
-            if (IsClosedGate(desc)) {
+            if (extendGates && IsClosedGate(desc)) {
                 gateIndices.push_back(result.size() - 1);
             }
         }
@@ -194,6 +197,71 @@ std::vector<engine::AABB> StageEditor::CollectSolidColliders(bool includeEnemyBo
     ExtendGatesToStageTop(result, gateIndices);
     return result;
 }
+
+#ifdef USE_IMGUI
+/** @brief 回転後の底面と足場の上面から配置する高さを求める */
+float StageEditor::FloorPositionY(const ObjectDesc& desc, const Vector3& world, const std::vector<engine::AABB>& floors) const {
+    constexpr float kHalfExtent = 0.5f;
+    const auto bounds = MakeRotatedBounds({}, { desc.scale.x * kHalfExtent, desc.scale.y * kHalfExtent,
+        desc.scale.z * kHalfExtent }, desc.rotation);
+    // 敵と目印は足元を基準に置く
+    float offset = ObjectKind::Of(desc.kind).IsVisual() ? bounds.max.y : 0.0f;
+    if (ObjectKind::Of(desc.kind).PlacesEnemy()) {
+        constexpr float kKnightStandHeight = 0.9f;
+        const bool knight = desc.kind == objectKindName::kEnemyKnight
+            || (desc.kind == objectKindName::kSpawnPoint && desc.spawnType == "knight");
+        offset = knight ? kKnightStandHeight : EnemyTuning::GetInstance()->Basic().corpseFootOffset;
+    }
+    // 列のどの部品も床に食い込まない高さを選ぶ
+    float highest = -FLT_MAX;
+    const int count = (std::max)(1, PlacementCopyCount(desc));
+    for (int index = 0; index < count; ++index) {
+        const Vector3 pos = PlacementInstancePosition(desc, world, index);
+        const auto top = FindSupportingFloor(pos, bounds.max.x, bounds.max.z, 0.0f, floors);
+        highest = (std::max)(highest, top.value_or(0.0f) + offset - (pos.y - world.y));
+    }
+    return highest;
+}
+
+/** @brief ひな形の全体を同じ高さだけ動かして床に乗せる */
+float StageEditor::GroupFloorShift(const std::vector<ObjectDesc>& parts) const {
+    if (!autoFloor_) {
+        return 0.0f;
+    }
+    const auto floors = CollectSolidColliders(false, true, nullptr, false);
+    std::optional<float> shift;
+    std::map<std::string, const ObjectDesc*> parents;
+    for (const auto& part : parts) {
+        parents[part.name] = &part;
+    }
+    for (const auto& part : parts) {
+        if (part.kind == objectKindName::kUIText) {
+            continue;
+        }
+        const Vector3 world = ResolveWorldPosition(part, [&](const std::string& name) -> const ObjectDesc* {
+            const auto found = parents.find(name);
+            return found != parents.end() ? found->second : nullptr;
+        });
+        const float delta = FloorPositionY(part, world, floors) - world.y;
+        shift = (std::max)(shift.value_or(delta), delta);
+    }
+    return shift.value_or(0.0f);
+}
+
+/** @brief 新しく置く物に自動接地の設定を適用する（背景・地形・カメラの位置・条件・文章のように、宙や奥に置く物は動かさない） */
+void StageEditor::SettleNewObject(ObjectDesc& desc) const {
+    static constexpr const char* kFloatingKinds[] = {
+        objectKindName::kUIText, objectKindName::kBackground, objectKindName::kTerrain,
+        objectKindName::kCameraPoint, objectKindName::kEventCondition,
+    };
+    const bool floating = std::any_of(std::begin(kFloatingKinds), std::end(kFloatingKinds), [&desc](const char* kind) {
+        return desc.kind == kind;
+    });
+    if (autoFloor_ && !floating) {
+        desc.position.y = FloorPositionY(desc, desc.position, CollectSolidColliders(false, true, nullptr, false));
+    }
+}
+#endif
 
 /** @brief 開き始めた扉の足元を取り出し、通知を消費する */
 std::vector<Vector3> StageEditor::ConsumeOpenedGatePositions() {
@@ -333,12 +401,15 @@ void StageEditor::DrawObjects() {
     Object3d::RebindCommonLighting(modelCommon_->GetDxCommon()->GetCommandList());
 
     // 見た目のモデルを先にまとめて描き、敵の本体はその後にメインのスレッドで描く
-    staticDrawList_.clear();
+    staticDrawList_.Clear();
     VisitDrawableEntries([this](ObjectEntry& entry) {
         for (auto& obj : entry.instances) {
-            staticDrawList_.push_back(obj.get());
+            staticDrawList_.Add(obj.get());
         }
     });
+    // 同じモデルをまとめ、半透明な物は奥から描く順に並べる（カメラが無い時は原点から見た順）
+    const Vector3 cameraPosition = camera_ ? camera_->GetTranslate() : Vector3 { 0.0f, 0.0f, 0.0f };
+    staticDrawList_.Sort(cameraPosition);
     DrawStaticObjects();
     VisitDrawableEntries([](ObjectEntry& entry) {
         if (entry.knight) {
@@ -355,26 +426,22 @@ void StageEditor::DrawStaticObjects() {
     // 1本のバンドルに入れる最少の数（少ないと分ける手間の方が大きい）
     constexpr size_t kMinObjectsPerBundle = 32;
     constexpr int kMinBundles = 2;
-    const size_t count = staticDrawList_.size();
+    const size_t count = staticDrawList_.Size();
     const int bundles = static_cast<int>((std::min)(static_cast<size_t>(ParallelBundleRecorder::GetParallelism()), count / kMinObjectsPerBundle));
     if (!ParallelBundleRecorder::IsEnabled() || bundles < kMinBundles) {
-        for (Object3d* obj : staticDrawList_) {
-            obj->Draw();
-        }
+        staticDrawList_.DrawAll();
         return;
     }
     DirectXCommon* dxCommon = modelCommon_->GetDxCommon();
     dxCommon->GetBundleRecorder().RecordAndExecute(dxCommon->GetMainCommandList(), bundles, [this, dxCommon, count, bundles](int index) {
         // バンドルは呼び出したリストのヒープ・ルートシグネチャ・PSO・ライトの設定を受け継がないので、自分で設定する
         // （描画先・ビューポート・シザーは呼び出したリストのものを使う）
-        SrvManager::GetInstance()->PreDraw();
+        engine::Services().srvManager->PreDraw();
         modelCommon_->CommonDrawSettings();
         Object3d::RebindCommonLighting(dxCommon->GetCommandList());
         const size_t begin = count * static_cast<size_t>(index) / static_cast<size_t>(bundles);
         const size_t end = count * static_cast<size_t>(index + 1) / static_cast<size_t>(bundles);
-        for (size_t i = begin; i < end; ++i) {
-            staticDrawList_[i]->Draw();
-        }
+        staticDrawList_.DrawRange(begin, end);
     });
     // バンドルで変わった設定を、続けて描く敵のためにメインのリストへ戻す
     modelCommon_->CommonDrawSettings();

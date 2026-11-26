@@ -4,6 +4,7 @@
  */
 #pragma once
 #include <Windows.h>
+#include "DeferredReleaseQueue.h"
 #include "FrameUploadAllocator.h"
 #include "ParallelBundleRecorder.h"
 #include "ResourceStateTracker.h"
@@ -13,6 +14,7 @@
 #include <d3dx12.h>
 #include <dxcapi.h>
 #include <dxgi1_6.h>
+#include <functional>
 #include <mutex>
 #include <string>
 #include <thread>
@@ -56,6 +58,10 @@ public: // メンバ関数
     /** @brief 描画の命令を複数のスレッドでバンドルへ記録するための部品を取得する */
     ParallelBundleRecorder& GetBundleRecorder() {
         return bundleRecorder_;
+    }
+    /** @brief 捨てられた GPU 資源を、GPU が使い終わるまで預かる列を取得する */
+    DeferredReleaseQueue& GetDeferredReleaseQueue() {
+        return deferredReleaseQueue_;
     }
     /** @brief メインのスレッドで記録しているコマンドリストを返す（バンドルの記録中でもこちらを返す） */
     ID3D12GraphicsCommandList* GetMainCommandList() {
@@ -131,6 +137,29 @@ public: // メンバ関数
         diagnosticContext_ = context;
     }
 
+    /** @brief デバッグレイヤーの知らせ1件を受け取る関数（isError は ERROR か CORRUPTION の時 true） */
+    using DebugMessageHandler = std::function<void(bool isError, int id, const std::string& description)>;
+    /**
+     * @brief デバッグレイヤーの警告とエラーを受け取る関数を登録する（Debug ビルドの時だけ届く。空の関数で外す）
+     * @param handler 受け取る関数
+     */
+    void SetDebugMessageHandler(DebugMessageHandler handler);
+    /**
+     * @brief デバッグレイヤーのエラーで止めるか（ふだんは止める。自動テストでは止めずに記録して先へ進む）
+     * @param enabled 止めるなら true
+     */
+    void SetBreakOnDebugErrors(bool enabled);
+    /**
+     * @brief 次に画面へ出す絵を PNG で保存するよう頼む（PostDraw の中で、描き終えて画面へ出す前に写し取る）
+     * @param path 保存する場所
+     * @note 写し取る時に GPU を待つので、自動テストで不具合を見つけた時など、たまにだけ使う
+     */
+    void RequestScreenshot(const std::wstring& path) {
+        screenshotPath_ = path;
+    }
+    /** @brief このアプリが今使っている GPU のメモリの量（バイト。取れなければ 0） */
+    uint64_t GetGpuMemoryUsage() const;
+
     /**
      * @brief シェーダーファイルをコンパイルする
      * @param filePath シェーダーファイルのパス
@@ -138,6 +167,18 @@ public: // メンバ関数
      * @return コンパイルされたシェーダーデータ
      */
     Microsoft::WRL::ComPtr<IDxcBlob> CompileShader(const std::wstring& filePath, const wchar_t* profile);
+
+    /**
+     * @brief pak とキャッシュを通さずにファイルからコンパイルし直す（シェーダーのホットリロード用）
+     * @return 成功したらコンパイル結果（キャッシュも置き換える）。エラーや警告が出たらログに出して nullptr
+     */
+    Microsoft::WRL::ComPtr<IDxcBlob> CompileShaderFromSource(const std::wstring& filePath, const wchar_t* profile);
+
+    /**
+     * @brief バイトコードの先頭のアドレスから、それをコンパイルしたファイルとプロファイルを引く
+     * @return CompileShader か CompileShaderFromSource で作ったバイトコードなら true
+     */
+    bool FindShaderSource(const void* bytecode, std::wstring& outPath, std::wstring& outProfile) const;
 
     /** @brief デバイスの取得 */
     ID3D12Device* GetDevice() {
@@ -232,15 +273,23 @@ public: // メンバ関数
 
     // RTV関連
 
-    /** @brief 現在のバックバッファのRTVハンドルを取得 */
+    /** @brief シーンを描く色バッファの形式（明るさ 1 を超える値も残せる浮動小数点。描画先にする PSO の形式もこれにそろえる） */
+    static constexpr DXGI_FORMAT kSceneColorFormat = DXGI_FORMAT_R16G16B16A16_FLOAT;
+    /** @brief スワップチェーンへ描き込む時の形式（フレームの最後に色バッファを写す時だけ使う） */
+    static constexpr DXGI_FORMAT kSwapChainRtvFormat = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+
+    /**
+     * @brief 今の描画先（シーンの色バッファ）の RTV ハンドルを取得
+     * @note 画面へ出すスワップチェーンではなく、フレームの最後にスワップチェーンへ写す浮動小数点の色バッファを返す
+     */
     D3D12_CPU_DESCRIPTOR_HANDLE GetCurrentBackBufferHandle();
 
-    /** @brief 現在のバックバッファリソースを取得 */
+    /** @brief 今の描画先（シーンの色バッファ）のリソースを取得（画面を写し取る演出はここから写す） */
     ID3D12Resource* GetCurrentBackBufferResource();
 
-    /** @brief バックバッファのフォーマットを取得（デフォルトはSRGB） */
+    /** @brief 描画先（シーンの色バッファ）の形式を取得 */
     DXGI_FORMAT GetBackBufferFormat() const {
-        return DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+        return kSceneColorFormat;
     }
 
     /** @brief スワップチェーンのバッファ数を取得（ダブルバッファリングなら2） */
@@ -319,6 +368,15 @@ private:
 
     // レンダーターゲットビューの生成
     void CreateRTV();
+    /** @brief スワップチェーンと同じ大きさのシーンの色バッファと、その RTV・SRV を作る（大きさが変わった時も呼ぶ） */
+    void CreateSceneColorBuffer();
+    /** @brief シーンの色バッファをスワップチェーンへ写すパイプラインを作る */
+    void CreatePresentPipeline();
+    /**
+     * @brief シーンの色バッファをスワップチェーンへ写し、スワップチェーンを画面へ出す状態にする
+     * @param backBufferIndex 写し先のスワップチェーンの番号
+     */
+    void CopySceneColorToSwapChain(UINT backBufferIndex);
 
     // 深度バッファリソースとDSVの生成
     void CreateDepthBuffer();
@@ -330,10 +388,17 @@ private:
 
     // DXCシェーダーコンパイラの初期化
     void InitializeDXC();
+    /** @brief ファイルを読んでコンパイルする（読めない・エラーや警告が出た時はログに出して nullptr を返す） */
+    Microsoft::WRL::ComPtr<IDxcBlob> CompileShaderSource(const std::wstring& filePath, const wchar_t* profile);
+    /** @brief コンパイルの結果をキャッシュへ入れ、バイトコードから元のファイルを引けるようにする */
+    void RememberShader(const std::wstring& cacheKey, const std::wstring& filePath, const wchar_t* profile,
+        const Microsoft::WRL::ComPtr<IDxcBlob>& shaderBlob);
 
     // FPS固定関連
     void InitializeFixFPS(); ///< FPS固定用の参照時間初期化
     void UpdateFixFPS(); ///< 1/60秒に満たない場合に待機する
+    /** @brief RequestScreenshot で頼まれていれば、今のバックバッファを PNG で保存する（画面へ出す前に呼ぶ） */
+    void CaptureRequestedScreenshot(UINT backBufferIndex);
 
 #ifdef _DEBUG
     /** @brief D3D12デバッグレイヤーのメッセージをエンジンログへ転送する */
@@ -352,9 +417,12 @@ private:
     ResourceStateTracker resourceStateTracker_;
     /** @brief 描画の命令を複数のスレッドでバンドルへ記録するための部品 */
     ParallelBundleRecorder bundleRecorder_;
+    /** @brief 捨てられた GPU 資源を、GPU が使い終わるまで預かる列 */
+    DeferredReleaseQueue deferredReleaseQueue_;
 
     // DirectX12基盤オブジェクト
     Microsoft::WRL::ComPtr<IDXGIFactory7> dxgiFactory_;
+    Microsoft::WRL::ComPtr<IDXGIAdapter4> adapter_; ///< 使っている GPU（メモリの量を聞くのに使う）
     Microsoft::WRL::ComPtr<ID3D12Device> device_;
     Microsoft::WRL::ComPtr<ID3D12CommandQueue> commandQueue_;
     /** @brief バックバッファごとに1つずつ持つコマンドアロケータ
@@ -377,14 +445,27 @@ private:
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> backBufferDsvHeap_;
     Microsoft::WRL::ComPtr<ID3D12Fence> fence_;
 
+    // シーンの色バッファ（全部ここへ描き、フレームの最後にスワップチェーンへ写す）
+    Microsoft::WRL::ComPtr<ID3D12Resource> sceneColorResource_;
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> sceneColorRtvHeap_; ///< 色バッファの RTV 1つぶん
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> presentSrvHeap_; ///< 写す時に色バッファを読む SRV 1つぶん（シェーダーから見える）
+    Microsoft::WRL::ComPtr<ID3D12RootSignature> presentRootSignature_; ///< 写すパスのルートシグネチャ
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> presentPipeline_; ///< 写すパスのパイプライン
+
     // DXC (Shader Compiler)
     Microsoft::WRL::ComPtr<IDxcUtils> dxcUtils_;
     Microsoft::WRL::ComPtr<IDxcCompiler3> dxcCompiler_;
     Microsoft::WRL::ComPtr<IDxcIncludeHandler> includeHandler_;
     /** @brief 同一プロセス内で再利用するコンパイル済みシェーダー */
     std::unordered_map<std::wstring, Microsoft::WRL::ComPtr<IDxcBlob>> shaderCache_;
+    /** @brief コンパイル結果のファイルとプロファイル（バイトコードのアドレスから引く。シェーダーのホットリロードに使う） */
+    struct ShaderSource {
+        std::wstring path;
+        std::wstring profile;
+    };
+    std::unordered_map<const void*, ShaderSource> shaderSources_;
     /** @brief シーン初期化が並行した場合のシェーダーキャッシュを保護する */
-    std::mutex shaderCacheMutex_;
+    mutable std::mutex shaderCacheMutex_;
 
     // 同期・管理用メンバ
     D3D12_CPU_DESCRIPTOR_HANDLE rtvHandles_[2];
@@ -407,6 +488,8 @@ private:
 
     /** @brief GPUエラー発生時に直前の処理を特定するための識別名 */
     std::string diagnosticContext_ = "Engine initialization";
+    DebugMessageHandler debugMessageHandler_; ///< デバッグレイヤーの知らせを受け取る関数（空なら呼ばない）
+    std::wstring screenshotPath_; ///< 次に保存する画面の場所（空なら保存しない）
 
 #ifdef _DEBUG
     Microsoft::WRL::ComPtr<ID3D12InfoQueue1> infoQueue_;

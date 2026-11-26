@@ -80,6 +80,8 @@ Microsoft::WRL::ComPtr<ID3D12RootSignature> CreateBindlessRootSignature(ID3D12De
     if (FAILED(device->CreateRootSignature(0, signatureBlob->GetBufferPointer(), signatureBlob->GetBufferSize(), IID_PPV_ARGS(&rootSignature)))) {
         return nullptr;
     }
+    // 同じ設定のパイプラインを保存から見分けられるよう、中身から作った目印を付ける
+    PipelineCache::TagRootSignature(rootSignature.Get(), signatureBlob.Get());
     return rootSignature;
 }
 } // namespace
@@ -136,9 +138,8 @@ void SpriteCommon::Initialize(DirectXCommon* dxCommon) {
     graphicsPipelineStateDesc.BlendState.RenderTarget[0] = ph::MakeBlendDesc(BlendMode::kAlpha);
     graphicsPipelineStateDesc.DepthStencilState.DepthEnable = FALSE; // 2Dは常に最前面に描く
 
-    HRESULT hr = device->CreateGraphicsPipelineState(&graphicsPipelineStateDesc,
-        IID_PPV_ARGS(&graphicsPipelineState_));
-    ENGINE_ASSERT(SUCCEEDED(hr));
+    // 保存した物があれば取り出し、無ければ作って保存する
+    graphicsPipelineState_ = ph::CreateGraphicsPipeline(device, graphicsPipelineStateDesc);
     graphicsPipelineState_->SetName(L"SpriteCommon.SpritePS");
 }
 
@@ -147,7 +148,7 @@ void SpriteCommon::CommonDrawSettings() {
     ID3D12GraphicsCommandList* commandList = dxCommon_->GetCommandList();
 
     commandList->SetGraphicsRootSignature(rootSignature_.Get());
-    commandList->SetPipelineState(graphicsPipelineState_.Get());
+    commandList->SetPipelineState(PipelineCache::Resolve(graphicsPipelineState_.Get()));
     commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 }
 

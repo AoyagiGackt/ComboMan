@@ -1,10 +1,12 @@
 /** @file main.cpp
- * @brief バグ探しの起動役（Engine.exe を --bug-hunt で立ち上げ、終わるまで待って、見つけたおかしな所を一覧にして出す）
+ * @brief バグ探しの起動役（Game.exe を --bug-hunt で立ち上げ、終わるまで待って、見つけたおかしな所を一覧にして出す）
  * @note 遊んでいる間の見張りはゲームの中身を直接見る必要があるので、ゲーム側（GamePlaySceneBugChecks.cpp）にある。
  *       このプロジェクトは起動と結果の読み取りだけを受け持つ。手順の表は同じフォルダの bug_hunt.json
- *       使い方: BugHunt をスタートアッププロジェクトにして実行する（先に CG2-1 をビルドしておく）。
+ *       使い方: BugHunt をスタートアッププロジェクトにして実行する（先に Game をビルドしておく）。
  *       引数に --realtime を付けると、人が見られるふだんの速さで遊ぶ。--runs N で N 回続けて回す（付けなければ起動した時に聞く）
  *       通常は前回の記録から変わった所を回し、--all を付けると全部回す。記録が無い時は全部回す。
+ *       おかしな所が見つかると smoke_test/replay_～.json に再生ファイルが書かれる。--replay <ファイル> を付けて実行するか、
+ *       回し終えた後に聞かれた時に y と答えると、同じ動きを見つけた所の少し手前までは速回しで、そこからふつうの速さで見られる
  */
 #include "TestReport.h"
 #include <Windows.h>
@@ -12,6 +14,7 @@
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <cwchar>
 #include <filesystem>
 #include <fstream>
@@ -22,11 +25,17 @@ namespace {
 namespace fs = std::filesystem;
 using engine::tests::testReport::Print;
 
-constexpr const wchar_t* kEngineExeName = L"Engine.exe";
+constexpr const wchar_t* kGameExeName = L"Game.exe";
 constexpr const wchar_t* kBugHuntFlag = L"--bug-hunt";
 constexpr const wchar_t* kRealtimeFlag = L"--realtime";
 constexpr const wchar_t* kAllFlag = L"--all"; // 前回の記録に関係なく全部回す
 constexpr const wchar_t* kRunsFlag = L"--runs"; // 続けて回す回数（例: --runs 5）
+constexpr const wchar_t* kReplayFlag = L"--replay"; // 再生ファイルから同じ動きをもう一度見る（続けてファイルの場所を書く）
+constexpr const char* kReplayLinePrefix = "再生ファイル: "; // 結果のファイルの、再生ファイルの場所の行の頭
+constexpr const char* kReplayLineEnd = "（"; // 再生ファイルの場所の行で、場所の後ろに続く説明の始まり
+constexpr const char* kReplayPrompt = "\n見つけた所を再生して見ますか？（y で見る / Enter だけなら見ない）: ";
+constexpr char kYesChoice = 'y'; // 再生して見る時に入れる文字
+constexpr char kYesChoiceUpper = 'Y'; // 大文字でも受け付ける
 constexpr int kMaxRuns = 50; // 回す回数の上限（1回で十数分かかるので、うっかり大きな数を入れても止まるように）
 constexpr int kDecimalBase = 10; // 回数を読む時の基数
 constexpr int kInputBufferSize = 32; // 回数を入力してもらう時の1行の長さ
@@ -79,6 +88,41 @@ fs::path FindProjectDirectory(const fs::path& exeDirectory) {
 /** @brief コマンド引数に flag が含まれているか */
 bool HasFlag(const wchar_t* flag) {
     return std::wstring(GetCommandLineW()).find(flag) != std::wstring::npos;
+}
+
+/** @brief コマンド引数の optionName の後ろに書いた値（無ければ空。空白を含む場所は "" で囲む） */
+std::wstring ReadOptionValue(const wchar_t* optionName) {
+    const std::wstring commandLine = GetCommandLineW();
+    const size_t option = commandLine.find(optionName);
+    if (option == std::wstring::npos) {
+        return std::wstring();
+    }
+    size_t begin = commandLine.find_first_not_of(L' ', option + std::wcslen(optionName));
+    if (begin == std::wstring::npos) {
+        return std::wstring();
+    }
+    size_t end = std::wstring::npos;
+    if (commandLine[begin] == L'"') {
+        ++begin;
+        end = commandLine.find(L'"', begin);
+    } else {
+        end = commandLine.find(L' ', begin);
+    }
+    return commandLine.substr(begin, end == std::wstring::npos ? std::wstring::npos : end - begin);
+}
+
+/** @brief 結果のファイルに書かれた再生ファイルの場所（書かれていなければ空） */
+std::string FindReplayPath(const fs::path& reportPath) {
+    std::ifstream file(reportPath);
+    for (std::string line; std::getline(file, line);) {
+        if (line.rfind(kReplayLinePrefix, 0) != 0) {
+            continue;
+        }
+        // 場所の後ろに続く説明を除く
+        const std::string rest = line.substr(std::strlen(kReplayLinePrefix));
+        return rest.substr(0, rest.find(kReplayLineEnd));
+    }
+    return std::string();
 }
 
 /** @brief 報告のフォルダにある結果ファイルのうち、since より後に書かれた一番新しいもの（無ければ空） */
@@ -164,9 +208,14 @@ int PrintReport(const fs::path& reportPath) {
     return issueCount;
 }
 
-/** @brief Engine.exe を --bug-hunt で起動し、終わるまで待つ（起動できなければ false） */
-bool RunGame(const fs::path& engineExe, const fs::path& projectDirectory, bool realtime, bool all, DWORD& exitCode) {
-    std::wstring commandLine = L"\"" + engineExe.wstring() + L"\" " + kBugHuntFlag;
+/**
+ * @brief Game.exe を --bug-hunt（再生の時は --replay）で起動し、終わるまで待つ（起動できなければ false）
+ * @param replayPath 再生ファイルの場所（空ならふつうのバグ探し）
+ */
+bool RunGame(const fs::path& gameExe, const fs::path& projectDirectory, bool realtime, bool all, const std::wstring& replayPath,
+    DWORD& exitCode) {
+    std::wstring commandLine = L"\"" + gameExe.wstring() + L"\" "
+        + (replayPath.empty() ? std::wstring(kBugHuntFlag) : std::wstring(kReplayFlag) + L" \"" + replayPath + L"\"");
     if (realtime) {
         commandLine += std::wstring(L" ") + kRealtimeFlag;
     }
@@ -275,14 +324,17 @@ void UpdateState(const fs::path& projectDirectory, fs::file_time_type startTime,
     }
 }
 
-/** @brief バグ探しを1回回して、結果を一覧にして出す */
-RunResult RunOnce(const fs::path& engineExe, const fs::path& projectDirectory, bool realtime, bool all) {
+/**
+ * @brief バグ探しを1回回して、結果を一覧にして出す
+ * @param replayPath 再生ファイルの場所（空ならふつうのバグ探し）
+ */
+RunResult RunOnce(const fs::path& gameExe, const fs::path& projectDirectory, bool realtime, bool all, const std::wstring& replayPath) {
     RunResult result;
     // 結果ファイルは時刻で見分けるので、始める前の時刻を覚えておく（ファイルの時刻と同じ時計で測る）
     const fs::file_time_type startTime = fs::file_time_type::clock::now();
     DWORD exitCode = 0;
-    if (!RunGame(engineExe, projectDirectory, realtime, all, exitCode)) {
-        Print("Engine.exe を起動できませんでした（エラー %lu）\n", GetLastError());
+    if (!RunGame(gameExe, projectDirectory, realtime, all, replayPath, exitCode)) {
+        Print("Game.exe を起動できませんでした（エラー %lu）\n", GetLastError());
         return result;
     }
 
@@ -314,11 +366,11 @@ RunResult RunOnce(const fs::path& engineExe, const fs::path& projectDirectory, b
 /** @brief バグ探しを決めた回数だけ回し、回ごとの結果と合計を出す */
 int main() {
     const fs::path exeDirectory = ExecutableDirectory();
-    const fs::path engineExe = exeDirectory / kEngineExeName;
+    const fs::path gameExe = exeDirectory / kGameExeName;
     const fs::path projectDirectory = FindProjectDirectory(exeDirectory);
     std::error_code error;
-    if (!fs::exists(engineExe, error)) {
-        Print("Engine.exe が見つかりません: %s（先に CG2-1 をビルドしてください）\n", ToUtf8(engineExe).c_str());
+    if (!fs::exists(gameExe, error)) {
+        Print("Game.exe が見つかりません: %s（先に Game をビルドしてください）\n", ToUtf8(gameExe).c_str());
         WaitForEnterIfInteractive();
         return kExitFailed;
     }
@@ -329,6 +381,14 @@ int main() {
     }
 
     const bool realtime = HasFlag(kRealtimeFlag);
+    // 再生ファイルを渡された時は、その動きを1回見せて終える（記録は書き換えない）
+    const std::wstring replayPath = ReadOptionValue(kReplayFlag);
+    if (!replayPath.empty()) {
+        Print("再生します: %s（見つけた所の少し手前までは速回し、そこからふつうの速さ）\n", ToUtf8(fs::path(replayPath)).c_str());
+        const RunResult replayed = RunOnce(gameExe, projectDirectory, realtime, false, replayPath);
+        WaitForEnterIfInteractive();
+        return replayed.passed ? (replayed.issueCount > 0 ? kExitIssuesFound : kExitPassed) : kExitFailed;
+    }
     const int runCount = DecideRunCount();
     const bool all = DecideRunScope();
     if (all) {
@@ -337,14 +397,14 @@ int main() {
     } else {
         Print(kChangedStartFormat, runCount, realtime ? "ふだんの速さ" : "速回し");
     }
-    Print("ゲーム: %s\n作業フォルダ: %s\n", ToUtf8(engineExe).c_str(), ToUtf8(projectDirectory).c_str());
+    Print("ゲーム: %s\n作業フォルダ: %s\n", ToUtf8(gameExe).c_str(), ToUtf8(projectDirectory).c_str());
 
     // 全回に同じ記録を使い、開始後に書かれた次の記録を最後に反映する
     const fs::file_time_type startTime = fs::file_time_type::clock::now();
     std::vector<RunResult> results;
     for (int run = 1; run <= runCount; ++run) {
         Print("\n######## %d / %d 回目 ########\n", run, runCount);
-        results.push_back(RunOnce(engineExe, projectDirectory, realtime, all));
+        results.push_back(RunOnce(gameExe, projectDirectory, realtime, all, std::wstring()));
     }
 
     // 回ごとの結果と合計（1回だけの時は上の結果がそのまま全部なので出さない）
@@ -364,6 +424,20 @@ int main() {
         Print("合計: おかしな所 %d 件\n", totalIssues);
     }
     UpdateState(projectDirectory, startTime, allPassed);
+    // おかしな所が見つかった回があれば、コンソールから実行した時だけ、その場で再生して見るか聞く
+    DWORD mode = 0;
+    for (const RunResult& result : results) {
+        const std::string found = result.report.empty() ? std::string() : FindReplayPath(result.report);
+        if (found.empty() || !GetConsoleMode(GetStdHandle(STD_INPUT_HANDLE), &mode)) {
+            continue;
+        }
+        Print("%s", kReplayPrompt);
+        char line[kInputBufferSize] = {};
+        if (std::fgets(line, sizeof(line), stdin) != nullptr && (line[0] == kYesChoice || line[0] == kYesChoiceUpper)) {
+            RunOnce(gameExe, projectDirectory, false, false, (projectDirectory / fs::path(found)).wstring());
+        }
+        break;
+    }
     WaitForEnterIfInteractive();
     if (!allPassed) {
         return kExitFailed;

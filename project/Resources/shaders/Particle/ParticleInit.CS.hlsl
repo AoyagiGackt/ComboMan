@@ -27,5 +27,6 @@ void main(uint3 DTid : SV_DispatchThreadID)
     if (idx == 0u)
     {
         gCounter[kFreeCountIndex] = int(gMaxParticles);
+        gCounter[kDrawCountIndex] = 0;
     }
 }

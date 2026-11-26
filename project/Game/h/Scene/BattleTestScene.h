@@ -38,6 +38,7 @@
 #include "ShadowManager.h"
 #include "Skydome.h"
 #include "SpaceDistortionEffect.h"
+#include "PostProcessStack.h"
 #include "Sprite.h"
 #include "SpriteCommon.h"
 #include "SrvManager.h"
@@ -69,6 +70,7 @@ using engine::graphics::ParticleManager;
 using engine::graphics::ShadowManager;
 using engine::graphics::Skydome;
 using engine::graphics::SpaceDistortionEffect;
+using engine::graphics::PostProcessStack;
 using engine::graphics::Sprite;
 using engine::graphics::SpriteCommon;
 using engine::graphics::SrvManager;
@@ -306,6 +308,8 @@ private:
     ShotTargetPicker gunShotPicker_;
     /** @brief プレイヤー中心の空間歪み（レンズ歪み+色収差） */
     SpaceDistortionEffect spaceWarp_;
+    /** @brief 3D の後・UI の前に画面全体へ掛けるエフェクトの列（順番は post_process.json） */
+    PostProcessStack postProcess_;
     /** @brief 解放時にダミーを切断破片へ差し替える演出 */
     MeshSliceEffect dummySlice_;
 

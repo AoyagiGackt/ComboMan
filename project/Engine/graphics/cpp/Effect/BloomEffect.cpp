@@ -92,15 +92,12 @@ void BloomEffect::Initialize(DirectXCommon* dxCommon, SrvManager* srvManager) {
     const UINT width = WinApp::kClientWidth;
     const UINT height = WinApp::kClientHeight;
 
-    // シーンキャプチャ RT（GrayscaleEffect と同じ TYPELESS → RTV=SRGB, SRV=SRGB）
-    constexpr pipelineHelper::RenderTargetFormats kSceneFormats = {
-        DXGI_FORMAT_R8G8B8A8_TYPELESS, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB
-    };
-    pipelineHelper::CreateRenderTarget(device, srvManager, width, height, kSceneFormats, pipelineHelper::kOffscreenClearColor,
+    // シーンキャプチャ RT（シーンをそのまま描き込むので、シーンの色バッファと同じ形式）
+    pipelineHelper::CreateRenderTarget(device, srvManager, width, height, pipelineHelper::kSceneColorTargetFormats, pipelineHelper::kOffscreenClearColor,
         { sceneTexture_, sceneRtvHeap_, sceneRtvHandle_, sceneSrvIndex_ });
 
-    // Bloom ピンポン RT
-    constexpr DXGI_FORMAT kBloomFmt = DXGI_FORMAT_R8G8B8A8_UNORM;
+    // Bloom ピンポン RT（1 を超える明るさをにじませるので浮動小数点にする）
+    constexpr DXGI_FORMAT kBloomFmt = DirectXCommon::kSceneColorFormat;
     for (size_t i = 0; i < std::size(bloomTex_); ++i) {
         CreateRenderTexture(device, srvManager,
             width, height,
@@ -111,6 +108,10 @@ void BloomEffect::Initialize(DirectXCommon* dxCommon, SrvManager* srvManager) {
             kBloomFmt, kBloomFmt);
         bloomInSrv_[i] = false; // 初期状態は RTV
     }
+
+    // 描き終わったバックバッファを写し取る先（CaptureAndApply 用）と、使うかどうか（graphics_tuning.json の bloom.enabled、0 で使わない）
+    captureTexture_ = pipelineHelper::CreateBackBufferCopyTexture(dxCommon, srvManager, captureSrvIndex_);
+    enabled_ = GraphicsTuning::Int("bloom.enabled", 1, 0, 1) != 0;
 
     // 全画面三角形の頂点シェーダーを、明部抽出・ぼかし・合成の3つのピクセルシェーダーで共有する
     Microsoft::WRL::ComPtr<IDxcBlob> vsBlob = dxCommon->CompileShader(
@@ -129,9 +130,9 @@ void BloomEffect::Initialize(DirectXCommon* dxCommon, SrvManager* srvManager) {
 
     brightPSO_ = CreatePSO(device, brightRS_.Get(), vsBlob.Get(), brightPS.Get(), kBloomFmt);
     blurPSO_ = CreatePSO(device, blurRS_.Get(), vsBlob.Get(), blurPS.Get(), kBloomFmt);
-    // Combine は SRGB バックバッファへ書き込む
+    // Combine はシーンの色バッファへ書き込む
     combinePSO_ = CreatePSO(device, combineRS_.Get(), vsBlob.Get(), combPS.Get(),
-        DXGI_FORMAT_R8G8B8A8_UNORM_SRGB);
+        DirectXCommon::kSceneColorFormat);
 
     // 明るさのしきい値と強さは graphics_tuning.json から読む
     brightCb_ = dxCommon->CreateBufferResource(kConstantBufferAlignment);
@@ -176,6 +177,7 @@ void BloomEffect::Finalize() {
     brightRS_.Reset();
     sceneTexture_.Reset();
     sceneRtvHeap_.Reset();
+    captureTexture_.Reset();
 }
 
 /** @brief シーンキャプチャ用RTをレンダーターゲットに設定する */
@@ -236,11 +238,28 @@ void BloomEffect::DrawToBloomTexture(ID3D12GraphicsCommandList* cmd, SrvManager*
 
 /** @brief 輝度抽出→水平ブラー→垂直ブラー→加算合成の4パスを実行しバックバッファへ合成する */
 void BloomEffect::Apply(SrvManager* srvManager) {
-    auto* cmd = dxCommon_->GetCommandList();
+    ComposeToBackBuffer(dxCommon_->GetCommandList(), srvManager, sceneSrvIndex_);
+}
 
+/** @brief 描き終わったバックバッファのゲームの絵の範囲を写し取り、ブルームを掛けて描き戻す */
+void BloomEffect::CaptureAndApply(SrvManager* srvManager) {
+    if (!enabled_ || !captureTexture_) {
+        return;
+    }
+    // 全画面などでバックバッファが内部解像度より大きい時も、絵の全体を写す
+    pipelineHelper::MatchCaptureTextureToGameArea(dxCommon_, srvManager, captureTexture_, captureSrvIndex_);
+    pipelineHelper::CaptureGameArea(dxCommon_, captureTexture_.Get());
+    auto* cmd = dxCommon_->GetCommandList();
+    ID3D12DescriptorHeap* heaps[] = { srvManager->GetSrvDescriptorHeap() };
+    cmd->SetDescriptorHeaps(1, heaps);
+    ComposeToBackBuffer(cmd, srvManager, captureSrvIndex_);
+}
+
+/** @brief 指定した画像から明部抽出・横ぼかし・縦ぼかしをして、元の画像と重ねてバックバッファへ描く */
+void BloomEffect::ComposeToBackBuffer(ID3D12GraphicsCommandList* cmd, SrvManager* srvManager, uint32_t sourceSrvIndex) {
     // Pass 1: 輝度抽出（シーン → bloomTex_[0]）
     DrawToBloomTexture(cmd, srvManager, 0, brightRS_.Get(), brightPSO_.Get(),
-        brightCb_->GetGPUVirtualAddress(), sceneSrvIndex_);
+        brightCb_->GetGPUVirtualAddress(), sourceSrvIndex);
 
     // Pass 2: 横ブラー（bloomTex_[0] → bloomTex_[1]）
     DrawToBloomTexture(cmd, srvManager, 1, blurRS_.Get(), blurPSO_.Get(),
@@ -256,7 +275,7 @@ void BloomEffect::Apply(SrvManager* srvManager) {
 
         pipelineHelper::SetTrianglePipeline(cmd, combineRS_.Get(), combinePSO_.Get());
         // t0 = scene, t1 = bloom
-        cmd->SetGraphicsRootDescriptorTable(pipelineHelper::bloomCompositeRootSlot::kScene, srvManager->GetGPUDescriptorHandle(sceneSrvIndex_));
+        cmd->SetGraphicsRootDescriptorTable(pipelineHelper::bloomCompositeRootSlot::kScene, srvManager->GetGPUDescriptorHandle(sourceSrvIndex));
         cmd->SetGraphicsRootDescriptorTable(pipelineHelper::bloomCompositeRootSlot::kBloom, srvManager->GetGPUDescriptorHandle(bloomSrvIndex_[0]));
         pipelineHelper::DrawFullscreenTriangle(cmd);
     }

@@ -173,6 +173,11 @@ bool BugHuntChanges::IsStageSelected(const std::string& levelPath) const {
 
 /** @brief 前回から増えた・変わった配置物の名前（前回の記録にこのステージが無ければ空） */
 std::vector<std::string> BugHuntChanges::ChangedObjects(const std::string& levelPath) const {
+    // 再生の時は、記録した時と同じ配置物を返す
+    if (imported_) {
+        const auto imported = importedChanges_.find(levelPath);
+        return imported != importedChanges_.end() ? imported->second : std::vector<std::string>();
+    }
     std::vector<std::string> names;
     const auto found = current_.find(levelPath);
     if (!prepared_ || !previous_.is_object() || found == current_.end()) {
@@ -225,7 +230,8 @@ nlohmann::json BugHuntChanges::ToJson() const {
 
 /** @brief 今のファイルの様子を次の記録として書き出す（最後まで回った時に呼ぶ） */
 void BugHuntChanges::WriteNextState() const {
-    if (!prepared_) {
+    // 再生の時は、今のファイルの様子を調べていないので記録を書かない
+    if (!prepared_ || imported_) {
         return;
     }
     std::error_code error;
@@ -234,6 +240,38 @@ void BugHuntChanges::WriteNextState() const {
     if (file) {
         file << ToJson().dump(kJsonIndent);
     }
+}
+
+/** @brief どのステージを遊び、どの配置物を近くで試すかの選び方を書き出す */
+nlohmann::json BugHuntChanges::ExportSelection() const {
+    nlohmann::json selection = nlohmann::json::object();
+    selection["prepared"] = prepared_;
+    selection["selectAll"] = selectAll_;
+    selection["allReason"] = allReason_;
+    selection["selected"] = selected_;
+    // ステージごとに、近くで試す配置物も残す（再生の時はファイルが変わっていても同じ物を試す）
+    nlohmann::json changed = nlohmann::json::object();
+    for (const Stage& stage : stages_) {
+        changed[stage.levelPath] = ChangedObjects(stage.levelPath);
+    }
+    selection["changedObjects"] = changed;
+    return selection;
+}
+
+/** @brief 再生ファイルに入れておいた選び方をそのまま使う */
+void BugHuntChanges::ImportSelection(const std::vector<Stage>& stages, const nlohmann::json& selection) {
+    stages_ = stages;
+    prepared_ = selection.value("prepared", true);
+    selectAll_ = selection.value("selectAll", true);
+    allReason_ = selection.value("allReason", std::string()) + "（再生）";
+    selected_ = selection.value("selected", std::vector<std::string>());
+    importedChanges_.clear();
+    // 一時の値をそのまま回すと途中で消えるので、名前を付けて持っておく
+    const nlohmann::json changed = ObjectAt(selection, "changedObjects");
+    for (const auto& [path, names] : changed.items()) {
+        importedChanges_[path] = names.get<std::vector<std::string>>();
+    }
+    imported_ = true;
 }
 
 } // namespace engine::game

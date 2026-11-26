@@ -9,6 +9,7 @@
 #include "EnemyEntity.h"
 #include "GameFlags.h"
 #include "KnightEnemy.h"
+#include "JsonHelper.h"
 #include "SceneShared.h"
 #include "StageEditor.h"
 #include "StageEditorUiStyle.h"
@@ -21,6 +22,83 @@
 namespace engine::game {
 namespace {
 namespace editorUi = engine::game::stageEditorUiStyle;
+
+/** @brief 敵の性格の表（名前・説明・何倍にするか） */
+constexpr const char* kPersonalitiesPath = "Resources/Config/enemy_personalities.json";
+
+/** @brief 配置物へ写す性格の説明と設定値 */
+struct Personality {
+    std::string name;
+    std::string description;
+    float hp;
+    float damage;
+    float speed;
+    float patrol;
+};
+
+/** @brief 設定表から選べる性格を読み込む */
+std::vector<Personality> LoadPersonalities() {
+    const auto root = JsonHelper::Load(kPersonalitiesPath);
+    std::vector<Personality> result;
+    if (!root.contains("personalities") || !root.at("personalities").is_array()) {
+        return result;
+    }
+    for (const auto& row : root.at("personalities")) {
+        try {
+            Personality preset { row.at("name").get<std::string>(), row.at("description").get<std::string>(),
+                row.at("enemyHpScale").get<float>(), row.at("enemyDamageScale").get<float>(),
+                row.at("enemySpeedScale").get<float>(), row.at("patrolSpeed").get<float>() };
+            if (!preset.name.empty() && preset.hp > 0 && preset.damage > 0 && preset.speed > 0 && preset.patrol >= 0) {
+                result.push_back(preset);
+            }
+        } catch (const nlohmann::json::exception&) {
+            // 項目が足りない行だけを飛ばす
+        }
+    }
+    return result;
+}
+
+/** @brief 今の値と一致する性格を示し、新しく選んだ設定を返す */
+const Personality* ChoosePersonality(const ObjectDesc& desc, bool knight) {
+    static const auto sPresets = LoadPersonalities();
+    const Personality* current = nullptr;
+    for (const auto& item : sPresets) {
+        if (desc.patrolSpeed == item.patrol && (knight || (desc.enemyHpScale == item.hp
+            && desc.enemyDamageScale == item.damage && desc.enemySpeedScale == item.speed))) {
+            current = &item;
+            break;
+        }
+    }
+    constexpr int kPersonalityColumns = 2;
+    if (!ImGui::BeginTable("性格の設定", kPersonalityColumns)) {
+        return nullptr;
+    }
+    ImGui::TableNextColumn();
+    ImGui::TextUnformatted("性格");
+    ImGui::SetNextItemWidth(-1);
+    const Personality* selected = nullptr;
+    if (ImGui::BeginCombo("##性格", current ? current->name.c_str() : "個別設定")) {
+        for (const auto& item : sPresets) {
+            if (ImGui::Selectable(item.name.c_str(), current == &item) && current != &item) {
+                selected = &item;
+            }
+        }
+        ImGui::EndCombo();
+    }
+    // 選んだ直後から、その敵に使われる値だけを説明する
+    ImGui::TableNextColumn();
+    const auto* shown = selected ? selected : current;
+    if (shown) {
+        if (!knight) {
+            ImGui::TextWrapped("%s", shown->description.c_str());
+        }
+        ImGui::TextWrapped("巡回路がある時の速さは毎秒 %g です。", shown->patrol);
+    } else if (sPresets.empty()) {
+        ImGui::TextWrapped("性格の設定表を読み込めませんでした。");
+    }
+    ImGui::EndTable();
+    return selected;
+}
 
 constexpr float kTextBoxHeight = 140.0f;
 constexpr float kMaxTextScale = 10.0f;
@@ -38,6 +116,21 @@ void StageEditorInspectorPanel::RenderObjectGameplay(StageEditor& editor, bool& 
         return editor.CaptureItemUndo(changed);
     };
     const ObjectKind& kind = ObjectKind::Of(desc.kind);
+    if (kind.PlacesEnemy()) {
+        const bool knight = desc.kind == objectKindName::kEnemyKnight || (kind.SpawnsLater() && desc.spawnType == "knight");
+        if (const auto* preset = ChoosePersonality(desc, knight)) {
+            editor.RecordUndoSnapshotNow();
+            desc.patrolSpeed = preset->patrol;
+            if (!knight) {
+                desc.enemyHpScale = preset->hp;
+                desc.enemyDamageScale = preset->damage;
+                desc.enemySpeedScale = preset->speed;
+                // 新しい実体の番号でゲーム側にも体力と攻撃設定を読み直させる
+                editor.DestroyObjectRuntime(editor.objects_[editor.selIndex_], true);
+                structuralDirty = true;
+            }
+        }
+    }
     kind.DrawGameplayInspector(editor, editor.selIndex_, desc, structuralDirty, captureItemUndo);
 
     // テスト中に今どうなっているかを確認し、必要ならその場で初期状態へ戻す

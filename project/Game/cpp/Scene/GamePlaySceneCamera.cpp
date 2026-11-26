@@ -2,6 +2,7 @@
  * @brief ステージ範囲とロック対象に基づくカメラ追従
  */
 #include "GamePlayScene.h"
+#include "GameActions.h"
 #include "AudioBridge.h"
 #include "CombatTuning.h"
 #include "EnemyTuning.h"
@@ -46,7 +47,7 @@ constexpr float kScriptFocusHeightOffset = 0.0f; // FocusCamera で向けた先�
 void GamePlayScene::UpdateTargetLock() {
     // Shiftを押している間だけロックオンし、その間は常に一番近い敵を対象にし続ける
     // （BattleTestSceneのダミーロックオンと同じ規約。押した瞬間の対象に固定しない）
-    if (!input_->PushAction(Input::Action::kLockOn)) {
+    if (!input_->PushAction(GameAction::kLockOn)) {
         lockedEnemy_ = nullptr;
         return;
     }
@@ -82,6 +83,11 @@ void GamePlayScene::UpdateCamera() {
     if (UpdateArenaCamera()) {
         return;
     }
+    // ゲームの型が横スクロール以外のカメラを使う時は、その部品で置く
+    if (UpdateModeCamera()) {
+        FinishCameraUpdate();
+        return;
+    }
     // カメラをプレイヤーに追従（境界ブロックが画面外に出ないよう clamp）。開始演出とやられ演出の間は演出が決めた位置と引きで映す
     Vector3 ppos = player_->GetPosition();
     // 引いた分だけ画面に映る範囲も広がる（透視投影なので距離に比例する）
@@ -99,10 +105,8 @@ void GamePlayScene::UpdateCamera() {
         ppos = bossExecution_.CameraFocus();
         zoom = bossExecution_.CameraZoom();
         followHeight = 0.0f;
-    } else if (scriptCameraFocusSeconds_ > 0.0f) {
+    } else if (scriptEffects_.TakeCameraFocus(ppos)) {
         // ノードグラフの FocusCamera で向けた先を映す（向けた先の高さをそのまま中心にする）
-        scriptCameraFocusSeconds_ -= gameConstants::kFrameDeltaTime;
-        ppos = scriptCameraFocus_;
         followHeight = kScriptFocusHeightOffset;
     }
     const float viewHalfW = gameConstants::kCameraHalfW * zoom;
@@ -146,7 +150,11 @@ void GamePlayScene::UpdateCamera() {
     };
 
     UpdateCameraSmoothing();
+    FinishCameraUpdate();
+}
 
+/** @brief カメラの揺れ・寄り・影の範囲を、決まったカメラの位置に合わせる */
+void GamePlayScene::FinishCameraUpdate() {
     // カメラシェイク（スムージングの後に直接カメラ座標へ加算）
     Vector3 shake = cameraShaker_.Update(gameConstants::kFrameDeltaTime);
     if (shake.x != 0.0f || shake.y != 0.0f) {

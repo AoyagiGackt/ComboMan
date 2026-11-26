@@ -7,6 +7,8 @@
  */
 #pragma once
 #include "Sprite.h"
+// 乱数の種を共通の窓口から取得する。
+#include "RandomSeed.h"
 #include "SpriteCommon.h"
 #include "Vector2.h"
 #include "Vector4.h"
@@ -71,7 +73,7 @@ private:
     std::vector<std::unique_ptr<engine::graphics::Sprite>> stripes_;
     std::vector<std::unique_ptr<engine::graphics::Sprite>> shardSprites_;
     std::vector<Shard> shards_;
-    std::mt19937 rng_ { std::random_device {}() };
+    std::mt19937 rng_ { engine::randomSeed::Next() };
     Vector4 tone_ = { 0.5f, 0.5f, 0.5f, 1.0f }; ///< ランクの色の彩度を落とした色（明るさは使う所ごとに掛ける）
     float time_ = 0.0f;
     bool panelVisible_ = true; ///< 文字の後ろの暗い板を出すか

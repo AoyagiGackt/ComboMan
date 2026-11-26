@@ -122,7 +122,7 @@ ID3D12Resource* GlassShatterEffect::CaptureSource() const {
 
 /** @brief 画面を撮る写し先を写す元と同じ大きさにし、絵がある範囲を定数バッファへ送る */
 void GlassShatterEffect::MatchFreezeTextureToSource() {
-    // 写し先の形式はいつもバックバッファに合わせる（オフスクリーンも同じ R8G8B8A8 の仲間なのでそのまま写せる）
+    // 写し先の形式はいつもバックバッファに合わせる（オフスクリーンもシーンの色バッファと同じ形式なのでそのまま写せる）
     const D3D12_RESOURCE_DESC backDesc = dxCommon_->GetCurrentBackBufferResource()->GetDesc();
     const D3D12_RESOURCE_DESC sourceDesc = CaptureSource()->GetDesc();
     const D3D12_RESOURCE_DESC freezeDesc = freezeTexture_->GetDesc();
@@ -180,7 +180,7 @@ void GlassShatterEffect::Apply() {
     }
 
     cmd->SetGraphicsRootSignature(rootSignature_.Get());
-    cmd->SetPipelineState(pipelineState_.Get());
+    cmd->SetPipelineState(PipelineCache::Resolve(pipelineState_.Get()));
     cmd->SetGraphicsRootConstantBufferView(pipelineHelper::fullscreenRootSlot::kConstants, cbResource_->GetGPUVirtualAddress());
 
     if (srvManager_ && freezeSrvIndex_ != UINT32_MAX) {

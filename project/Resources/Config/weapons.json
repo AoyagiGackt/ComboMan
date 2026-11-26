@@ -153,7 +153,7 @@
         {
             "name": "Claymore",
             "type": "Greatsword",
-            "hitStyle": "hammer",
+            "hitStyle": "greatsword",
             "damage": 45.0,
             "range": 3.0,
             "attackInterval": 0.90,
@@ -174,7 +174,7 @@
         {
             "name": "Scythe",
             "type": "Scythe",
-            "hitStyle": "spear",
+            "hitStyle": "scythe",
             "damage": 25.0,
             "range": 3.5,
             "attackInterval": 0.60,
@@ -194,7 +194,7 @@
         {
             "name": "Axe",
             "type": "Axe",
-            "hitStyle": "hammer",
+            "hitStyle": "axe",
             "damage": 35.0,
             "range": 2.8,
             "attackInterval": 0.75,

@@ -306,7 +306,7 @@ public:
         }
         TriggerDesc desc = editor.triggers_[index].GetDesc();
         desc.name = "trigger_" + std::to_string(editor.nextSerial_++);
-        desc.position.x += editor.snapEnabled_ ? editor.snapStep_ : 1.0f;
+        desc.position.x += editor.snap_.Enabled() ? editor.snap_.Step() : 1.0f;
         TriggerVolume trigger;
         trigger.Init(desc);
         editor.triggers_.push_back(std::move(trigger));

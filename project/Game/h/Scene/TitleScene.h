@@ -4,6 +4,8 @@
  */
 #pragma once
 #include "FloatingTitle.h"
+// 乱数の種を共通の窓口から取得する。
+#include "RandomSeed.h"
 #include "Audio.h"
 #include "BaseScene.h"
 #include "Camera.h"
@@ -219,7 +221,7 @@ private:
     /** @brief 急な回避や踏み込みでも画面が跳ねないよう補間したカメラX座標 */
     float demoCameraX_ = 0.0f;
     /** @brief 的の復帰位置・攻撃間隔のばらつきと演出に使う乱数 */
-    std::mt19937 demoRng_ { std::random_device {}() };
+    std::mt19937 demoRng_ { engine::randomSeed::Next() };
     /** @brief 次に切り替える武器のインデックス（weaponManager_->GetList()内） */
     int demoWeaponIndex_ = 0;
 

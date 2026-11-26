@@ -93,6 +93,12 @@ void StageEditor::ApplySnapshot(const LevelSnapshot& snap) {
         SetSky(snap.sky);
     }
     flagGraphs_ = snap.flagGraphs;
+    gameMode_ = snap.gameMode;
+    path_ = snap.path;
+    // 消した点を選んだままにしない
+    if (selectedPathPoint_ >= static_cast<int>(path_.size())) {
+        selectedPathPoint_ = -1;
+    }
     comment_ = snap.comment;
     strncpy_s(graphPathBuffer_, graphPath_.c_str(), _TRUNCATE);
     strncpy_s(commentBuffer_, comment_.c_str(), _TRUNCATE);
@@ -182,14 +188,10 @@ void StageEditor::Redo() {
     statusTimer_ = StageEditor::kStatusBriefSeconds;
 }
 
-/** @brief スナップ有効時、値をsnapStep_の倍数へ丸める（無効時はそのまま返す） */
+/** @brief スナップ有効時、値をsnap_.Step()の倍数へ丸める（無効時はそのまま返す） */
 float StageEditor::SnapValue(float v) const {
     // Ctrlを押している間はスナップOFFでも一時的に揃える
-    const bool snapActive = snapEnabled_ || ImGui::GetIO().KeyCtrl;
-    if (!snapActive || snapStep_ <= 0.0f) {
-        return v;
-    }
-    return std::round(v / snapStep_) * snapStep_;
+    return snap_.Snap(v, ImGui::GetIO().KeyCtrl);
 }
 
 /** @brief 保存前検証を実行し、修正が必要な項目を返す */
@@ -282,6 +284,10 @@ std::vector<std::string> StageEditor::ValidateLevel() const {
         if (!std::filesystem::exists(sky_, fileError)) {
             issues.push_back("空の画像が見つかりません: " + sky_);
         }
+    }
+    // ゲームの型に合っているか
+    for (std::string& issue : CollectGameModeIssues()) {
+        issues.push_back(std::move(issue));
     }
     return issues;
 }

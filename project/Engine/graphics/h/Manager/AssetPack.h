@@ -24,6 +24,10 @@
 #include <vector>
 #include <utility>
 namespace engine {
+class DirectXCommon;
+namespace graphics {
+class ModelCommon;
+}
 
 /** @brief 変換済みデータを詰めるための書き込み口（数値・配列・文字列を順に並べる） */
 class BinaryWriter {
@@ -131,7 +135,7 @@ public:
     /** @brief 設定ファイルを読み、useならpakの目次を開く（最初の素材読み込みより前に呼ぶ） */
     void Initialize(bool forceCook = false, bool prepareAssets = false);
     /** @brief cookなら記録した素材をpakへ書き出す（終了時に呼ぶ） */
-    void Finalize();
+    void Finalize(DirectXCommon* device = nullptr, graphics::ModelCommon* modelCommon = nullptr);
 
     /** @brief pak の動作モードを返す */
     Mode GetMode() const {
@@ -154,8 +158,10 @@ public:
     /** @brief 設定で指定パスのテクスチャ圧縮が許可されているかを返す */
     bool ShouldCompressTexture(const std::string& path) const;
 
-    /** @brief useモードで、pakにキーが入っているか（元ファイルが無くても読めるかの判定用） */
+    /** @brief 使用中または作成中のパックにキーがあるかを調べる */
     bool Contains(const std::string& key) const;
+    /** @brief 作成中のパックで任意のプロファイルのシェーダーを探す */
+    bool ContainsShader(const std::string& path) const;
 
     /**
      * @brief 元ファイルが無い時に、pakへそのまま入れたファイル（"raw:"+パス）を読む
@@ -169,8 +175,9 @@ private:
 
     /** @brief 登録項目の識別情報と、その項目が保持するデータ */
     struct Entry {
-        uint64_t offset = 0;
-        uint64_t size = 0;
+        uint64_t offset = 0; ///< pak の中の位置
+        uint64_t size = 0; ///< pak に入れた大きさ（圧縮した物は圧縮後）
+        uint64_t rawSize = 0; ///< 元の大きさ（size と違えば圧縮してある）
     };
 
     /** @brief 起動時のモード判定に使う、素材フォルダの状態と設定 */
@@ -193,6 +200,21 @@ private:
     std::wstring ResolvePackPath(const std::string& fileName) const;
     /** @brief cook終了時に、Resources内のJSONと音声を元ファイルのまま記録する（配布時にResourcesが無くても動くように） */
     void RecordRawFiles();
+    /**
+     * @brief 素材を圧縮する（縮まない素材は圧縮しない）
+     * @param raw 元の素材
+     * @param stored pak に入れる中身（圧縮できれば圧縮後、できなければ元のまま）
+     * @return 圧縮したら true
+     */
+    static bool Compress(const std::vector<uint8_t>& raw, std::vector<uint8_t>& stored);
+    /**
+     * @brief 圧縮した素材を元に戻す
+     * @param stored pak に入れてあった中身
+     * @param rawSize 元の大きさ
+     * @param out 元に戻した素材
+     * @return 戻せたら true
+     */
+    static bool Decompress(const std::vector<uint8_t>& stored, uint64_t rawSize, std::vector<uint8_t>& out);
 
     Mode mode_ = Mode::kOff;
     std::wstring packPath_;
@@ -204,6 +226,7 @@ private:
     mutable std::mutex mutex_;
     bool textureCompressionEnabled_ = true;
     std::vector<std::string> textureCompressionExcludePrefixes_;
+    std::vector<std::string> rawExcludePrefixes_; ///< 元ファイルのまま入れる素材のうち、pak に入れない場所（使っていない素材のフォルダなど）
     size_t compressedTextureCount_ = 0;
     uint64_t textureBytesBefore_ = 0;
     uint64_t textureBytesAfter_ = 0;

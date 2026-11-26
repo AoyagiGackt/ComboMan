@@ -3,6 +3,11 @@
  * @brief 敵・ギミックの更新とプレイヤーへの被弾処理
  */
 #include "GamePlayScene.h"
+#include "CombatDepth.h"
+#include "StageEditorPlaytest.h"
+#include "GameActions.h"
+#include "TestCoverage.h"
+
 #include "EnemyEffectLibrary.h"
 #include "CrashBreadcrumbs.h"
 #include "AudioBridge.h"
@@ -174,7 +179,7 @@ GamePlayScene::WeaponEnemyHit GamePlayScene::DetectWeaponEnemyHit(const WeaponEn
     }
     if (!result.hit && player_->JustFired()) {
         // 弾は手前の相手で止まるので、射撃の的に選ばれた時だけ当たる
-        result.hit = gunShotPicker_.IsTarget(entry.enemy);
+        result.hit = gunShotPicker_.IsTarget(entry.enemy) && combatDepth::IsNear(playerPos.z, entry.enemy->GetPosition().z);
         result.gun = result.hit;
     }
     // 固有技: プレイヤーを中心にした横長の範囲に入っていたか
@@ -225,10 +230,16 @@ void GamePlayScene::ApplyWeaponEnemyHit(WeaponEnemyEntry& entry, WeaponEnemyHit&
     // 近接と銃は武器ごとの疲労でダメージが落ちる（固有技はクールタイムがあるので対象外）
     hit.fired = hit.gun && player_->JustFired();
     const bool skillSequence = hit.melee && player_->IsSkillSequenceActive();
-    const int fatigueIndex = skillSequence ? -1 : hit.melee ? HeldMeleeFatigueIndex() : (hit.fired ? GunFatigueIndex() : -1);
-    hit.fatigueMult = WeaponFatigueDamageMult(fatigueIndex);
+    const int fatigueIndex = skillSequence ? -1 : hit.melee ? WeaponFatigueTracker::HeldMeleeIndex() : (hit.fired ? WeaponFatigueTracker::GunIndex() : -1);
+    hit.fatigueMult = weaponFatigue_.DamageMult(fatigueIndex);
+    // 自動テストの網羅のまとめに数える
+    if (hit.gun && testCoverage::IsEnabled()) {
+        testCoverage::Cover("gun", GunTypeName(wm->GetRanged().type));
+    } else if ((hit.melee || hit.skill) && wm->HasEquippedWeapon()) {
+        testCoverage::Cover("weapon", WeaponTypeName(wm->GetCurrent().type));
+    }
     entry.enemy->TakeDamageScaled(static_cast<float>(damage) * hit.fatigueMult);
-    RegisterFatigueHit(fatigueIndex, hit.melee ? CombatTune().weaponFatiguePerHit : CombatTune().gunFatiguePerHit);
+    weaponFatigue_.RegisterHit(fatigueIndex, hit.melee ? CombatTune().weaponFatiguePerHit : CombatTune().gunFatiguePerHit);
 
     // 吹き飛び: 固有技の連続技の締めは倒して場外まで飛ばし、それ以外は段ごとの高さで押し出す
     // （生きたまま壁の向こうへ落ちると部屋の残りの敵に数えられて扉が開かない）
@@ -290,7 +301,7 @@ void GamePlayScene::EmitWeaponEnemyHitEffects(const Vector3& enemyPos, const Wea
     const float ringRadius = wm->HasEquippedWeapon() ? wm->GetCurrent().effectRingRadius : 0.0f;
     float hitStrength = hit.skill ? CombatTune().weaponEnemySkillHitStrength : 1.0f;
     const Vector4 elementColor = hitColor;
-    ApplyFatigueToHitEffect(hit.fatigueMult, hitColor, hitStrength);
+    WeaponFatigueTracker::ApplyToHitEffect(hit.fatigueMult, hitColor, hitStrength);
     EmitEnemyHitEffect(enemyPos, hitColor, hitStrength, extraBurstCount, ringRadius);
     if (hit.melee || hit.skill) {
         EmitWeaponStyleHit(enemyPos, hit.comboFinisher || hit.skill);
@@ -375,7 +386,7 @@ void GamePlayScene::UpdateWeaponSteal(WeaponEnemyEntry& entry) {
     const float absorbRange = CombatTune().absorbRange;
     // 吸収範囲の中で奪取ボタンを押したら、突き刺し動作と演出を出して吸い寄せ始める
     if (!entry.absorbing && dx * dx + dy * dy <= absorbRange * absorbRange && IsSelectedStealTarget(entry.enemy)
-        && input_->TriggerAction(Input::Action::kSteal)) {
+        && input_->TriggerAction(GameAction::kSteal)) {
         entry.absorbing = true;
         entry.absorbTimer = CombatTune().absorbDuration;
         player_->PlayStealStab();
@@ -399,6 +410,8 @@ void GamePlayScene::UpdateWeaponSteal(WeaponEnemyEntry& entry) {
     }
     // 吸い寄せ終わったら武器を手に入れる（満杯なら今持っている武器と入れ替わる）
     if (entry.absorbTimer <= 0.0f) {
+        // 自動テストの網羅のまとめに数える
+        testCoverage::Cover("player_action", "steal");
         entry.weaponAcquired = true;
         entry.enemy->SetVisible(false);
         const WeaponManager::AcquireResult acquired = WeaponManager::GetInstance()->Acquire(entry.weaponType);
@@ -486,10 +499,11 @@ void GamePlayScene::UpdateExplosiveBarrels() {
             hit = gunShotPicker_.IsTarget(barrel.TargetIdentity());
         }
         if (!hit && player_->JustWeaponSkillHit()) {
-            const AABB range = {
+            AABB range = {
                 { playerPos.x - CombatTune().weaponEnemySkillRadius, playerPos.y - CombatTune().skillRangeHalfHeight, -kStageHalfDepth },
                 { playerPos.x + CombatTune().weaponEnemySkillRadius, playerPos.y + CombatTune().skillRangeHalfHeight, kStageHalfDepth }
             };
+            combatDepth::Apply(range, playerPos.z);
             hit = Collision::CheckCollision(range, barrelBounds);
         }
 
@@ -625,6 +639,7 @@ void GamePlayScene::UpdateEnemyAttackOnPlayer(float dt) {
         const float bulletHalf = CombatTune().enemyBulletHalfExtent;
         AABB bulletAABB = { { bullet.pos.x - bulletHalf, bullet.pos.y - bulletHalf, -kStageHalfDepth },
             { bullet.pos.x + bulletHalf, bullet.pos.y + bulletHalf, kStageHalfDepth } };
+        combatDepth::Apply(bulletAABB, bullet.pos.z);
         Collider playerCol = player_->GetCollider();
         if (!Collision::CheckCollision(playerCol.aabb, bulletAABB)) {
             ++it;
@@ -644,6 +659,9 @@ void GamePlayScene::UpdateEnemyAttackOnPlayer(float dt) {
         // 被弾: HPを減らし、プレイヤーをのけぞらせて弾を消す
         RunData::GetInstance()->TakeDamage(bullet.damage);
         player_->OnHit();
+#ifdef USE_IMGUI
+        stagePlaytest::Hit(GetStageEditor(), player_->GetPosition());
+#endif
 
         fx.Impact("bullet_hit");
         fx.Ring("bullet_hit", bullet.pos);
@@ -674,10 +692,12 @@ void GamePlayScene::ApplyEnemyMeleeSwing(EnemyEntity* attacker) {
     }
 
     // 前方だけに判定を出す（背後にいるプレイヤーには当たらない＝回り込みが有効）
-    const AABB swingRange = {
+    AABB swingRange = {
         { (std::min)(epos.x, epos.x + dirX * tuning.meleeReach), epos.y - tuning.meleeHitHalfHeight, -kStageHalfDepth },
         { (std::max)(epos.x, epos.x + dirX * tuning.meleeReach), epos.y + tuning.meleeHitHalfHeight, kStageHalfDepth }
     };
+    // 奥行きにも動く型では、敵の奥行きの前後にいる時だけ当たる
+    combatDepth::Apply(swingRange, epos.z);
     if (!Collision::CheckCollision(player_->GetCollider().aabb, swingRange)) {
         return;
     }
@@ -687,6 +707,9 @@ void GamePlayScene::ApplyEnemyMeleeSwing(EnemyEntity* attacker) {
 
     RunData::GetInstance()->TakeDamage(attacker->GetAttackDamage());
     player_->OnHit();
+#ifdef USE_IMGUI
+    stagePlaytest::Hit(GetStageEditor(), player_->GetPosition());
+#endif
     fx.Impact("enemy_swing");
     fx.Sparks("player_hit", ppos);
 }

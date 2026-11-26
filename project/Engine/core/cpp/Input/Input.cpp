@@ -7,9 +7,9 @@
 #include "EngineAssert.h"
 #include "JsonHelper.h"
 #include "Logger.h"
+#include "StringUtility.h"
 #include <cmath>
 #include <dinput.h>
-#include <iterator>
 #include <utility>
 
 namespace engine {
@@ -101,32 +101,6 @@ constexpr PadButtonName kPadButtonNames[] = {
     { "DpadRight", XINPUT_GAMEPAD_DPAD_RIGHT, L"十字キー右" },
 };
 
-/** @brief JSONの操作名とActionの対応（設定読み込みと {操作名} の置き換えで共用する） */
-constexpr std::pair<const char*, Input::Action> kActionNames[] = {
-    { "MoveLeft", Input::Action::kMoveLeft },
-    { "MoveRight", Input::Action::kMoveRight },
-    { "Jump", Input::Action::kJump },
-    { "Down", Input::Action::kDown },
-    { "Attack", Input::Action::kAttack },
-    { "Shoot", Input::Action::kShoot },
-    { "Skill", Input::Action::kSkill },
-    { "Awaken", Input::Action::kAwaken },
-    { "Finisher", Input::Action::kFinisher },
-    { "GunSwitch", Input::Action::kGunSwitch },
-    { "Dodge", Input::Action::kDodge },
-    { "Warp", Input::Action::kWarp },
-    { "Steal", Input::Action::kSteal },
-    { "Interact", Input::Action::kInteract },
-    { "LockOn", Input::Action::kLockOn },
-    { "Pause", Input::Action::kPause },
-    { "ArenaForward", Input::Action::kArenaForward },
-    { "ArenaBack", Input::Action::kArenaBack },
-    { "ArenaLeft", Input::Action::kArenaLeft },
-    { "ArenaRight", Input::Action::kArenaRight },
-    { "ArenaJump", Input::Action::kArenaJump },
-};
-static_assert(std::size(kActionNames) == static_cast<size_t>(Input::Action::kCount), "操作名の表にActionの追加漏れがある");
-
 /** @brief 操作の割り当てに依らず表記が決まっている {名前}（パッド時とキーボード時の表記） */
 struct FixedPrompt {
     const wchar_t* name;
@@ -193,70 +167,29 @@ std::wstring PadButtonLabel(WORD button) {
 
 constexpr SHORT kStickMenuThreshold = 16000; // メニュー操作でスティックを倒したとみなす量（最大32767）
 constexpr float kStickMax = 32767.0f; // XInputのスティック値の最大値
-// 下入力は打ち上げ技の条件になるため、移動中に少し下へ傾いただけで出ないよう深めに倒した時だけにする
-constexpr float kStickDownThreshold = 0.6f;
 
-/** @brief 左スティックでも入力できる操作と、その判定・操作説明の表記 */
-struct StickAction {
-    Input::Action action;
-    const wchar_t* label;
-    bool (*held)(float x, float y, float deadzone); ///< 正規化したスティック値で倒れているか
-};
-constexpr StickAction kStickActions[] = {
-    {
-        Input::Action::kMoveLeft, L"左スティック←", [](float x, float, float deadzone) {
-            return x <= -deadzone;
-        }
-    },
-    {
-        Input::Action::kMoveRight, L"左スティック→", [](float x, float, float deadzone) {
-            return x >= deadzone;
-        }
-    },
-    {
-        Input::Action::kDown, L"左スティック↓", [](float, float y, float) {
-            return y <= -kStickDownThreshold;
-        }
-    },
-    {
-        Input::Action::kArenaForward, L"左スティック↑", [](float, float y, float deadzone) {
-            return y >= deadzone;
-        }
-    },
-    {
-        Input::Action::kArenaBack, L"左スティック↓", [](float, float y, float deadzone) {
-            return y <= -deadzone;
-        }
-    },
-    {
-        Input::Action::kArenaLeft, L"左スティック←", [](float x, float, float deadzone) {
-            return x <= -deadzone;
-        }
-    },
-    {
-        Input::Action::kArenaRight, L"左スティック→", [](float x, float, float deadzone) {
-            return x >= deadzone;
-        }
-    },
-};
-
-/** @brief アクションに割り当てたスティックの方向を探す（割り当てが無ければ nullptr） */
-const StickAction* FindStickAction(Input::Action action) {
-    for (const StickAction& entry : kStickActions) {
-        if (entry.action == action) {
-            return &entry;
-        }
+/** @brief 左スティックが指定方向のしきい値に達しているかを返す */
+bool StickHeld(Input::StickDirection direction, const XINPUT_STATE& state, float threshold) {
+    const float x = state.Gamepad.sThumbLX / kStickMax;
+    const float y = state.Gamepad.sThumbLY / kStickMax;
+    switch (direction) {
+    case Input::StickDirection::kLeft: return x <= -threshold;
+    case Input::StickDirection::kRight: return x >= threshold;
+    case Input::StickDirection::kUp: return y >= threshold;
+    case Input::StickDirection::kDown: return y <= -threshold;
+    default: return false;
     }
-    return nullptr;
 }
 
-/** @brief 左スティックの倒し方が移動系の操作に当たるか */
-bool StickHeld(Input::Action action, const XINPUT_STATE& state, float deadzone) {
-    const StickAction* entry = FindStickAction(action);
-    if (entry == nullptr) {
-        return false;
+/** @brief 割り当てた左スティックの方向を案内する表記を返す */
+const wchar_t* StickLabel(Input::StickDirection direction) {
+    switch (direction) {
+    case Input::StickDirection::kLeft: return L"左スティック←";
+    case Input::StickDirection::kRight: return L"左スティック→";
+    case Input::StickDirection::kUp: return L"左スティック↑";
+    case Input::StickDirection::kDown: return L"左スティック↓";
+    default: return L"?";
     }
-    return entry->held(state.Gamepad.sThumbLX / kStickMax, state.Gamepad.sThumbLY / kStickMax, deadzone);
 }
 
 } // namespace
@@ -294,61 +227,41 @@ void Input::Initialize(WinApp* winApp) {
     result = mouse_->SetCooperativeLevel(winApp->GetHwnd(), DISCL_FOREGROUND | DISCL_NONEXCLUSIVE);
     ENGINE_ASSERT(SUCCEEDED(result));
 
-    LoadActionBindings();
     sCurrent = this;
 }
 
-/** @brief Resources/Config/input_bindings.jsonから操作割り当てを読み込む */
-void Input::LoadActionBindings() {
-    // 設定ファイルが無い場合も操作不能にならない既定割り当てを先に設定する
-    // 値の並びは { 主キー, 副キー, ゲームパッドのボタン }。0 は割り当て無し
-    // 移動・ジャンプ・しゃがみは矢印キーでも操作できるよう副キーを持たせる
-    actionBindings_[static_cast<size_t>(Action::kMoveLeft)] = { DIK_A, DIK_LEFT, 0 };
-    actionBindings_[static_cast<size_t>(Action::kMoveRight)] = { DIK_D, DIK_RIGHT, 0 };
-    actionBindings_[static_cast<size_t>(Action::kJump)] = { DIK_W, DIK_UP, XINPUT_GAMEPAD_A };
-    actionBindings_[static_cast<size_t>(Action::kDown)] = { DIK_S, DIK_DOWN, 0 };
-    // 攻撃系（近接・射撃・スキル・覚醒・とどめ・銃の切り替え）
-    actionBindings_[static_cast<size_t>(Action::kAttack)] = { DIK_L, 0, XINPUT_GAMEPAD_X };
-    actionBindings_[static_cast<size_t>(Action::kShoot)] = { DIK_K, 0, XINPUT_GAMEPAD_Y };
-    actionBindings_[static_cast<size_t>(Action::kSkill)] = { DIK_SPACE, 0, XINPUT_GAMEPAD_RIGHT_SHOULDER };
-    actionBindings_[static_cast<size_t>(Action::kAwaken)] = { DIK_R, 0, XINPUT_GAMEPAD_LEFT_SHOULDER };
-    actionBindings_[static_cast<size_t>(Action::kFinisher)] = { DIK_F, 0, XINPUT_GAMEPAD_LEFT_SHOULDER };
-    actionBindings_[static_cast<size_t>(Action::kGunSwitch)] = { DIK_G, 0, XINPUT_GAMEPAD_DPAD_LEFT };
-    // 回避・ワープ・武器奪取・調べる・ロックオン
-    actionBindings_[static_cast<size_t>(Action::kDodge)] = { DIK_I, 0, XINPUT_GAMEPAD_B };
-    actionBindings_[static_cast<size_t>(Action::kWarp)] = { DIK_C, 0, 0 };
-    actionBindings_[static_cast<size_t>(Action::kSteal)] = { DIK_J, 0, kGamepadLeftTrigger };
-    actionBindings_[static_cast<size_t>(Action::kInteract)] = { DIK_RETURN, 0, kGamepadLeftTrigger };
-    actionBindings_[static_cast<size_t>(Action::kLockOn)] = { DIK_LSHIFT, 0, kGamepadRightTrigger };
-    // ポーズ
-    actionBindings_[static_cast<size_t>(Action::kPause)] = { DIK_P, 0, XINPUT_GAMEPAD_START };
-    // 闘技場の移動（前後左右はスティックでも動ける。ジャンプは前進のキーと分ける）
-    actionBindings_[static_cast<size_t>(Action::kArenaForward)] = { DIK_W, DIK_UP, 0 };
-    actionBindings_[static_cast<size_t>(Action::kArenaBack)] = { DIK_S, DIK_DOWN, 0 };
-    actionBindings_[static_cast<size_t>(Action::kArenaLeft)] = { DIK_A, DIK_LEFT, 0 };
-    actionBindings_[static_cast<size_t>(Action::kArenaRight)] = { DIK_D, DIK_RIGHT, 0 };
-    actionBindings_[static_cast<size_t>(Action::kArenaJump)] = { DIK_U, 0, XINPUT_GAMEPAD_A };
-
+/** @brief 操作番号順に割り当てを登録し、設定ファイルの内容を反映する */
+void Input::SetActionTable(const std::vector<ActionDef>& defs) {
+    std::vector<ActionBinding> bindings;
+    bindings.reserve(defs.size());
     // input_bindings.json に書かれたアクションだけ、キー名・ボタン名を読み取って上書きする
     const nlohmann::json root = JsonHelper::Load("Resources/Config/input_bindings.json");
     const auto actions = root.value("actions", nlohmann::json::object());
-    for (const auto& [name, action] : kActionNames) {
+    for (const ActionDef& def : defs) {
+        const std::string name = def.name ? def.name : "";
+        ActionBinding& binding = bindings.emplace_back(ActionBinding { StringUtility::ConvertString(name),
+            def.primaryKey, def.secondaryKey, def.gamepadButton, def.stick,
+            def.stickThreshold == kUseDeadzone ? deadzone_ : def.stickThreshold });
         // 書かれていないアクションは既定の割り当てのまま残す
         const auto data = actions.value(name, nlohmann::json::object());
         if (!data.is_object() || data.empty()) {
             continue;
         }
         // キー名・ボタン名を内部のコードに変換して上書きする（空や未知の名前は割り当て無しになる）
-        ActionBinding& binding = actionBindings_[static_cast<size_t>(action)];
         binding.primaryKey = ParseKey(data.value("primary", ""));
         binding.secondaryKey = ParseKey(data.value("secondary", ""));
         binding.gamepadButton = ParseGamepadButton(data.value("gamepad", ""));
     }
+    actionBindings_ = std::move(bindings);
+    ClearActionOverrides();
 }
 
 /** @brief 指定アクションが押されているかを返す */
-bool Input::PushAction(Action action) const {
+bool Input::PushAction(int action) const {
     const size_t idx = static_cast<size_t>(action);
+    if (idx >= actionBindings_.size()) {
+        return false;
+    }
     if (actionOverrideEnabled_[idx]) {
         return actionOverridePressed_[idx];
     }
@@ -356,12 +269,15 @@ bool Input::PushAction(Action action) const {
     const bool keyboard = primaryKeyboardEnabled_
         && ((binding.primaryKey && key_[binding.primaryKey]) || (binding.secondaryKey && key_[binding.secondaryKey]));
     return keyboard || (primaryGamepadEnabled_ && ((binding.gamepadButton && (state_.Gamepad.wButtons & binding.gamepadButton))
-        || StickHeld(action, state_, deadzone_)));
+        || StickHeld(binding.stick, state_, binding.stickThreshold)));
 }
 
 /** @brief 指定アクションが押された瞬間かを返す */
-bool Input::TriggerAction(Action action) const {
+bool Input::TriggerAction(int action) const {
     const size_t idx = static_cast<size_t>(action);
+    if (idx >= actionBindings_.size()) {
+        return false;
+    }
     if (actionOverrideEnabled_[idx]) {
         return actionOverridePressed_[idx] && !actionOverridePressedPrev_[idx];
     }
@@ -372,21 +288,25 @@ bool Input::TriggerAction(Action action) const {
     const bool gamepad = binding.gamepadButton
         && (state_.Gamepad.wButtons & binding.gamepadButton)
         && !(previousState_.Gamepad.wButtons & binding.gamepadButton);
-    const bool stick = StickHeld(action, state_, deadzone_) && !StickHeld(action, previousState_, deadzone_);
+    const bool stick = StickHeld(binding.stick, state_, binding.stickThreshold) && !StickHeld(binding.stick, previousState_, binding.stickThreshold);
     return keyboard || (primaryGamepadEnabled_ && (gamepad || stick));
 }
 
 /** @brief 指定アクションの押下状態を実機入力の代わりに強制する（タイトルデモ等の自動操作用） */
-void Input::SetActionOverride(Action action, bool pressed) {
-    actionOverrideEnabled_[static_cast<size_t>(action)] = true;
-    actionOverridePressed_[static_cast<size_t>(action)] = pressed;
+void Input::SetActionOverride(int action, bool pressed) {
+    const size_t idx = static_cast<size_t>(action);
+    if (idx >= actionBindings_.size()) {
+        return;
+    }
+    actionOverrideEnabled_[idx] = true;
+    actionOverridePressed_[idx] = pressed;
 }
 
 /** @brief 全アクションのオーバーライドを解除し、実機入力の参照に戻す */
 void Input::ClearActionOverrides() {
-    actionOverrideEnabled_.fill(false);
-    actionOverridePressed_.fill(false);
-    actionOverridePressedPrev_.fill(false);
+    actionOverrideEnabled_.assign(actionBindings_.size(), false);
+    actionOverridePressed_.assign(actionBindings_.size(), false);
+    actionOverridePressedPrev_.assign(actionBindings_.size(), false);
 }
 
 /** @brief キー状態の更新 */
@@ -405,6 +325,12 @@ void Input::Update() {
     if (FAILED(keyboard_->GetDeviceState(sizeof(key_), key_))) {
         ZeroMemory(key_, sizeof(key_));
     }
+    // 本物の入力を切っている時は、Esc 以外のキーを押していない扱いにする（自動テストの再現で人の操作が混ざらないように）
+    if (!physicalInputEnabled_) {
+        const BYTE escape = key_[DIK_ESCAPE];
+        ZeroMemory(key_, sizeof(key_));
+        key_[DIK_ESCAPE] = escape;
+    }
     // 自動テストが押したことにしているキーを重ねる（ウィンドウが裏にあって実機の入力が取れない時も効く）
     constexpr BYTE kKeyDown = 0x80;
     for (int k = 0; k < kKeyCount; ++k) {
@@ -418,7 +344,7 @@ void Input::Update() {
     // マウス情報の取得開始
     mouse_->Acquire();
     // 全マウスの入力情報を取得する失敗時はクリア
-    if (FAILED(mouse_->GetDeviceState(sizeof(DIMOUSESTATE2), &mouseState_))) {
+    if (FAILED(mouse_->GetDeviceState(sizeof(DIMOUSESTATE2), &mouseState_)) || !physicalInputEnabled_) {
         ZeroMemory(&mouseState_, sizeof(DIMOUSESTATE2));
     }
 
@@ -535,39 +461,31 @@ bool Input::TriggerMenuCancel() const {
     return (key_[DIK_BACK] && !keyPre_[DIK_BACK]) || PadTriggered(0, XINPUT_GAMEPAD_B);
 }
 
-/** @brief 演出を飛ばす（決定・攻撃・ジャンプのどれか） */
-bool Input::TriggerCinematicSkip() const {
-    return TriggerMenuConfirm() || TriggerAction(Action::kAttack) || TriggerAction(Action::kJump);
-}
-
 /** @brief 操作の表示名を、最後に使った機器に合わせて返す（例: キーボードなら "J"、パッドなら "LT"） */
-std::wstring Input::GetActionLabel(Action action) const {
-    const ActionBinding& binding = actionBindings_[static_cast<size_t>(action)];
+std::wstring Input::GetActionLabel(int action) const {
+    const size_t idx = static_cast<size_t>(action);
+    if (idx >= actionBindings_.size()) {
+        return {};
+    }
+    const ActionBinding& binding = actionBindings_[idx];
     if (usingGamepad_ && binding.gamepadButton) {
         return PadButtonLabel(binding.gamepadButton);
     }
-    if (usingGamepad_) {
-        if (const StickAction* stick = FindStickAction(action)) {
-            return stick->label;
-        }
+    if (usingGamepad_ && binding.stick != StickDirection::kNone) {
+        return StickLabel(binding.stick);
     }
     return binding.primaryKey ? KeyLabel(binding.primaryKey) : L"?";
 }
 
 /** @brief 文章中の {操作名} を、最後に使った機器のボタン名へ置き換える */
 std::wstring Input::ExpandPrompts(const std::wstring& text) const {
-    // {名前} の名前を表示用の文字に置き換える。移動→固定の案内→アクション名の順に探す
+    // {名前} の名前を表示用の文字に置き換える。追加の案内→固定の案内→アクション名の順に探す
     auto resolve = [&](const std::wstring& name, std::wstring& out) {
-        if (name == L"Move") {
-            out = usingGamepad_ ? L"左スティック" : GetActionLabel(Action::kMoveLeft) + L" " + GetActionLabel(Action::kMoveRight);
-            return true;
-        }
-        // 闘技場の前後左右の移動もまとめて1つの表記にする
-        if (name == L"ArenaMove") {
-            out = usingGamepad_ ? L"左スティック"
-                                : GetActionLabel(Action::kArenaForward) + GetActionLabel(Action::kArenaLeft)
-                    + GetActionLabel(Action::kArenaBack) + GetActionLabel(Action::kArenaRight);
-            return true;
+        if (promptResolver_) {
+            out = promptResolver_(*this, name);
+            if (!out.empty()) {
+                return true;
+            }
         }
         for (const FixedPrompt& prompt : kFixedPrompts) {
             if (name == prompt.name) {
@@ -575,10 +493,9 @@ std::wstring Input::ExpandPrompts(const std::wstring& text) const {
                 return true;
             }
         }
-        for (const auto& [actionName, action] : kActionNames) {
-            const std::string narrow(actionName);
-            if (name == std::wstring(narrow.begin(), narrow.end())) {
-                out = GetActionLabel(action);
+        for (size_t i = 0; i < actionBindings_.size(); ++i) {
+            if (name == actionBindings_[i].name) {
+                out = GetActionLabel(static_cast<int>(i));
                 return true;
             }
         }
@@ -661,6 +578,11 @@ void Input::UpdateGamepad() {
     }
     if (state_.Gamepad.bRightTrigger > XINPUT_GAMEPAD_TRIGGER_THRESHOLD) {
         state_.Gamepad.wButtons |= kGamepadRightTrigger;
+    }
+    // 本物の入力を切っている時は、つないだままのパッドも押していない扱いにする
+    if (!physicalInputEnabled_) {
+        ZeroMemory(&state_, sizeof(XINPUT_STATE));
+        ZeroMemory(&secondPadState_, sizeof(XINPUT_STATE));
     }
 
     if (WasGamepadConnected()) {

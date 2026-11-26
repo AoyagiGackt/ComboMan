@@ -1,0 +1,235 @@
+{
+  "_comment": "強制スクロールのお手本。道の終わりに着くとクリア",
+  "playerSpawn": [
+    5,
+    0.4,
+    0
+  ],
+  "enemySpawn": [
+    28,
+    0.4,
+    0
+  ],
+  "graphPath": "Resources/Graphs/Samples/sample_path_scroll_main.json",
+  "sky": "",
+  "flagGraphs": [],
+  "checkpoints": [],
+  "triggers": [],
+  "objects": [
+    {
+      "name": "floor",
+      "type": "row",
+      "kind": "prop",
+      "axis": "x",
+      "count": 120,
+      "step": 1,
+      "model": "Resources/block/terrain/terrain_ground.obj",
+      "texture": "Resources/block/terrain/terrain_palette_meadow.png",
+      "position": [
+        2,
+        -0.98,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "lighting": false,
+      "solid": true
+    },
+    {
+      "name": "wall_left",
+      "type": "row",
+      "kind": "prop",
+      "axis": "y",
+      "count": 13,
+      "step": 1,
+      "model": "Resources/block/terrain/terrain_wall.obj",
+      "texture": "Resources/block/terrain/terrain_palette_meadow.png",
+      "position": [
+        2,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "lighting": false,
+      "solid": true
+    },
+    {
+      "name": "wall_right",
+      "type": "row",
+      "kind": "prop",
+      "axis": "y",
+      "count": 14,
+      "step": 1,
+      "model": "Resources/block/terrain/terrain_wall.obj",
+      "texture": "Resources/block/terrain/terrain_palette_meadow.png",
+      "position": [
+        122,
+        -0.98,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "lighting": false,
+      "solid": true
+    },
+    {
+      "name": "ceiling",
+      "type": "row",
+      "kind": "prop",
+      "axis": "x",
+      "count": 121,
+      "step": 1,
+      "model": "Resources/block/terrain/terrain_ceiling.obj",
+      "texture": "Resources/block/terrain/terrain_palette_meadow.png",
+      "position": [
+        2,
+        13,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "lighting": false,
+      "solid": true
+    },
+    {
+      "name": "enemy_1",
+      "type": "static",
+      "kind": "enemy_basic",
+      "position": [
+        24,
+        -0.38,
+        0
+      ],
+      "spawnType": "basic",
+      "weaponType": "",
+      "enemyModel": "Slime",
+      "enemyGroup": ""
+    },
+    {
+      "name": "enemy_2",
+      "type": "static",
+      "kind": "enemy_basic",
+      "position": [
+        38,
+        -0.38,
+        0
+      ],
+      "spawnType": "basic",
+      "weaponType": "",
+      "enemyModel": "Slime",
+      "enemyGroup": ""
+    },
+    {
+      "name": "enemy_3",
+      "type": "static",
+      "kind": "enemy_basic",
+      "position": [
+        52,
+        -0.38,
+        0
+      ],
+      "spawnType": "basic",
+      "weaponType": "",
+      "enemyModel": "Slime",
+      "enemyGroup": ""
+    },
+    {
+      "name": "enemy_4",
+      "type": "static",
+      "kind": "enemy_basic",
+      "position": [
+        70,
+        -0.38,
+        0
+      ],
+      "spawnType": "basic",
+      "weaponType": "",
+      "enemyModel": "Slime",
+      "enemyGroup": ""
+    },
+    {
+      "name": "enemy_5",
+      "type": "static",
+      "kind": "enemy_basic",
+      "position": [
+        86,
+        -0.38,
+        0
+      ],
+      "spawnType": "basic",
+      "weaponType": "",
+      "enemyModel": "Slime",
+      "enemyGroup": ""
+    },
+    {
+      "name": "enemy_6",
+      "type": "static",
+      "kind": "enemy_basic",
+      "position": [
+        100,
+        -0.38,
+        0
+      ],
+      "spawnType": "basic",
+      "weaponType": "",
+      "enemyModel": "Slime",
+      "enemyGroup": ""
+    }
+  ],
+  "gameMode": "path_scroll",
+  "path": [
+    {
+      "position": [
+        10,
+        3,
+        0
+      ],
+      "speed": 4
+    },
+    {
+      "position": [
+        40,
+        3,
+        0
+      ],
+      "speed": 3
+    },
+    {
+      "position": [
+        60,
+        5,
+        0
+      ],
+      "speed": 2
+    },
+    {
+      "position": [
+        90,
+        3,
+        0
+      ],
+      "speed": 4
+    },
+    {
+      "position": [
+        112,
+        3,
+        0
+      ],
+      "speed": 4
+    }
+  ]
+}

@@ -42,6 +42,11 @@ public:
     /** @brief このレベルで出すなら出す準備をする（開始演出が終わったら開く） */
     void Arm(const std::string& levelPath);
     /**
+     * @brief 決めた見出しと本文で出す準備をする（ゲームの型の操作説明用。{操作名} は出す時にキーの名前へ置き換える）
+     * @note Arm で出す準備ができている時はそちらを優先し、何もしない
+     */
+    void ArmCustom(const std::string& title, const std::string& lines);
+    /**
      * @brief 1フレーム進める（開いている間と、閉じた攻撃ボタンが離されるまでは true を返し、呼ぶ側はゲームを止める）
      * @param canOpen 開いてよいか（開始演出の最中は false）
      */
@@ -58,6 +63,8 @@ private:
     bool holdingCloseAttack_ = false; ///< 閉じた後、攻撃ボタンが離されるのを待っているか
     float timer_ = 0.0f; ///< 開いてからの秒数
     float alpha_ = 0.0f; ///< 板の不透明度
+    std::string customTitle_; ///< ArmCustom で決めた見出し（空なら controls_guide.json の見出し）
+    std::string customLines_; ///< ArmCustom で決めた本文
 };
 
 } // namespace engine::game

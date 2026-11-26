@@ -138,7 +138,7 @@ void EnemyEntity::PlaceMotionWeapon() {
     position.z += pose.weaponOffset.z;
     const float facingYaw = facingSign_ >= 0.0f ? gameConstants::kHalfPi : -gameConstants::kHalfPi;
     weaponObject_->SetPosition(position);
-    weaponObject_->SetRotation({ 0.0f, facingYaw + facingSign_ * pose.spin, -facingSign_ * pose.weaponAngle });
+    weaponObject_->SetRotation({ 0.0f, facingYaw + facingSign_ * pose.spin + weaponBaseYaw_, -facingSign_ * pose.weaponAngle });
 }
 
 } // namespace engine::game

@@ -16,6 +16,9 @@
 #include "SkinCommon.h"
 #include "SkinnedModel.h"
 #include "SkinnedObject3d.h"
+#include "PlayerTypes.h"
+#include "PlayerWeaponVisuals.h"
+#include "StaticModelOverride.h"
 #include <algorithm>
 #include <bitset>
 #include <memory>
@@ -140,6 +143,14 @@ public:
     /// @param blocks StageEditor::GetSolidColliders()等で得たワールドAABB一覧
     /// @note 上に乗れば着地・横から当たれば壁として押し出す。ブロックを動かせば次フレームから追従する
     void ResolveBlockCollision(const std::vector<AABB>& blocks);
+    /** @brief 武器投げの入力、飛行と地形への衝突を進める */
+    void UpdateWeaponThrow(Input* input, const std::vector<AABB>& blocks);
+    /** @brief 命中した投擲を終了し、投げた時の威力を返す */
+    float ConsumeWeaponThrowHit(const AABB& target);
+    /** @brief 壊すために投げた武器が飛行中か */
+    bool HasWeaponInFlight() const { return weaponThrow_.secondsLeft > 0.0f; }
+    /** @brief 演出へ移る時に飛行中の武器を消す */
+    void ClearWeaponThrow() { weaponThrow_ = {}; }
     /**
      * @brief 指定した位置の真下にある床へ立った時の位置を返す（足元より下で一番高いブロックの上面に足を合わせる）
      * @return 真下に床が無ければ、指定した位置をそのまま返す
@@ -154,8 +165,8 @@ public:
      * @note 1回の Update() にだけ効く。毎フレーム Update() の前に呼ぶ
      */
     void SetRampageTarget(const Vector3& target) {
-        rampageTarget_ = target;
-        hasRampageTarget_ = true;
+        rampageData_.target = target;
+        rampageData_.hasTarget = true;
     }
 
     /** @brief 武器奪取の刺突モーションを頭から再生する（外部トリガー用、既存の斬撃を流用） */
@@ -208,7 +219,7 @@ public:
     void OnHit();
     /** @brief 被弾直後の無敵時間中、または回避の無敵中かどうかを返す */
     bool IsInvincible() const {
-        return invincibleTimer_ > 0.0f || dodgeActive_ || warpActive_;
+        return invincibleTimer_ > 0.0f || dodge_.active || warp_.active;
     }
 
     // ── 回避（前後ステップ。全区間無敵、コンボからキャンセル可）──
@@ -219,7 +230,7 @@ public:
     void BufferDodgeInput(Input* input);
     /** @brief 回避モーション中か（この間は敵の攻撃を受けない） */
     bool IsDodging() const {
-        return dodgeActive_;
+        return dodge_.active;
     }
     /** @brief このフレームに回避を開始したか */
     bool JustDodged() const {
@@ -228,7 +239,7 @@ public:
     /// @brief 直近の回避で連続回避（スパム）が何回続いているかを返す
     /// @note 0なら間隔を空けた回避。2以上は危険のない場面での連打とみなしてスタイル評価を下げる材料にする
     int GetDodgeSpamCount() const {
-        return dodgeSpamCount_;
+        return dodge_.spamCount;
     }
     /// @brief 回避中に敵の攻撃を紙一重で避けた（ジャスト回避）ことを1回だけ成立させる
     /// @return 今回の回避でまだ報酬を受け取っていなければtrue（呼び出し側が加点・演出を行う）
@@ -236,18 +247,18 @@ public:
     /// @brief ジャスト回避直後の強化窓を開く（この間の攻撃は威力が上がる。回避を攻めの起点にするため）
     /// @param seconds 強化が続く秒数
     void BeginJustDodgeWindow(float seconds) {
-        justDodgeWindowTimer_ = (std::max)(justDodgeWindowTimer_, seconds);
+        dodge_.justDodgeWindowTimer = (std::max)(dodge_.justDodgeWindowTimer, seconds);
     }
     /** @brief ジャスト回避直後の強化窓の中か */
     bool IsJustDodgeWindowActive() const {
-        return justDodgeWindowTimer_ > 0.0f;
+        return dodge_.justDodgeWindowTimer > 0.0f;
     }
 
     // ── テレポート斬り（機動アクション。通常時は覚醒ゲージ少量消費+クールタイム、
     //    覚醒中はゲージ消費なし・距離延長・クールタイム短縮の強化版）──
     /** @brief テレポート中か（この間は敵の攻撃を受けない） */
     bool IsWarping() const {
-        return warpActive_;
+        return warp_.active;
     }
 
     /// @brief 現在の武器と覚醒状態から攻撃ダメージ倍率を返す（覚醒中はweapons.jsonのawakened.damageMult）
@@ -274,11 +285,11 @@ public:
     void SetStaticVisualModel(const std::string& modelPath, const std::string& texturePath = "");
     /** @brief 固定の見た目に使うモデルのパスを返す */
     const std::string& GetStaticVisualModelPath() const {
-        return staticOverrideModelPath_;
+        return staticOverride_.GetModelPath();
     }
     /** @brief 固定の見た目に使うテクスチャのパスを返す */
     const std::string& GetStaticVisualTexturePath() const {
-        return staticOverrideTexturePath_;
+        return staticOverride_.GetTexturePath();
     }
     /** @brief このフレームにジャンプしたかを返す */
     bool JustJumped() const {
@@ -299,11 +310,11 @@ public:
 
     /** @brief 覚醒ゲージの現在値を返す（0.0〜1.0） */
     float GetAwakenGauge() const {
-        return awakenGauge_;
+        return awaken_.gauge;
     }
     /** @brief 覚醒状態かどうかを返す */
     bool IsAwakened() const {
-        return isAwakened_;
+        return awaken_.isAwakened;
     }
 
     /// @brief 攻撃が実際に命中した際にシーン側の当たり判定から呼び、覚醒ゲージを加算する
@@ -385,7 +396,7 @@ public:
     void SetHeldWeaponWorldCorrection(const Matrix4x4& correction);
     /** @brief 手に持つ近接武器の補正をなくす（付け直しは次に姿を更新した時） */
     void ClearHeldWeaponWorldCorrection() {
-        hasHeldWeaponCorrection_ = false;
+        weaponVisuals_.ClearCorrection();
     }
 
     /**
@@ -515,7 +526,7 @@ public:
     }
     /** @brief 乱舞の空中連撃の回数を返す */
     int GetJuggleCount() const {
-        return juggleSlashCount_;
+        return rampageData_.juggleSlashCount;
     }
 
     // フィニッシャースラッシュ（覚醒ゲージ満タン + F）
@@ -525,10 +536,15 @@ public:
     }
     /** @brief フィニッシャーを静止して溜めている最中か */
     bool IsFinisherCharging() const {
-        return finisherCharging_;
+        return finisher_.charging;
     }
 
 private:
+    playerTypes::DodgeState dodge_; ///< 回避の状態
+    playerTypes::WarpState warp_; ///< テレポート斬りの状態
+    playerTypes::AwakenState awaken_; ///< 覚醒の状態
+    playerTypes::RampageData rampageData_; ///< 覚醒乱舞の途中の値
+    playerTypes::FinisherState finisher_; ///< フィニッシャーの溜めの状態
     /** @brief 装備を現在のボーンへ付け直し、武器と銃の行列を更新する */
     void UpdateAttachedWeapons();
 
@@ -601,28 +617,14 @@ private:
     float invincibleTimer_ = 0.0f;
 
     // 回避（レーン制なので前後のみ。移動入力があればその方向、無ければ向きの逆へバックステップ）
-    bool dodgeActive_ = false;
-    bool dodgeRewardClaimed_ = false; // 1回の回避でジャスト回避報酬を二重に受け取らないためのフラグ
-    float dodgeTimer_ = 0.0f;
-    float dodgeStartX_ = 0.0f;
-    float dodgeTargetX_ = 0.0f;
-    float dodgeCooldown_ = 0.0f;
-    float dodgeSpamTimer_ = 0.0f; // 前回の回避からの経過秒数（連打判定用）
-    int dodgeSpamCount_ = 0;
-    int dodgeBufferFrames_ = 0; // 先行入力した回避ボタンの残り有効フレーム数（0なら未入力）
-    bool dodgeBackward_ = false; // 向きを変えずに後ろへ下がる回避か（前転モーションだと滑って見えるので専用の見せ方にする）
-    float justDodgeWindowTimer_ = 0.0f; // ジャスト回避直後の強化窓の残り秒数（長さと倍率はCombatTuning側）
 
     // テレポート斬り（向いている方向へ短距離ワープする機動アクション。全区間無敵、コンボからキャンセル可）
-    bool warpActive_ = false;
-    bool warpRequestedByDodge_ = false; ///< ロックオン中に敵の方へ倒して回避を押し、回避の代わりにワープを頼んだか
-    float warpTimer_ = 0.0f;
-    float warpStartX_ = 0.0f;
-    float warpTargetX_ = 0.0f;
-    float warpCooldown_ = 0.0f;
 
     // 向き（最後に入力した横方向+1=右 -1=左）
     float lastDirX_ = 1.0f;
+    playerTypes::WeaponThrow weaponThrow_;
+    /** @brief 飛行中の武器の移動区間が指定した半径で当たれば投擲を終える */
+    float ConsumeWeaponThrowHit(const AABB& target, float radius);
     float visualYawOffset_ = 0.0f; ///< 見た目の向きだけに足す角度
     bool strafeMoving_ = false; ///< 横へ回り込んでいて走りのアニメにするか
     float externalShiftX_ = 0.0f; ///< 次の更新の始めに横へずらす量（AddExternalShiftX で足し、使ったら 0 に戻す）
@@ -635,9 +637,6 @@ private:
     }
 
     // 覚醒ゲージ
-    float awakenGauge_ = 0.0f;
-    bool isAwakened_ = false;
-    float awakenTimer_ = 0.0f;
 
     // スタイル技（L / K キー）
     bool weaponSwitchAttackPending_ = false;
@@ -677,23 +676,13 @@ private:
 
     // 固有技で共通の水平ダッシュ（瞬間移動に見えないよう、開始位置→目標位置へ短時間でイージング移動する）
     // ヒット判定は移動完了フレームで発生させること
-    struct DashMotion {
-        bool active = false;
-        float timer = 0.0f;
-        float startX = 0.0f;
-        float targetX = 0.0f;
-    };
+    using DashMotion = playerTypes::DashMotion;
     /** @brief 現在位置からworldDeltaXぶん先（minX_/maxX_でクランプ）へダッシュを開始する */
     void BeginDash(DashMotion& dash, float worldDeltaX);
     /** @brief ダッシュを1フレーム進める（pos_.xを更新）。ちょうど完了したフレームだけtrueを返す */
     bool AdvanceDash(DashMotion& dash);
 
     // 覚醒乱舞（Sword + 覚醒 + L）
-    int juggleSlashCount_ = 0; // 今回の乱舞で何回切ったか
-    int juggleAngleIdx_ = 0; // 次のスラッシュ角度インデックス
-    float rampageTimer_ = 0.0f; // 突進を始めてから、または最後に斬ってからの秒数（着かない・入力が止まった乱舞を打ち切る）
-    Vector3 rampageTarget_ = { }; // 乱舞が向かう相手の位置（SetRampageTarget() で渡された時だけ使う）
-    bool hasRampageTarget_ = false; // このフレームの乱舞の相手が渡されているか
 
     // リムライト（本体・手持ち武器で共通）
     static constexpr Vector3 kRimColor = { 0.4f, 0.9f, 1.0f };
@@ -769,11 +758,7 @@ private:
 
     // アウトラインパス後に通常描画 PSO へ戻すために保持（Player::Draw() で使用）
     ModelCommon* modelCommon_ = nullptr;
-    Model* staticOverrideModel_ = nullptr; // 実体はModelManagerが所有・共有する
-    std::unique_ptr<Object3d> staticOverrideObject_;
-    float staticOverrideFootOffset_ = 0.0f; // モデル原点から最下点までの距離（スケール後）中心原点のモデルでも足元を合わせる
-    std::string staticOverrideModelPath_;
-    std::string staticOverrideTexturePath_;
+    StaticModelOverride staticOverride_; ///< 見た目の差し替えモデル（差し替えている間は本体と武器の代わりに描く）
 
     // スキンメッシュ描画の共通設定（両フォームのリグで共有）
     std::unique_ptr<SkinCommon> skinCommon_;
@@ -782,26 +767,7 @@ private:
     // アニメーションや武器アタッチ先ボーン名などモデル依存の情報をセットで持つ
     // （アセットパス・アニメ名の定義は CharacterVisuals.h の kNormalRigVisual / kAwakenedRigVisual）
     /** @brief 通常/覚醒フォーム1体ぶんのモデル・アニメーション・武器アタッチ用ボーン名一式 */
-    struct CharacterRig {
-        Model* staticModel = nullptr; ///< 残像・分身演出用（ボーンなし、本体と同じ見た目）。実体はModelManagerが所有・共有する
-        SkinnedModel* skinnedModel = nullptr; ///< 本体描画（ボーンアニメーション付き）。実体はModelManagerが所有・共有する
-        std::unique_ptr<SkinnedObject3d> object;
-        float modelScale = 1.0f;
-        float modelOffsetY = 0.0f; ///< モデル原点（足元）を AABB 中心の pos_ に合わせる下げ幅
-        const char* meleeBoneName = ""; ///< 近接武器のアタッチ先ボーン
-        const char* gunBoneName = ""; ///< 銃のアタッチ先ボーン
-        const char* motionRigId = ""; ///< 加算モーションの保存キー（リグのモデルファイル名）
-        engine::graphics::Animation idleAnim;
-        engine::graphics::Animation runAnim;
-        engine::graphics::Animation jumpAnim;
-        engine::graphics::Animation runningJumpAnim; ///< 移動しながらのジャンプ
-        engine::graphics::Animation swimAnim; ///< 水中
-        engine::graphics::Animation idleHoldAnim; ///< 武器持ち待機（構え系スタイル）
-        engine::graphics::Animation runHoldAnim; ///< 武器持ち走り（構え系スタイル）
-        engine::graphics::Animation slashAnim; ///< 斬撃（ソード攻撃・乱舞・フィニッシャー）
-        engine::graphics::Animation punchAnim; ///< パンチ（ソード以外のスタイルのコンボ）
-        engine::graphics::Animation walkAnim; ///< 歩き（マップを移動する時）
-    };
+    using CharacterRig = playerTypes::CharacterRig;
     CharacterRig normalRig_; ///< 通常フォーム
     CharacterRig awakenedRig_; ///< 覚醒フォーム（メカ）
     CharacterRig* rig_ = &normalRig_; ///< 現在表示中のリグ（覚醒の開始/終了で切り替え）
@@ -917,62 +883,10 @@ private:
      */
     bool TryStartSkillSequence(Input* input, WeaponType type, float& cooldown, float cooldownSeconds);
 
-    // 右手ボーンに持たせる近接武器（現在のスタイルに対応する1つだけ表示）
-    // 種類が多いため個別メンバーではなくテーブルで持つ（追加は CharacterVisuals.h の kHeldWeaponVisuals）
-    /** @brief 右手に持たせる近接武器1種ぶんのモデルと、握らせる際のローカルスケール/回転/位置 */
-    struct HeldWeaponSlot {
-        WeaponType type;
-        Model* model = nullptr; // 実体はModelManagerが所有・共有する
-        std::unique_ptr<Object3d> object;
-        Vector3 gripScale;
-        Vector3 gripRotate;
-        Vector3 gripTranslate;
-    };
-    std::vector<HeldWeaponSlot> heldWeapons_;
-    int activeHeldIndex_ = -1; ///< 現在表示中の heldWeapons_ インデックス（-1=非表示）
-    int thrownWeaponIndex_ = -1; ///< 手元を離れて飛んでいる武器（武器切り替え後もactiveHeldIndex_と別に描画し続けるための heldWeapons_ インデックス、無ければ-1）
-    // 合体の素材の武器（土台の柄頭から逆向きに付けて、両端に刃のある1本に見せる。土台と同じ種類でも描けるよう heldWeapons_ とは別に持つ）
-    std::vector<HeldWeaponSlot> fusedPartnerWeapons_;
-    int fusedPartnerIndex_ = -1; ///< 表示中の fusedPartnerWeapons_ インデックス（-1=合体していない）
-    bool hasHeldWeaponCorrection_ = false; ///< 手に持つ近接武器に補正を掛けるか
-    Matrix4x4 heldWeaponCorrection_ {}; ///< 手に持つ近接武器のワールド行列に掛ける補正（SetHeldWeaponWorldCorrection で決める）
+    // 手に持つ近接武器・合体の素材・銃の見た目（何を持たせるかは AttachActiveWeapons が毎フレーム決めて渡す）
+    PlayerWeaponVisuals weaponVisuals_;
 
-    /** @brief 選んでいる枠の武器が合体していれば、素材の武器を土台の柄頭から逆向きに付ける */
-    void AttachFusedPartner();
-    /** @brief 手に付けた近接武器へ、決めてある補正を掛ける（補正が無ければ何もしない） */
-    void ApplyHeldWeaponCorrection(Object3d& object) const;
-    /** @brief 手に持つ近接武器の実体すべて（合体の素材の分も含む）に fn を呼ぶ */
-    template <class Fn>
-    void ForEachMeleeWeaponObject(Fn&& fn) {
-        for (auto& slot : heldWeapons_) {
-            fn(*slot.object);
-        }
-        for (auto& slot : fusedPartnerWeapons_) {
-            fn(*slot.object);
-        }
-    }
-
-    /** @brief 手元を離れて飛んでいる武器を、手のボーンから外して位置・回転を直接動かす */
-    void PlaceThrownWeapon(HeldWeaponSlot& slot, const Vector3& position, float spinZ);
-
-    /** @brief 右手ボーンに武器オブジェクトを追従させる（握りローカル行列は呼び出し側で指定） */
-    void AttachHeldWeapon(Object3d* obj, const char* boneName,
-        const Vector3& gripScale, const Vector3& gripRotate, const Vector3& gripTranslate);
-
-    // 銃装備（左手ボーンに毎フレーム追従、G キーで切り替えた1丁だけ表示）
-    // 近接の heldWeapons_ と同じテーブル方式（追加は CharacterVisuals.h の kGunVisuals）
-    struct GunSlot {
-        GunType type;
-        Model* model = nullptr; // 実体はModelManagerが所有・共有する
-        std::unique_ptr<Object3d> object;
-        Vector3 gripScale;
-        Vector3 gripRotate;
-        Vector3 gripTranslate;
-    };
-    std::vector<GunSlot> guns_;
-    int activeGunIndex_ = -1; ///< 現在表示中の guns_ インデックス（-1=非表示）
     float portalAlpha_ = 1.0f; ///< 入口演出時の輪郭の透明度
-    bool gunVisible_ = true; ///< 銃のアタッチ先ボーンが見つかったか
     bool weaponsDropped_ = false; ///< やられ演出で武器を手放したか（手に付けず、銃も隠す）
     Vector3 droppedWeaponPosition_ {}; ///< 手放した近接武器の位置（やられ演出が毎フレーム決める）
     float droppedWeaponSpin_ = 0.0f; ///< 手放した近接武器のZ軸回りの回転
@@ -1008,8 +922,6 @@ private:
     float attackAnimTimer_ = 0.0f; ///< 攻撃モーションの残り再生秒数（0以下で通常状態へ復帰）
 
     // フィニッシャー 静止集中 → 一閃
-    bool finisherCharging_ = false; ///< 静止して溜めている最中か
-    float finisherChargeTimer_ = 0.0f; ///< 残り溜め時間（0以下で解放＝一閃へ）
 
     /** @brief 左右の移動入力ぶん step だけ横へ動かし、向きを更新する */
     void ApplyHorizontalInput(Input* input, float step);

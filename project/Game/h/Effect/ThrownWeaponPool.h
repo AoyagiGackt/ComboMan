@@ -21,6 +21,9 @@ class EnemyEntity;
 
 /** @brief 投げる時の数値を保持する */
 struct ThrownWeaponParams {
+    static constexpr float kLaunchHeight = 0.6f; ///< プレイヤーの位置から投げ始める高さ
+    /** @brief 終点手前で減速する往路の1回分の移動距離 */
+    static float OutwardStep(float speed, float distance, float remaining, float dt);
     static constexpr float kDefaultSpeed = 16.0f; ///< 既定の飛ぶ速さ
     static constexpr float kDefaultDistance = 7.0f; ///< 既定の行きの距離
     static constexpr float kDefaultSpinSpeed = 18.0f; ///< 既定の回る速さ

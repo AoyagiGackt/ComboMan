@@ -37,13 +37,10 @@ void WaterSurfaceEffect::Initialize(engine::DirectXCommon* dxCommon, SrvManager*
     captureDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
     captureTexture_ = pipelineHelper::CreateDefaultResource(device, captureDesc, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
     captureSrv_ = srvManager_->Allocate();
-    // 描画先と同じ色空間で背景を読む。
-    srvManager_->CreateSrvForTexture2D(captureSrv_, captureTexture_.Get(), DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, kOne);
-    const pipelineHelper::RenderTargetFormats kFormats = {
-        DXGI_FORMAT_R8G8B8A8_TYPELESS, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB
-    };
+    // 写し元（シーンの色バッファ）と同じ形式で背景を読む。
+    srvManager_->CreateSrvForTexture2D(captureSrv_, captureTexture_.Get(), captureDesc.Format, kOne);
     pipelineHelper::CreateRenderTarget(device, srvManager_, engine::WinApp::kClientWidth, engine::WinApp::kClientHeight,
-        kFormats, pipelineHelper::kOffscreenClearColor,
+        pipelineHelper::kSceneColorTargetFormats, pipelineHelper::kOffscreenClearColor,
         { backgroundTexture_, backgroundRtvHeap_, backgroundRtv_, backgroundSrv_ }, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
     // GPUが参照中のフレームへCPUが上書きしないよう画像番号ごとに領域を持つ。
     constantStride_ = AlignConstantBufferSize(sizeof(Parameters));
@@ -124,7 +121,7 @@ void WaterSurfaceEffect::Draw() {
     ID3D12DescriptorHeap* heaps[] = { srvManager_->GetSrvDescriptorHeap() };
     cmd->SetDescriptorHeaps(kOne, heaps);
     cmd->SetGraphicsRootSignature(rootSignature_.Get());
-    cmd->SetPipelineState(pipelineState_.Get());
+    cmd->SetPipelineState(PipelineCache::Resolve(pipelineState_.Get()));
     cmd->SetGraphicsRootConstantBufferView(pipelineHelper::fullscreenRootSlot::kConstants,
         constants_->GetGPUVirtualAddress() + frameIndex * constantStride_);
     cmd->SetGraphicsRootDescriptorTable(pipelineHelper::fullscreenRootSlot::kTexture, srvManager_->GetGPUDescriptorHandle(imageSrv));

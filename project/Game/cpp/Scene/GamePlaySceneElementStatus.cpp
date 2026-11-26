@@ -3,6 +3,8 @@
  * @brief GamePlayScene のうち、武器の属性が敵に残る状態（燃焼・凍結など）、武器を手に入れた瞬間の演出、武器の合体と砕け、名前の表示
  */
 #include "GamePlayScene.h"
+#include "TestCoverage.h"
+
 #include "RunData.h"
 #include "CombatTuning.h"
 #include "CrashBreadcrumbs.h"
@@ -19,18 +21,9 @@ using namespace engine::graphics;
 
 namespace engine::game {
 namespace {
-// 武器名の表示（画面の中央上に出し、出てすぐ大きく弾けてから元の大きさへ戻り、最後に薄く消える）
-constexpr float kAcquireBannerSeconds = 1.6f; // 出している秒数
-constexpr float kAcquireBannerPopSeconds = 0.15f; // 出てから元の大きさへ戻るまでの秒数
-constexpr float kAcquireBannerFadeSeconds = 0.45f; // 最後に薄く消えていく秒数
-constexpr float kAcquireBannerPopScale = 0.6f; // 出た瞬間に大きさへ足す割合
-constexpr Vector2 kAcquireBannerPosition = { gameConstants::kScreenCenterX, 200.0f }; // 文字の中心の位置
-constexpr float kAcquireBannerScale = 2.4f; // 文字の大きさ
-constexpr float kAcquireBannerWhiteMix = 0.45f; // 武器の色へ白を混ぜる割合（暗い色の武器でも読めるように）
-constexpr Vector4 kAcquireBannerShadowColor = { 0.0f, 0.0f, 0.0f, 0.85f }; // 影の色
-constexpr float kAcquireBannerShadowOffset = 3.0f; // 影をずらす量
 
 // 合体した武器が砕けた時の演出
+constexpr float kFusionBannerOffsetY = 80.0f; // 2行の区画案内の下に、合体の知らせを出す
 constexpr Vector3 kFusionBreakFlashTint = { 1.0f, 0.35f, 0.25f }; // 砕けた時の閃光の色
 constexpr Vector4 kFusionBreakBannerColor = { 1.0f, 0.4f, 0.3f, 1.0f }; // 砕けた知らせの文字の色（白を混ぜて出す）
 constexpr float kFusionBreakBurstStrength = 1.6f; // 破片と属性の弾けの大きさ
@@ -172,18 +165,6 @@ void GamePlayScene::PlayWeaponAcquireEffect(WeaponType type) {
     }
 }
 
-/** @brief 画面の中央上に名前を一瞬出す（武器を合体させた時に使う） */
-void GamePlayScene::ShowWeaponBanner(const std::wstring& text, const Vector4& color) {
-    acquireBannerText_ = text;
-    acquireBannerColor_ = {
-        color.x + (1.0f - color.x) * kAcquireBannerWhiteMix,
-        color.y + (1.0f - color.y) * kAcquireBannerWhiteMix,
-        color.z + (1.0f - color.z) * kAcquireBannerWhiteMix,
-        1.0f,
-    };
-    acquireBannerTimer_ = kAcquireBannerSeconds;
-}
-
 /** @brief 枠が満杯の時に奪った武器を、今持っている武器に合体させる */
 bool GamePlayScene::TryFuseAcquiredWeapon(WeaponManager::AcquireResult result, WeaponType type) {
     // ポーズで合体を切っている時は、今までどおり今の武器と入れ替える（持っている種類なら覚醒ゲージへ）
@@ -212,6 +193,8 @@ bool GamePlayScene::TryFuseAcquiredWeapon(WeaponManager::AcquireResult result, W
 /** @brief ボスから奪った武器をボスの枠へ入れる（空なら入れ、同じなら覚醒ゲージへ、別の種類なら主軸を選ぶ画面を出す） */
 void GamePlayScene::AcquireBossWeapon(WeaponType type) {
     WeaponManager* wm = WeaponManager::GetInstance();
+    // 自動テストの網羅のまとめに数える
+    testCoverage::Cover("player_action", "steal");
     const WeaponManager::BossAcquireResult result = wm->AcquireBossWeapon(type, GameSettingsManager::GetInstance()->Get().weaponFusion);
     CrashBreadcrumbs::Add("game", "ボスの武器を入手（結果 " + std::to_string(static_cast<int>(result)) + "）");
     if (result == WeaponManager::BossAcquireResult::kAdded) {
@@ -323,7 +306,7 @@ void GamePlayScene::PlayWeaponFusionEffect(int slot, bool bossWeapon) {
     RunData::GetInstance()->RecordFusion(static_cast<int>(base.type), static_cast<int>(partner->type), bossWeapon);
     // ボスの武器どうしの合体は見出しを変える
     const std::wstring heading = bossWeapon ? L"ボス武器の合体 " : L"合体 ";
-    ShowWeaponBanner(heading + WeaponTypeLabel(base.type) + L"＋" + WeaponTypeLabel(partner->type), partnerColor);
+    banner_.Show(heading + WeaponTypeLabel(base.type) + L"＋" + WeaponTypeLabel(partner->type), partnerColor, kFusionBannerOffsetY);
     hud_.Notify(HudEvent::kWeaponAcquired);
 }
 
@@ -351,14 +334,15 @@ void GamePlayScene::ApplyFusionHit(EnemyEntity* enemy, float scale) {
     // 砕けると枠が変わるので、演出に使う武器は先に写しておく
     const WeaponData base = wm->GetCurrent();
     const WeaponData partnerCopy = *partner;
+    const int baseSlot = wm->GetSelectedSlot();
     if (wm->ConsumeFusionDurability(1)) {
         player_->CancelAttacksForWeaponBreak();
-        PlayWeaponFusionBreakEffect(base, partnerCopy);
+        PlayWeaponFusionBreakEffect(base, partnerCopy, wm->GetSlotWeaponIndex(baseSlot) >= 0);
     }
 }
 
 /** @brief 合体した武器が砕けた瞬間の演出 */
-void GamePlayScene::PlayWeaponFusionBreakEffect(const WeaponData& weapon, const WeaponData& partner) {
+void GamePlayScene::PlayWeaponFusionBreakEffect(const WeaponData& weapon, const WeaponData& partner, bool baseRemains) {
     const Vector3 playerPos = player_->GetPosition();
     const Vector3 chest = { playerPos.x, playerPos.y + HitEffectLibrary::GetInstance()->SceneParticles().chestHeight, playerPos.z };
     const Vector4 color = ColorFromArray(weapon.effectColor);
@@ -371,38 +355,8 @@ void GamePlayScene::PlayWeaponFusionBreakEffect(const WeaponData& weapon, const 
     if (const IElementEffect* effect = IElementEffect::Find(partner.element)) {
         effect->EmitHit(ElementContext(), chest, ColorFromArray(partner.effectColor), kFusionBreakBurstStrength);
     }
-    ShowWeaponBanner(std::wstring(WeaponTypeLabel(weapon.type)) + L"が砕けた", kFusionBreakBannerColor);
+    banner_.Show(std::wstring(WeaponTypeLabel(weapon.type)) + (baseRemains ? L"の合体が解けた" : L"が砕けた"), kFusionBreakBannerColor, kFusionBannerOffsetY);
     hud_.Notify(HudEvent::kWeaponAcquired);
-}
-
-/** @brief 武器名の表示の残り時間を進める */
-void GamePlayScene::UpdateWeaponAcquireBanner(float dt) {
-    acquireBannerTimer_ = (std::max)(acquireBannerTimer_ - dt, 0.0f);
-}
-
-/** @brief 手に入れた武器の名前を画面の中央上に出す（出てすぐ大きく弾け、最後に薄く消える） */
-void GamePlayScene::DrawWeaponAcquireBanner() {
-    if (acquireBannerTimer_ <= 0.0f || acquireBannerText_.empty()) {
-        return;
-    }
-    UILayout& layout = UILayout::Get(kLayoutName);
-    const Vector2 center = layout.Pos("acquire_banner.pos", kAcquireBannerPosition);
-    const float baseScale = layout.Float("acquire_banner.scale", kAcquireBannerScale);
-    // 出た直後ほど大きく、時間とともに元の大きさへ戻す
-    const float elapsed = kAcquireBannerSeconds - acquireBannerTimer_;
-    const float pop = 1.0f - std::clamp(elapsed / kAcquireBannerPopSeconds, 0.0f, 1.0f);
-    const float scale = baseScale * (1.0f + kAcquireBannerPopScale * pop);
-    // 最後の時間で薄く消す
-    const float alpha = std::clamp(acquireBannerTimer_ / kAcquireBannerFadeSeconds, 0.0f, 1.0f);
-    Vector4 color = acquireBannerColor_;
-    color.w *= alpha;
-    Vector4 shadow = kAcquireBannerShadowColor;
-    shadow.w *= alpha;
-    const Vector2 size = FontRenderer::MeasureStringW(acquireBannerText_, scale);
-    const float x = center.x - size.x * kCenterFactor;
-    const float y = center.y - size.y * kCenterFactor;
-    fontRenderer_.DrawStringW(acquireBannerText_, x + kAcquireBannerShadowOffset, y + kAcquireBannerShadowOffset, scale, shadow);
-    fontRenderer_.DrawStringW(acquireBannerText_, x, y, scale, color);
 }
 
 } // namespace engine::game

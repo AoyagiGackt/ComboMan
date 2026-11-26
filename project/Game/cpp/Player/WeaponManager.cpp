@@ -3,6 +3,8 @@
  * @brief 武器の一覧の読み込みと、装備・入手の管理（WeaponManager）の実装
  */
 #include "WeaponManager.h"
+#include "TestCoverage.h"
+
 #include "GameRules.h"
 #include "JsonFieldTable.h"
 #include "JsonHelper.h"
@@ -142,9 +144,10 @@ WeaponManager::WeaponManager() {
     for (const auto& w : j.value("weapons", nlohmann::json::array())) {
         WeaponData data {};
         data.type = ParseWeaponTypeName(w.value("type", ""));
-        // 本編で使う四つの基本戦闘スタイルだけを読み込む（同時に持てるのはkSlotCount個まで）
+        // 本編で使う武器だけを読み込む（同時に持てるのはkSlotCount個まで。モーション・属性・固有技・締めの動作がそろった物）
         static constexpr WeaponType kCoreWeaponTypes[] = {
             WeaponType::kSword, WeaponType::kSpear, WeaponType::kDagger, WeaponType::kHammer,
+            WeaponType::kGreatsword, WeaponType::kScythe, WeaponType::kAxe,
         };
         const bool isCoreWeapon = std::find(std::begin(kCoreWeaponTypes), std::end(kCoreWeaponTypes), data.type)
             != std::end(kCoreWeaponTypes);
@@ -276,10 +279,6 @@ WeaponManager::AcquireResult WeaponManager::Acquire(WeaponType type) {
         if (weapons_[i].type != type) {
             continue;
         }
-        if (unlocked_[i]) {
-            return AcquireResult::kDuplicate;
-        }
-
         for (int slot = 0; slot < static_cast<int>(slots_.size()); ++slot) {
             if (slots_[slot] >= 0) {
                 continue;
@@ -291,6 +290,9 @@ WeaponManager::AcquireResult WeaponManager::Acquire(WeaponType type) {
             return AcquireResult::kAdded;
         }
 
+        if (Owns(type)) {
+            return AcquireResult::kDuplicate;
+        }
         pendingWeaponIndex_ = static_cast<int>(i);
         return AcquireResult::kNeedsReplacement;
     }
@@ -304,11 +306,11 @@ void WeaponManager::ReplacePendingWeapon(int slot) {
     }
 
     const int removed = slots_[slot];
-    if (removed >= 0) {
-        unlocked_[removed] = false;
-    }
     fusions_[slot] = Fusion {};
     slots_[slot] = pendingWeaponIndex_;
+    if (removed >= 0) {
+        unlocked_[removed] = Owns(weapons_[removed].type);
+    }
     unlocked_[pendingWeaponIndex_] = true;
     selectedSlot_ = slot;
     index_ = pendingWeaponIndex_;
@@ -359,6 +361,10 @@ bool WeaponManager::FusePendingInto(int slot, int durability) {
     if (!HasPendingWeapon() || slot < 0 || slot >= kSlotCount || slots_[slot] < 0) {
         return false;
     }
+    // 自動テストの網羅のまとめに数える
+    if (testCoverage::IsEnabled()) {
+        testCoverage::Cover("fusion", std::string(WeaponTypeName(weapons_[slots_[slot]].type)) + "+" + WeaponTypeName(weapons_[pendingWeaponIndex_].type));
+    }
     SetFusion(slot, pendingWeaponIndex_, durability);
     pendingWeaponIndex_ = -1;
     return true;
@@ -376,6 +382,10 @@ bool WeaponManager::FuseInto(int slot, WeaponType type, int durability) {
         return false;
     }
     // 同じ種類どうしでも合体できる（剣＋剣）
+    // 自動テストの網羅のまとめに数える
+    if (testCoverage::IsEnabled()) {
+        testCoverage::Cover("fusion", std::string(WeaponTypeName(weapons_[slots_[slot]].type)) + "+" + WeaponTypeName(type));
+    }
     SetFusion(slot, static_cast<int>(std::distance(weapons_.begin(), found)), durability);
     return true;
 }
@@ -467,7 +477,7 @@ const WeaponData* WeaponManager::GetCurrentFusionPartner() const {
     return partner >= 0 ? &weapons_[partner] : nullptr;
 }
 
-/** @brief 選んでいる枠の合体の耐久を減らす。尽きたら枠の武器ごと砕き、ほかの枠の武器へ持ち替える */
+/** @brief 耐久が尽きたら合体を解除し、持ち替え先があれば土台の武器も砕く */
 bool WeaponManager::ConsumeFusionDurability(int amount) {
     if (!IsFusionValid(selectedSlot_)) {
         return false;
@@ -477,11 +487,30 @@ bool WeaponManager::ConsumeFusionDurability(int amount) {
     if (fusion.durability > 0) {
         return false;
     }
-    // 土台の武器も砕けて枠が空く（合体した時は枠が満杯なので、ほかの枠の武器は必ず残る）
-    unlocked_[slots_[selectedSlot_]] = false;
-    slots_[selectedSlot_] = -1;
     fusion = Fusion {};
+    TryBreakCurrentWeapon();
+    return true;
+}
+
+/** @brief 持ち替え先を確保できた時だけ、元の枠とその合体を消す */
+bool WeaponManager::TryBreakCurrentWeapon() {
+    if (!HasEquippedWeapon()) {
+        return false;
+    }
+    const int oldSlot = selectedSlot_;
     SelectNext();
+    if (selectedSlot_ == oldSlot) {
+        return false;
+    }
+    if (oldSlot == kBossSlot) {
+        bossWeaponIndex_ = -1;
+        bossPartnerIndex_ = -1;
+    } else {
+        const int removed = slots_[oldSlot];
+        slots_[oldSlot] = -1;
+        unlocked_[removed] = Owns(weapons_[removed].type);
+        fusions_[oldSlot] = Fusion {};
+    }
     return true;
 }
 
@@ -515,6 +544,11 @@ void WeaponManager::UnlockAll() {
 
 /** @brief トレーニング用に指定武器を現在のスロットへ装備する */
 void WeaponManager::EquipForTraining(WeaponType type) {
+    if (!AreSlotsFull()) {
+        Acquire(type);
+        pendingWeaponIndex_ = -1;
+        return;
+    }
     // 指定された種類の武器を探す
     for (int weaponIndex = 0; weaponIndex < static_cast<int>(weapons_.size()); ++weaponIndex) {
         if (weapons_[weaponIndex].type != type) {
@@ -532,24 +566,11 @@ void WeaponManager::EquipForTraining(WeaponType type) {
         }
 
         // 空きスロットへ入れる。空きが無ければ今選んでいるスロット（無ければ先頭）と入れ替える
-        int targetSlot = -1;
-        for (int slot = 0; slot < static_cast<int>(slots_.size()); ++slot) {
-            if (slots_[slot] < 0) {
-                targetSlot = slot;
-                break;
-            }
-        }
-        if (targetSlot < 0 || targetSlot >= static_cast<int>(slots_.size())) {
-            targetSlot = (selectedSlot_ >= 0 && selectedSlot_ < static_cast<int>(slots_.size()))
-                ? selectedSlot_
-                : 0;
-        }
+        const int targetSlot = selectedSlot_ >= 0 && selectedSlot_ < kSlotCount ? selectedSlot_ : 0;
         // 押し出した武器は未解放に戻し、入れた武器を解放して選ぶ
         const int removedWeapon = slots_[targetSlot];
-        if (removedWeapon >= 0 && removedWeapon != weaponIndex) {
-            unlocked_[removedWeapon] = false;
-        }
         slots_[targetSlot] = weaponIndex;
+        unlocked_[removedWeapon] = Owns(weapons_[removedWeapon].type);
         fusions_[targetSlot] = Fusion {};
         unlocked_[weaponIndex] = true;
         selectedSlot_ = targetSlot;
@@ -561,6 +582,13 @@ void WeaponManager::EquipForTraining(WeaponType type) {
 
 /** @brief タイトルデモ用に指定武器を装備する（スロットから押し出した武器も解放済みのまま残す） */
 void WeaponManager::EquipForDemo(WeaponType type) {
+    for (int slot = 0; slot < kSlotCount; ++slot) {
+        if (slots_[slot] >= 0 && weapons_[slots_[slot]].type == type) {
+            SelectSlot(slot);
+            pendingWeaponIndex_ = -1;
+            return;
+        }
+    }
     const std::vector<bool> unlocked = unlocked_;
     EquipForTraining(type);
     unlocked_ = unlocked;

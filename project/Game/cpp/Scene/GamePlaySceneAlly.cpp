@@ -3,6 +3,8 @@
  * @brief GamePlayScene のうち、味方のボスの呼び出し・2人目の参加と抜け・味方と敵の当たり・味方の表示
  */
 #include "GamePlayScene.h"
+#include "TestCoverage.h"
+
 #include "CombatTuning.h"
 #include "CrashBreadcrumbs.h"
 #include "ElementEffect.h"
@@ -72,7 +74,7 @@ std::wstring GamePlayScene::AllyUnavailableReason() const {
 bool GamePlayScene::SummonAlly() {
     const std::wstring reason = AllyUnavailableReason();
     if (!reason.empty()) {
-        ShowWeaponBanner(reason, kAllyMessageColor);
+        banner_.Show(reason, kAllyMessageColor);
         return false;
     }
     const WeaponManager* wm = WeaponManager::GetInstance();
@@ -80,6 +82,8 @@ bool GamePlayScene::SummonAlly() {
     const Vector3 playerPos = player_->GetPosition();
     const Vector3 position = { playerPos.x - player_->GetLastDirX() * kSummonSide, playerPos.y, playerPos.z };
     // ボスの武器どうしを合体させていれば、体力とダメージが上がる
+    // 自動テストの網羅のまとめに数える
+    testCoverage::Cover("player_action", "ally");
     ally_.Summon(main.type, AllyTune().color, position, wm->GetFusedWeaponIndex(WeaponManager::kBossSlot) >= 0);
     // 呼び出した所に吸い込みと同じ輪を主軸の武器の色で出す
     const HitEffectPlayer fx(pm_, &cameraShaker_, &rng_);
@@ -95,7 +99,7 @@ void GamePlayScene::JoinTwoPlayer(AllyDevice device) {
         const WeaponData* main = nullptr;
         const WeaponData* partner = nullptr;
         if (!ArenaAssistWeapons(main, partner)) {
-            ShowWeaponBanner(L"ボスの武器を持っていないので、援護できない", kAllyMessageColor);
+            banner_.Show(L"ボスの武器を持っていないので、援護できない", kAllyMessageColor);
             return;
         }
     } else if (!ally_.IsActive() && !SummonAlly()) {
@@ -107,7 +111,7 @@ void GamePlayScene::JoinTwoPlayer(AllyDevice device) {
     input_->SetPrimaryGamepadEnabled(device != AllyDevice::kFirstPad);
     input_->SetPrimaryKeyboardEnabled(device != AllyDevice::kKeyboard);
     const std::wstring firstPlayer = device == AllyDevice::kKeyboard ? L"コントローラー" : L"キーボード";
-    ShowWeaponBanner(std::wstring(L"2P が参加しました（") + AllyDeviceName(device) + L"）  1P: " + firstPlayer, kAllyMessageColor);
+    banner_.Show(std::wstring(L"2P が参加しました（") + AllyDeviceName(device) + L"）  1P: " + firstPlayer, kAllyMessageColor);
     CrashBreadcrumbs::Add("game", "2P が参加した");
 }
 
@@ -120,7 +124,7 @@ void GamePlayScene::LeaveTwoPlayer(const wchar_t* message) {
     input_->SetPrimaryGamepadEnabled(true);
     input_->SetPrimaryKeyboardEnabled(true);
     if (message != nullptr) {
-        ShowWeaponBanner(message, kAllyMessageColor);
+        banner_.Show(message, kAllyMessageColor);
     }
 }
 
@@ -377,7 +381,7 @@ void GamePlayScene::ApplyEnemyAttacksToAlly(const AllySurroundings& around) {
         const HitEffectPlayer fx(pm_, &cameraShaker_, &rng_);
         fx.Ring("defeat", allyPos);
         LeaveTwoPlayer(nullptr);
-        ShowWeaponBanner(L"分身が倒れた", kAllyMessageColor);
+        banner_.Show(L"分身が倒れた", kAllyMessageColor);
     }
 }
 

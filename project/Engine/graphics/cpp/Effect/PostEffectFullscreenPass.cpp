@@ -16,12 +16,9 @@ void* PostEffectFullscreenPass::InitializeCommon(DirectXCommon* dxCommon, SrvMan
     dxCommon_ = dxCommon;
     ID3D12Device* device = dxCommon->GetDevice();
 
-    // TYPELESS リソースにすることで、同一バッファを UNORM_SRGB の RTV と SRV として共有できる
-    constexpr pipelineHelper::RenderTargetFormats kFormats = {
-        DXGI_FORMAT_R8G8B8A8_TYPELESS, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB
-    };
+    // シーンをそのまま描き込むので、描画先の PSO と同じシーンの色バッファの形式にする
     pipelineHelper::CreateRenderTarget(device, srvManager, WinApp::kClientWidth, WinApp::kClientHeight,
-        kFormats, pipelineHelper::kOffscreenClearColor, { sceneTexture_, rtvHeap_, rtvHandle_, srvIndex_ });
+        pipelineHelper::kSceneColorTargetFormats, pipelineHelper::kOffscreenClearColor, { sceneTexture_, rtvHeap_, rtvHandle_, srvIndex_ });
     // シーンの描き込み先の状態は、描画パスの宣言から RenderPassGraph が切り替える（作った直後は描画先の状態）
     dxCommon->GetResourceStateTracker().Register(sceneTexture_.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET);
 

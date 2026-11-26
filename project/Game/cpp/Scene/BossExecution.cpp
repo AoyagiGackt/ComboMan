@@ -3,6 +3,8 @@
  * @brief ボスへのとどめの演出（BossExecution）の拍の進め方と、拍ごとの演出
  */
 #include "BossExecution.h"
+#include "TestCoverage.h"
+
 #include "Camera.h"
 #include "CameraShaker.h"
 #include "ComboFeelDirector.h"
@@ -132,6 +134,14 @@ void BossExecution::Start(const Setup& setup, const Services& services) {
     services_ = services;
     // 共通の歩み寄り（銃で倒した時は銃の歩み寄り）の後に型の拍をつないで写しておく
     const auto& tuning = BossExecutionTuningStore::Get();
+    // 自動テストの網羅のまとめに数える
+    if (testCoverage::IsEnabled()) {
+        for (const auto& [name, style] : tuning.styles) {
+            if (&style == setup.style) {
+                testCoverage::Cover("execution", name);
+            }
+        }
+    }
     byGun_ = setup.byGun;
     byBomb_ = setup.byBomb;
     gun_ = setup.gun;

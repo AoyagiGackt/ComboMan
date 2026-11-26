@@ -3,6 +3,9 @@
  * @brief 水場の水面の表示（WaterPool）の実装
  */
 #include "WaterPool.h"
+#include "EngineContext.h"
+// 乱数の種を共通の窓口から取得する。
+#include "RandomSeed.h"
 #include "CombatTuning.h"
 #include <algorithm>
 #include <cmath>
@@ -43,14 +46,13 @@ std::uniform_real_distribution<float> RandomRange(float minimum, float maximum) 
 /** @brief 水面の描画資源と環境粒子を用意する */
 void WaterPool::Initialize(SpriteCommon* spriteCommon) {
     spriteCommon_ = spriteCommon;
-    pm_ = ParticleManager::GetInstance();
+    pm_ = engine::Services().particles;
 
-    // RNG シード（MSVC はクラス定義内で std::random_device{}() を使えないため初期化はここで行う）
-    std::random_device rd;
-    rippleRng_ = std::mt19937(rd());
-    glintRng_ = std::mt19937(rd());
-    bubbleRng_ = std::mt19937(rd());
-    splashRng_ = std::mt19937(rd());
+    // 各水面演出の乱数の種を初期化する。
+    rippleRng_ = std::mt19937(engine::randomSeed::Next());
+    glintRng_ = std::mt19937(engine::randomSeed::Next());
+    bubbleRng_ = std::mt19937(engine::randomSeed::Next());
+    splashRng_ = std::mt19937(engine::randomSeed::Next());
 
     /** @brief 水場の粒子グループ名と加算合成の有効指定 */
     struct WaterParticleGroup {
@@ -68,7 +70,7 @@ void WaterPool::Initialize(SpriteCommon* spriteCommon) {
     }
 
     // GPU資源と固定長の波形をこの時点で用意する。
-    waterEffect_.Initialize(spriteCommon_->GetDxCommon(), SrvManager::GetInstance());
+    waterEffect_.Initialize(spriteCommon_->GetDxCommon(), engine::Services().srvManager);
     pointCount_ = static_cast<size_t>(SceneVisualTuning::Water().wavePointCount);
     heights_.fill(kZero);
     velocities_.fill(kZero);

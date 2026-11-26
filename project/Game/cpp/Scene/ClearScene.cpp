@@ -3,6 +3,7 @@
  * @brief エンディング画面の演出・スコア確定・タイトルへの遷移（ClearScene）の実装
  */
 #include "ClearScene.h"
+#include "GameAudio.h"
 #include "AssetPack.h"
 #include "GameConstants.h"
 #include "ImGuiManager.h"

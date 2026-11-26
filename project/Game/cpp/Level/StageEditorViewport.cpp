@@ -3,7 +3,9 @@
  * @brief ステージエディタの中央ビューと編集カメラ操作を実装するファイル
  */
 #include "StageEditorViewport.h"
+#include "GameConstants.h"
 #include "StageEditor.h"
+#include "ObjectKind.h"
 #include "StageEditorUiStyle.h"
 #include "Camera.h"
 #include "Input.h"
@@ -241,10 +243,9 @@ namespace {
 constexpr float kScalePerPixel = 0.01f; // 拡縮ドラッグ1pxあたりの倍率の変化（指数で効かせる）
 constexpr float kMinScale = 0.05f;
 constexpr float kScaleSnapStep = 0.1f; // Ctrlを押している間に揃える拡縮の間隔
-constexpr float kRotateSnapRadians = 0.261799f; // Ctrlを押している間に揃える回転の間隔（15度）
 constexpr float kRotateMinRadiusPx = 6.0f; // ハンドルの中心にこれより近い間は角度が暴れるので回さない
 constexpr float kPi = 3.14159265f;
-constexpr float kRadiansToDegrees = 180.0f / kPi;
+constexpr float kRadiansToDegrees = 1.0f / gameConstants::kDegToRad;
 constexpr float Vector3::* kScaleComponents[] = { &Vector3::x, &Vector3::y, &Vector3::z };
 
 // 画面UIの印
@@ -282,41 +283,50 @@ void DrawLabelWithBackground(ImDrawList* drawList, const ImVec2& position, ImU32
 }
 }
 
+/** @brief 回転角を指定された度数の倍数に揃える */
+float StageEditor::SnapRotation(float radians, bool temporary) const {
+    if (!angleSnap_ && !temporary) {
+        return radians;
+    }
+    const float step = angleStepDegrees_ / kRadiansToDegrees;
+    return std::round(radians / step) * step;
+}
+
 /** @brief 回転/拡縮ツールのドラッグを反映する（ドラッグ開始時の値へ、開始からの累積量を掛ける） */
 void StageEditor::UpdateRotateScaleDrag(float mouseX, float mouseY) {
     if (selKind_ != SelKind::kObject) {
         return;
     }
-    const float totalX = mouseX - dragStartMouseX_;
-    const float totalY = mouseY - dragStartMouseY_;
+    const float totalX = mouseX - viewDrag_.dragStartMouseX;
+    const float totalY = mouseY - viewDrag_.dragStartMouseY;
     const bool snap = ImGui::GetIO().KeyCtrl;
 
     // 回転: ハンドルの中心の周りをマウスが回った角度を足していく（画面の時計回りはZの負の向き）
     Vector3 world;
     ImVec2 center;
-    if (rotateDragging_ && SelectionWorldPosition(world) && diagnosticsDraw::WorldToScreen(world, center)) {
+    if (viewDrag_.rotateDragging && SelectionWorldPosition(world) && diagnosticsDraw::WorldToScreen(world, center)) {
         const float offsetX = mouseX - center.x;
         const float offsetY = mouseY - center.y;
         if (offsetX * offsetX + offsetY * offsetY >= kRotateMinRadiusPx * kRotateMinRadiusPx) {
             const float angle = std::atan2(offsetY, offsetX);
-            if (rotateAngleValid_) {
+            if (viewDrag_.rotateAngleValid) {
                 // 角度が -π と π の境目をまたいでも、差が短い向きになるよう直す
-                float delta = angle - rotateLastAngle_;
+                float delta = angle - viewDrag_.rotateLastAngle;
                 if (delta > kPi) {
                     delta -= kPi * 2.0f;
                 } else if (delta < -kPi) {
                     delta += kPi * 2.0f;
                 }
-                rotateAccumRadians_ -= delta;
+                viewDrag_.rotateAccumRadians -= delta;
             }
-            rotateLastAngle_ = angle;
-            rotateAngleValid_ = true;
+            viewDrag_.rotateLastAngle = angle;
+            viewDrag_.rotateAngleValid = true;
         }
     }
 
     // 拡縮: 全軸同時なら右か上へ、軸ハンドルなら矢印の向きへ動かすと大きくなる
-    const bool uniform = scaleUniform_ || activeDragAxis_ == stageEditorUiStyle::kGizmoAxisFree;
-    const float scalePixels = uniform ? totalX - totalY : AxisDragPixels(activeDragAxis_, totalX, totalY);
+    const bool uniform = viewDrag_.scaleUniform || viewDrag_.activeDragAxis == stageEditorUiStyle::kGizmoAxisFree;
+    const float scalePixels = uniform ? totalX - totalY : AxisDragPixels(viewDrag_.activeDragAxis, totalX, totalY);
     const float factor = std::exp(scalePixels * kScalePerPixel);
     // Ctrl中は間隔に揃え、0や負の大きさにならないよう下限で止める
     const auto finishScale = [snap](float value) {
@@ -325,19 +335,19 @@ void StageEditor::UpdateRotateScaleDrag(float mouseX, float mouseY) {
     };
 
     // 複数選択中の物すべてに同じ量だけ回転・拡縮をかける
-    for (const DragStartTransform& start : dragStarts_) {
+    for (const DragStartTransform& start : viewDrag_.dragStarts) {
         if (start.index < 0 || start.index >= static_cast<int>(objects_.size())) {
             continue;
         }
         ObjectEntry& entry = objects_[start.index];
         ObjectDesc& desc = entry.desc;
-        if (rotateDragging_) {
-            const float rotated = start.rotation.z + rotateAccumRadians_;
-            desc.rotation.z = snap ? std::round(rotated / kRotateSnapRadians) * kRotateSnapRadians : rotated;
+        if (viewDrag_.rotateDragging) {
+            const float rotated = start.rotation.z + viewDrag_.rotateAccumRadians;
+            desc.rotation.z = SnapRotation(rotated, snap);
         } else if (uniform) {
             desc.scale = { finishScale(start.scale.x * factor), finishScale(start.scale.y * factor), finishScale(start.scale.z * factor) };
         } else {
-            float Vector3::* component = kScaleComponents[activeDragAxis_ - stageEditorUiStyle::kGizmoAxisX];
+            float Vector3::* component = kScaleComponents[viewDrag_.activeDragAxis - stageEditorUiStyle::kGizmoAxisX];
             desc.scale.*component = finishScale(start.scale.*component * factor);
         }
         if (ObjectKind::Of(desc.kind).IsVisual()) {
@@ -349,38 +359,38 @@ void StageEditor::UpdateRotateScaleDrag(float mouseX, float mouseY) {
 
 /** @brief ドラッグ中の移動量や数値をカーソルの近くに出す */
 void StageEditor::DrawDragReadout() {
-    if (!dragThresholdPassed_ || !IsViewportDragActive() || boxSelecting_ || !ImGui::IsMousePosValid()) {
+    if (!viewDrag_.dragThresholdPassed || !IsViewportDragActive() || viewDrag_.boxSelecting || !ImGui::IsMousePosValid()) {
         return;
     }
     const ImGuiIO& io = ImGui::GetIO();
     char text[kReadoutCapacity] = { };
-    if (uiDragLayout_) {
+    if (viewDrag_.uiDragLayout) {
         // 画面UIの印: ゲーム画面のpx座標と、掴んだ位置からの移動量
         UILayout::PositionHandle handle;
         if (UILayout::FindSelectedHandle(handle)) {
             std::snprintf(text, sizeof(text), "画面UI (%.0f, %.0f)  移動 (%+.0f, %+.0f)%s",
                 handle.position.x, handle.position.y,
-                handle.position.x - uiDragStartX_, handle.position.y - uiDragStartY_,
+                handle.position.x - viewDrag_.uiDragStartX, handle.position.y - viewDrag_.uiDragStartY,
                 io.KeyCtrl ? "  格子に揃え中" : "");
         }
-    } else if (dragStarts_.empty()) {
+    } else if (viewDrag_.dragStarts.empty()) {
         return;
-    } else if (rotateDragging_ || scaleDragging_) {
-        const DragStartTransform& start = dragStarts_.front();
+    } else if (viewDrag_.rotateDragging || viewDrag_.scaleDragging) {
+        const DragStartTransform& start = viewDrag_.dragStarts.front();
         if (start.index < 0 || start.index >= static_cast<int>(objects_.size())) {
             return;
         }
         const ObjectDesc& desc = objects_[start.index].desc;
-        if (rotateDragging_) {
+        if (viewDrag_.rotateDragging) {
             std::snprintf(text, sizeof(text), "回転 %.1f 度  変化 %+.1f 度%s",
                 desc.rotation.z * kRadiansToDegrees, (desc.rotation.z - start.rotation.z) * kRadiansToDegrees,
-                io.KeyCtrl ? "  15度刻み" : "");
+                (angleSnap_ || io.KeyCtrl) ? "  角度を揃え中" : "");
         } else {
             std::snprintf(text, sizeof(text), "拡縮 (%.2f, %.2f, %.2f)%s",
                 desc.scale.x, desc.scale.y, desc.scale.z, io.KeyCtrl ? "  0.1刻み" : "");
         }
     } else {
-        const DragStartTransform& start = dragStarts_.front();
+        const DragStartTransform& start = viewDrag_.dragStarts.front();
         if (SelectionKindOf(selKind_).IsScreenAnchor(*this, selIndex_)) {
             const Vector3& position = objects_[selIndex_].desc.position;
             std::snprintf(text, sizeof(text), "画面座標 (%.0f, %.0f)", position.x, position.y);
@@ -391,7 +401,7 @@ void StageEditor::DrawDragReadout() {
             }
             std::snprintf(text, sizeof(text), "位置 (%.2f, %.2f, %.2f)  移動 (%+.2f, %+.2f, %+.2f)%s",
                 world.x, world.y, world.z, world.x - start.world.x, world.y - start.world.y, world.z - start.world.z,
-                snapEnabled_ || io.KeyCtrl ? "  揃え中" : "");
+                snap_.Enabled() || io.KeyCtrl ? "  揃え中" : "");
         }
     }
     if (text[0] == '\0') {
@@ -441,7 +451,7 @@ void StageEditor::DrawUILayoutHandles() {
     // 印を描く
     for (const UILayout::PositionHandle& handle : handles) {
         const bool selected = UILayout::IsSelectedHandle(handle.layout, handle.index);
-        const bool hovered = uiHoverLayout_ == handle.layout && uiHoverIndex_ == handle.index;
+        const bool hovered = viewDrag_.uiHoverLayout == handle.layout && viewDrag_.uiHoverIndex == handle.index;
         const ImU32 color = hovered ? kUIHandleHoverColor : (selected ? kUIHandleSelectedColor : kUIHandleColor);
         const float half = hovered ? kUIHandleHoverHalfSize : kUIHandleHalfSize;
         const Vector3 image = viewport_.ScreenToImage(handle.position.x, handle.position.y);
@@ -464,7 +474,7 @@ void StageEditor::DrawUILayoutHandles() {
     }
 
     // マウスの下に重なった印の名前を縦に並べる（一番近い印を白で示す）
-    if (!uiHoverLayout_ || IsViewportDragActive()) {
+    if (!viewDrag_.uiHoverLayout || IsViewportDragActive()) {
         return;
     }
     ImVec2 labelPosition = { mouse.x + kReadoutOffsetX, mouse.y + kReadoutOffsetY };
@@ -476,7 +486,7 @@ void StageEditor::DrawUILayoutHandles() {
         if (dx * dx + dy * dy > kUIHandlePickRadiusPx * kUIHandlePickRadiusPx || lineCount >= kUIHoverLabelMaxLines) {
             continue;
         }
-        const bool nearest = uiHoverLayout_ == handle.layout && uiHoverIndex_ == handle.index;
+        const bool nearest = viewDrag_.uiHoverLayout == handle.layout && viewDrag_.uiHoverIndex == handle.index;
         DrawLabelWithBackground(dl, labelPosition, nearest ? kUIHandleHoverColor : kUIHandleOverlapLabelColor, handle.label.c_str());
         labelPosition.y += lineHeight;
         ++lineCount;
@@ -495,30 +505,30 @@ void StageEditor::BeginUILayoutDrag(UILayout* layout, size_t index, float mouseX
     UILayout::PositionHandle handle;
     if (UILayout::FindSelectedHandle(handle)) {
         const Vector3 logicalMouse = viewport_.ImageToScreen(mouseX, mouseY);
-        uiDragGrabOffsetX_ = handle.position.x - logicalMouse.x;
-        uiDragGrabOffsetY_ = handle.position.y - logicalMouse.y;
-        uiDragStartX_ = handle.position.x;
-        uiDragStartY_ = handle.position.y;
+        viewDrag_.uiDragGrabOffsetX = handle.position.x - logicalMouse.x;
+        viewDrag_.uiDragGrabOffsetY = handle.position.y - logicalMouse.y;
+        viewDrag_.uiDragStartX = handle.position.x;
+        viewDrag_.uiDragStartY = handle.position.y;
     }
-    uiDragLayout_ = layout;
-    uiDragIndex_ = index;
+    viewDrag_.uiDragLayout = layout;
+    viewDrag_.uiDragIndex = index;
 }
 
 /** @brief 画面UIの印をマウスへ追従させる（Ctrlで格子に揃え、Shiftで動きの大きい軸だけ動かす） */
 void StageEditor::UpdateUILayoutDrag(float mouseX, float mouseY) {
     const ImGuiIO& io = ImGui::GetIO();
     const Vector3 logicalMouse = viewport_.ImageToScreen(mouseX, mouseY);
-    float x = logicalMouse.x + uiDragGrabOffsetX_;
-    float y = logicalMouse.y + uiDragGrabOffsetY_;
+    float x = logicalMouse.x + viewDrag_.uiDragGrabOffsetX;
+    float y = logicalMouse.y + viewDrag_.uiDragGrabOffsetY;
     if (io.KeyShift) {
-        if (std::abs(x - uiDragStartX_) >= std::abs(y - uiDragStartY_)) {
-            y = uiDragStartY_;
+        if (std::abs(x - viewDrag_.uiDragStartX) >= std::abs(y - viewDrag_.uiDragStartY)) {
+            y = viewDrag_.uiDragStartY;
         } else {
-            x = uiDragStartX_;
+            x = viewDrag_.uiDragStartX;
         }
     }
     const float step = io.KeyCtrl ? kUISnapStepPx : 1.0f;
-    uiDragLayout_->SetPosition(uiDragIndex_, { std::round(x / step) * step, std::round(y / step) * step });
+    viewDrag_.uiDragLayout->SetPosition(viewDrag_.uiDragIndex, { std::round(x / step) * step, std::round(y / step) * step });
     MarkUndoDirty();
 }
 

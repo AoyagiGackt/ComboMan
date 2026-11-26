@@ -11,6 +11,8 @@
 #include "EditorUI.h"
 #include "EnemyEntity.h"
 #include "GameFlags.h"
+#include "GameConstants.h"
+#include "ObjectKind.h"
 #include "KnightEnemy.h"
 #include "SceneShared.h"
 #include "StageEditor.h"
@@ -214,7 +216,21 @@ void StageEditorInspectorPanel::RenderObjectTransform(
     // 回転・拡縮を持つ種類だけ。複数選択中は差分をほかの選択物にも加える
     if (ObjectKind::Of(desc.kind).HasRotationAndScale()) {
         const Vector3 previousRotation = desc.rotation;
-        const bool rotationChanged = captureItemUndo(ImGui::DragFloat3("回転", &desc.rotation.x, editorUi::kDragStepRotation));
+        // 丸める前の値を保持し、小さいドラッグも次の刻みまで積み重ねる
+        if (editor.rotationInputIndex_ != editor.selIndex_) {
+            editor.rotationInput_ = desc.rotation * (1.0f / gameConstants::kDegToRad);
+        }
+        const Vector3 beforeInput = editor.rotationInput_;
+        const bool rotationChanged = captureItemUndo(ImGui::DragFloat3("回転（度）", &editor.rotationInput_.x,
+            editorUi::kDragStepRotation / gameConstants::kDegToRad));
+        editor.rotationInputIndex_ = ImGui::IsItemActive() ? editor.selIndex_ : -1;
+        if (rotationChanged) {
+            for (auto axis : { &Vector3::x, &Vector3::y, &Vector3::z }) {
+                if (editor.rotationInput_.*axis != beforeInput.*axis) {
+                    desc.rotation.*axis = editor.SnapRotation((editor.rotationInput_.*axis) * gameConstants::kDegToRad);
+                }
+            }
+        }
         transformDirty |= rotationChanged;
         const Vector3 previousScale = desc.scale;
         const bool scaleChanged = captureItemUndo(ImGui::DragFloat3("スケール", &desc.scale.x, editorUi::kDragStepScale));
@@ -230,7 +246,12 @@ void StageEditorInspectorPanel::RenderObjectTransform(
                 }
                 // 変わった方だけ差分を足す
                 if (rotationChanged) {
-                    editor.objects_[index].desc.rotation = editor.objects_[index].desc.rotation + rotationDelta;
+                    auto& rotation = editor.objects_[index].desc.rotation;
+                    for (auto axis : { &Vector3::x, &Vector3::y, &Vector3::z }) {
+                        if (rotationDelta.*axis != 0.0f) {
+                            rotation.*axis = editor.SnapRotation(rotation.*axis + rotationDelta.*axis);
+                        }
+                    }
                 }
                 if (scaleChanged) {
                     editor.objects_[index].desc.scale = editor.objects_[index].desc.scale + scaleDelta;

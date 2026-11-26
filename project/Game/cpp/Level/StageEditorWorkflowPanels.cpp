@@ -6,10 +6,14 @@
 #ifdef USE_IMGUI
 #include "Camera.h"
 #include "DiagnosticsDraw.h"
+#include "StageEditorPlaytest.h"
 #include "EditorUI.h"
 #include "EnemyEntity.h"
 #include "GameFlags.h"
 #include "GraphEditor.h"
+#include "GameRules.h"
+#include "ObjectKind.h"
+#include "Object3d.h"
 #include "KnightEnemy.h"
 #include "StageEditorPanels.h"
 #include "SceneManager.h"
@@ -20,6 +24,7 @@
 #include <cfloat>
 #include <imgui.h>
 #include <iterator>
+#include <set>
 #endif
 using namespace engine::graphics;
 
@@ -73,7 +78,8 @@ constexpr ControlBinding kTransformControls[] = {
     { "W / E / R", "移動 / 回転 / 拡縮ツールに切り替え" },
     { "左ドラッグ", "選択物を動かす（ハンドルの軸を掴むとその軸だけ。複数選択はまとめて動く。ビューの外へ出ても続く）" },
     { "Shift+ドラッグ", "奥行き(Z)方向へ移動" },
-    { "Ctrl+ドラッグ", "グリッドに揃える / 回転は15度刻み / 拡縮は0.1刻み" },
+    { "Ctrl+Enter / End", "ここから遊ぶ / 選んだ物を床に下ろす" },
+    { "Ctrl+ドラッグ", "グリッドに揃える / 回転は設定した角度刻み / 拡縮は0.1刻み" },
     { "矢印キー", "少しずつ動かす（Shift+上下で奥行き）" },
 };
 
@@ -140,6 +146,7 @@ void StageEditor::RenderWorkflowPanel() {
 
     // 画面中央・選択位置からのテスト開始と、カメラ・グリッドの補助
     ImGui::SeparatorText("テスト");
+    stagePlaytest::Controls(*this);
     if (ImGui::Button("画面中央からテスト", kWideButtonSize)) {
         StartPlayTestOrWarn(ViewCenterOnGround());
     }
@@ -147,12 +154,7 @@ void StageEditor::RenderWorkflowPanel() {
     // 何も選んでいない時は開始位置が決まらないので押せなくする
     ImGui::BeginDisabled(selKind_ == SelKind::kNone);
     if (ImGui::Button("選択位置からテスト", kWideButtonSize)) {
-        // 選択物の位置が取れない種類なら画面中央から始める
-        Vector3 start;
-        if (!SelectionKindOf(selKind_).WorldPosition(*this, selIndex_, start)) {
-            start = ViewCenterOnGround();
-        }
-        StartPlayTestOrWarn(start);
+        PlayFromHere();
     }
     ImGui::EndDisabled();
     editorUI::HelpMarker("プレイヤーをその場所へ移してテストを始めます。後半の区画を何度も確かめる時に使います。F2で編集へ戻ります");
@@ -165,13 +167,13 @@ void StageEditor::RenderWorkflowPanel() {
 
     // ドラッグで動かす時の軸の制限
     ImGui::SeparatorText("移動ギズモ");
-    ImGui::RadioButton("自由", &gizmoAxis_, stageEditorUiStyle::kGizmoAxisFree);
+    ImGui::RadioButton("自由", &viewDrag_.gizmoAxis, stageEditorUiStyle::kGizmoAxisFree);
     ImGui::SameLine();
-    ImGui::RadioButton("X", &gizmoAxis_, stageEditorUiStyle::kGizmoAxisX);
+    ImGui::RadioButton("X", &viewDrag_.gizmoAxis, stageEditorUiStyle::kGizmoAxisX);
     ImGui::SameLine();
-    ImGui::RadioButton("Y", &gizmoAxis_, stageEditorUiStyle::kGizmoAxisY);
+    ImGui::RadioButton("Y", &viewDrag_.gizmoAxis, stageEditorUiStyle::kGizmoAxisY);
     ImGui::SameLine();
-    ImGui::RadioButton("Z", &gizmoAxis_, stageEditorUiStyle::kGizmoAxisZ);
+    ImGui::RadioButton("Z", &viewDrag_.gizmoAxis, stageEditorUiStyle::kGizmoAxisZ);
 
     // 選択物をプレハブとして保存・画面中央へ配置
     ImGui::SeparatorText("プレハブ");
@@ -258,6 +260,9 @@ void StageEditor::RenderWorkflowPanel() {
             snapshot.enemySpawn = recovered.enemySpawn;
             snapshot.graphPath = recovered.graphPath;
             snapshot.flagGraphs = recovered.flagGraphs;
+            snapshot.sky = recovered.sky;
+            snapshot.gameMode = recovered.gameMode;
+            snapshot.path = recovered.path;
             ApplySnapshot(snapshot);
             dirty_ = true;
             ImGui::CloseCurrentPopup();
@@ -411,12 +416,82 @@ void StageEditor::RenderStageAnalysisPanel() {
 
     // 見つかった項目を一覧で出す
     if (findings.empty()) {
-        ImGui::TextColored(editorUi::kOkColor, "問題は見つかりませんでした");
+        ImGui::TextColored(editorUi::kOkColor, "配置と接続の問題は見つかりませんでした");
     } else {
         ImGui::Text("%d件の確認項目", static_cast<int>(findings.size()));
         for (const std::string& finding : findings) {
             ImGui::BulletText("%s", finding.c_str());
         }
+    }
+    // 遊ぶ場所とイベントを点検し、名前を検索せず対象の位置へ直接移動する
+    ImGui::SeparatorText("遊ぶ場所の点検");
+    const auto floors = CollectSolidColliders(false, true, nullptr, false);
+    /** @brief 点が床や壁の内側にあるかを調べる */
+    const auto embedded = [&](const Vector3& point) {
+        return std::any_of(floors.begin(), floors.end(), [&](const AABB& box) {
+            return point.x > box.min.x && point.x < box.max.x && point.y > box.min.y && point.y < box.max.y
+                && point.z > box.min.z && point.z < box.max.z;
+        });
+    };
+    /** @brief 点検結果に対象を選んでカメラを寄せるボタンを付ける */
+    const auto showWarning = [&](const std::string& message, SelKind kind, int index, const Vector3& target) {
+        ImGui::PushID(static_cast<int>(kind));
+        ImGui::PushID(index);
+        if (ImGui::SmallButton("移動")) {
+            selKind_ = kind;
+            selIndex_ = index;
+            selectedObjectIndices_.clear();
+            if (kind == SelKind::kObject) {
+                selectedObjectIndices_.push_back(index);
+            }
+            FocusCameraOn(target);
+        }
+        ImGui::SameLine();
+        ImGui::TextWrapped("%s", message.c_str());
+        ImGui::PopID();
+        ImGui::PopID();
+    };
+    bool locationWarning = false;
+    if (embedded(playerSpawn_)) {
+        locationWarning = true;
+        showWarning("プレイヤーの出現位置が壁や床の中にあります", SelKind::kNone, -1, playerSpawn_);
+    }
+    const auto& rules = GameRules::GetInstance()->Get();
+    bool clearFound = false;
+    std::set<std::string> watchedFlags;
+    for (int index = 0; index < static_cast<int>(objects_.size()); ++index) {
+        const auto& desc = objects_[index].desc;
+        if (!desc.enabled) {
+            continue;
+        }
+        const auto& kind = ObjectKind::Of(desc.kind);
+        watchedFlags.insert(desc.activationFlag);
+        const Vector3 world = WorldPositionOf(desc);
+        if (kind.PlacesEnemy() && embedded(world)) {
+            locationWarning = true;
+            showWarning("敵の出現位置が壁や床の中にあります: " + desc.name, SelKind::kObject, index, world);
+        }
+        const char* prefix = kind.RuntimeFlagPrefix();
+        clearFound |= (rules.requireBossWeaponSteal && kind.SpawnsCombatEnemy() && desc.isStageBoss)
+            || (prefix && std::string(prefix) + desc.name == rules.clearFlag);
+    }
+    // グラフから任意のフラグを読んだりクリアしたりできる場合は断定しない
+    const bool hasGraph = !graphPath_.empty() || !flagGraphs_.empty();
+    for (int index = 0; index < static_cast<int>(triggers_.size()); ++index) {
+        const auto& trigger = triggers_[index].GetDesc();
+        const bool clearFlag = !trigger.flag.empty() && trigger.flag == rules.clearFlag;
+        clearFound |= clearFlag && trigger.value;
+        if (!hasGraph && !trigger.spawnsWaterSplash && !trigger.flag.empty() && !clearFlag && !watchedFlags.contains(trigger.flag)) {
+            locationWarning = true;
+            showWarning("この合図で動く配置物が見つかりません（ほかの条件で使っているなら問題ありません）: " + trigger.name, SelKind::kTrigger, index, trigger.position);
+        }
+    }
+    if (!clearFound && !hasGraph) {
+        locationWarning = true;
+        ImGui::TextWrapped("クリアにつながるボスや合図が見つかりません。ゴールやクリアの条件を置いたか確かめてください。");
+    }
+    if (!locationWarning) {
+        ImGui::TextDisabled("遊ぶ場所の点検で警告はありません");
     }
     ImGui::Separator();
     // 選択中の配置物の位置からテストを始める
@@ -561,5 +636,4 @@ void StageEditor::RenderEditorHelpPanel() {
 }
 
 } // namespace engine::game
-
 #endif

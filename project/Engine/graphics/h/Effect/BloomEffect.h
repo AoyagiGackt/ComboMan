@@ -72,6 +72,13 @@ public:
      */
     void Apply(SrvManager* srvManager);
 
+    /**
+     * @brief 描き終わったバックバッファのゲームの絵の範囲を写し取り、ブルームを掛けて描き戻す
+     * @note 描画先をオフスクリーンへ差し替えないので、画面を写し取るほかの演出と一緒に使える。
+     *       3D描画の後・UIの前に呼び、呼んだ後は描画先を元に戻すこと（描画先とPSOを書き換える）
+     */
+    void CaptureAndApply(SrvManager* srvManager);
+
     // パラメータ
 
     /** @brief ブルームを使うかを設定する */
@@ -132,7 +139,10 @@ private:
         ID3D12RootSignature* rootSignature, ID3D12PipelineState* pipelineState,
         D3D12_GPU_VIRTUAL_ADDRESS constants, uint32_t sourceSrvIndex);
 
-    /// RTV / SRV 付きの UNORM テクスチャを生成する
+    /** @brief 指定した画像から明部抽出・横ぼかし・縦ぼかしをして、元の画像と重ねてバックバッファへ描く */
+    void ComposeToBackBuffer(ID3D12GraphicsCommandList* cmd, SrvManager* srvManager, uint32_t sourceSrvIndex);
+
+    /// RTV / SRV 付きの浮動小数点テクスチャを生成する
     void CreateRenderTexture(ID3D12Device* device,
         SrvManager* srvManager,
         UINT width, UINT height,
@@ -166,8 +176,12 @@ private:
     uint32_t sceneSrvIndex_ = UINT32_MAX;
     bool sceneFirstFrame_ = true;
 
+    // バックバッファから写し取る先（CaptureAndApply 用。バックバッファと同じ形式）
+    Microsoft::WRL::ComPtr<ID3D12Resource> captureTexture_;
+    uint32_t captureSrvIndex_ = UINT32_MAX;
+
     // Bloom ピンポン RT [0],[1]
-    // 常に Full resolution (UNORM, ガンマ非補正の中間バッファ)
+    // 常に Full resolution（シーンの色バッファと同じ浮動小数点。1 を超える明るさもそのまま持つ）
     Microsoft::WRL::ComPtr<ID3D12Resource> bloomTex_[2];
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> bloomRtvHeap_[2];
     D3D12_CPU_DESCRIPTOR_HANDLE bloomRtvHandle_[2] = { };

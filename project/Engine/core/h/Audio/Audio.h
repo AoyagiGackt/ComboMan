@@ -9,6 +9,9 @@
  *   audio->SetBGMVolume(0.5f);         // BGM音量変更
  */
 #pragma once
+#include "Vector3.h"
+#include <array>
+#include <memory>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -26,16 +29,6 @@
 #pragma comment(lib, "xaudio2.lib")
 #pragma comment(lib, "mfuuid.lib")
 namespace engine {
-/** @brief Resources/Config/bgm.json に書くシーンごとの BGM のキー */
-namespace bgmKey {
-inline constexpr const char* kTitle = "title"; ///< タイトル
-inline constexpr const char* kStageSelect = "stage_select"; ///< ステージセレクト
-inline constexpr const char* kStage = "stage"; ///< ステージ本編
-inline constexpr const char* kTraining = "training"; ///< トレーニング
-inline constexpr const char* kBattleTest = "battle_test"; ///< バトルテスト
-inline constexpr const char* kGameOver = "game_over"; ///< やられて GAME OVER が出た時（1回だけ流す）
-inline constexpr const char* kGameClear = "game_clear"; ///< クリアして結果画面になった時（1回だけ流す）
-}
 
 /**
  * @brief 再生する音声データを保持する構造体
@@ -45,6 +38,9 @@ struct SoundData {
     std::vector<byte> pBuffer; ///< 音声データ本体
     unsigned int bufferSize; ///< バッファのサイズ（バイト）
 };
+
+/** @brief 音量をまとめて調節する出力先 */
+enum class AudioBus { kBgm, kSe, kVoice, kCount };
 
 /**
  * @brief オーディオ再生を管理するクラス
@@ -69,16 +65,33 @@ public:
      * @return ロード済みの SoundData
      */
     SoundData LoadAudio(const std::string& filename);
+    /**
+     * @brief メニューの選択移動音と決定音に使う音声ファイルを設定し、先に読み込んでおく
+     * @note どの音を使うかはゲームが決める（設定しない間は PlayMenuChoice / PlayMenuSelect は何も鳴らさない）
+     */
+    void SetMenuSounds(const std::string& choicePath, const std::string& selectPath);
     /** @brief メニューの選択移動音を再生する */
     void PlayMenuChoice();
     /** @brief メニューの決定音を再生する */
     void PlayMenuSelect();
     /**
-     * @brief bgm.json でシーンのキーに割り当てた曲を再生する（同じ曲が鳴っていれば続きから流す）
-     * @param sceneKey BgmKey のいずれか
+     * @brief キーから曲を引く表の JSON ファイルを設定して読み込む（{ "キー": "曲のパス", ... }）
+     * @note どのファイルを使い、どんなキーを書くかはゲームが決める。設定しない間は表が空になる
+     */
+    static void SetBgmTablePath(const std::string& path);
+    /**
+     * @brief 表でキーに割り当てた曲を再生する（同じ曲が鳴っていれば続きから流す）
+     * @param sceneKey 表のキー
      * @param loop false なら最後まで流したら止める（ゲームオーバーやクリアの曲）
      */
     void PlaySceneBGM(const std::string& sceneKey, bool loop = true);
+    /**
+     * @brief 表でキーに割り当てた曲を、鳴らさずに読み込んでおく
+     * @param sceneKey 表のキー
+     * @note 曲は初めて鳴らす時に読み込んで変換するので、ゲームの途中で初めて鳴らす曲（クリアややられた時）は
+     *       シーンの読み込みの時に読んでおかないと、鳴らした瞬間に画面が止まる
+     */
+    void PreloadSceneBGM(const std::string& sceneKey);
 
     /** @brief BGM の割り当てを読み直し、再生中のシーンにも反映する */
     static void ReloadBGMConfig();
@@ -136,6 +149,27 @@ public:
      */
     void StopAllSE();
 
+    /** @brief 出力先全体の音量を設定する */
+    void SetBusVolume(AudioBus bus, float volume);
+    /** @brief 出力先全体の音量を取得する */
+    float GetBusVolume(AudioBus bus) const;
+    /** @brief マスター音量を設定する */
+    void SetMasterVolume(float volume);
+    /** @brief マスター音量を取得する */
+    float GetMasterVolume() const {
+        return masterVolume_;
+    }
+    /** @brief 声を声用の出力先で再生する */
+    void PlayVoice(const SoundData& soundData, float volume = 1.0f);
+    /** @brief 再生中の声をすべて止める */
+    void StopAllVoice();
+    /** @brief 聞き手の位置と向きを設定する */
+    void SetListener(const Vector3& position, const Vector3& forward, const Vector3& up);
+    /** @brief 指定した位置の効果音を再生する */
+    void PlaySE3D(const SoundData& soundData, const Vector3& position, float volume = 1.0f);
+    /** @brief 曲を少しずつ読み込みながら再生する */
+    void PlayStreamBGM(const std::string& filePath, bool loop = true);
+
     // BGM フェード
 
     /**
@@ -168,14 +202,45 @@ public:
     }
 
 private:
+    /** @brief 読み込み済みの音を取得する */
     const SoundData& GetCachedSound(const std::string& filename);
     // シーンを離れた後も再生中のSEが参照できるよう、音声システム側で保持する。
     std::unordered_map<std::string, SoundData> soundCache_;
     /** @brief SourceVoice を生成するヘルパー */
-    IXAudio2SourceVoice* CreateSourceVoice(const SoundData& soundData);
+    IXAudio2SourceVoice* CreateSourceVoice(const WAVEFORMATEX& format, AudioBus bus, IXAudio2VoiceCallback* callback = nullptr);
+    /** @brief ファイルまたはパックから音声の読み込みを始める */
+    static HRESULT OpenReader(const std::string& path, Microsoft::WRL::ComPtr<IMFSourceReader>& reader, WAVEFORMATEX& format);
+    /** @brief 次の音声サンプルを末尾に追加し、終端を通知する */
+    static HRESULT AppendSample(IMFSourceReader* reader, std::vector<byte>& bytes, bool& ended);
+    /** @brief 空いたバッファに曲の続きを補充する */
+    void FillStream();
+    /** @brief ストリームの読み込み位置と再生待ちの領域 */
+    struct StreamState;
+    std::shared_ptr<StreamState> stream_;
+    /** @brief サブミックスと距離設定を初期化する */
+    void InitializeBuses();
+    /** @brief 一度だけ鳴る音を指定の出力先で再生する */
+    void PlayOneShot(const SoundData& sound, float volume, AudioBus bus, const Vector3* position);
+    /** @brief 終了した音または指定されたすべての音を解放する */
+    static void ReleaseVoices(std::vector<IXAudio2SourceVoice*>& voices, bool stopAll);
+    /** @brief 音源の位置から左右の出力行列と距離減衰を求める */
+    float ApplyPosition(IXAudio2SourceVoice* voice, UINT32 channels, const Vector3& position) const;
 
-    /** @brief 終了済みの SE Voice を削除する */
-    void CleanupFinishedSE();
+    static constexpr size_t kBusCount = static_cast<size_t>(AudioBus::kCount); ///< 出力先の数
+    static constexpr float kDefaultNear = 1.0f; ///< audio.json が無い時の、減衰が始まる距離
+    static constexpr float kDefaultFar = 30.0f; ///< audio.json が無い時の、無音になる距離
+    std::array<IXAudio2SubmixVoice*, kBusCount> buses_{}; ///< BGM・SE・声の出力先（全部マスターへ出る）
+    std::array<float, kBusCount> busVolumes_{1.0f, 1.0f, 1.0f}; ///< 出力先ごとの音量
+    float masterVolume_ = 1.0f; ///< 全体の音量
+    UINT32 outputChannels_ = 0; ///< マスターの出力チャンネル数
+    DWORD channelMask_ = 0; ///< マスターのスピーカーの並び
+    Vector3 listenerPosition_{}; ///< 聞き手の位置
+    Vector3 listenerRight_{1.0f, 0.0f, 0.0f}; ///< 聞き手の右向き（左右の振り分けに使う）
+    float nearDistance_ = kDefaultNear; ///< この距離までは減衰しない
+    float farDistance_ = kDefaultFar; ///< この距離で無音になる
+    float panStrength_ = 1.0f; ///< 左右への振り分けの強さ（0 で振らない）
+    bool streamSceneBgm_ = false; ///< シーンの曲を少しずつ読み込んで鳴らすか
+    std::vector<IXAudio2SourceVoice*> spokenVoices_; ///< 再生中の声
 
     Microsoft::WRL::ComPtr<IXAudio2> xAudio2_;
     IXAudio2MasteringVoice* masteringVoice_ = nullptr;
@@ -184,6 +249,8 @@ private:
     IXAudio2SourceVoice* bgmVoice_ = nullptr;
     /** @brief PlaySceneBGM で流している曲のパス（それ以外の再生中・停止中は空） */
     std::string sceneBgmPath_;
+    std::string menuChoicePath_; ///< メニューの選択移動音（空なら鳴らさない）
+    std::string menuSelectPath_; ///< メニューの決定音（空なら鳴らさない）
 
     /** @brief SE チャンネル（複数同時再生） */
     std::vector<IXAudio2SourceVoice*> seVoices_;

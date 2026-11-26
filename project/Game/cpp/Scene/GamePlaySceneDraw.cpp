@@ -4,6 +4,7 @@
  * @note GamePlayScene の演出と描画だけを GamePlayScene.cpp から分けて置いている（クラスは GamePlayScene のまま）
  */
 #include "GamePlayScene.h"
+#include "GameActions.h"
 #include "GameSounds.h"
 #include "HitEffectLibrary.h"
 #include "TextBufferCapacity.h"
@@ -196,7 +197,7 @@ void GamePlayScene::CheckClearCondition() {
         const float dx = ppos.x - epos.x;
         const float dy = ppos.y - epos.y;
         if (!mainWeaponAbsorbing_ && dx * dx + dy * dy <= CombatTune().weaponAbsorbRange * CombatTune().weaponAbsorbRange
-            && IsSelectedStealTarget(enemy_) && input_->TriggerAction(Input::Action::kSteal)) {
+            && IsSelectedStealTarget(enemy_) && input_->TriggerAction(GameAction::kSteal)) {
             // 膝をついたボスには、歩み寄って武器を抜き取り、その武器でとどめを刺す
             if (TryStartBossExecution()) {
                 return;
@@ -405,20 +406,12 @@ void GamePlayScene::DrawWorldAndActors() {
     bladeFlash_.Draw();
     comboFeel_.DrawTrail();
 
-    // 空間歪み（バックバッファ直描き時のみUIより先に画面をキャプチャして歪ませる）
-    if (spaceWarp_.IsActive() && IsDrawingToBackBuffer()) {
-        // スコープを抜けた瞬間に必ずレンダーターゲット設定を戻す（歪み描画がRTを変えるため）
-        PipelineStateGuard restoreGuard([this] {
+    // ブルーム・トーンマップ・空間のゆがみ・締めの放射ブラーを、post_process.json の順に UI より先に掛ける
+    // （画面を写し取って掛けるので、バックバッファへ直接描いている時だけ。1つ掛けるごとに描画先を戻す）
+    if (IsDrawingToBackBuffer()) {
+        postProcess_.Execute([this] {
             SetupMainRenderTarget();
         });
-        spaceWarp_.CaptureAndApply();
-    }
-    // 締めのラジアルブラーも同じくバックバッファ直描き時だけ、UIより先に掛ける
-    if (comboFeel_.HasScreenEffects() && IsDrawingToBackBuffer()) {
-        PipelineStateGuard restoreGuard([this] {
-            SetupMainRenderTarget();
-        });
-        comboFeel_.ApplyScreenEffects();
     }
 }
 

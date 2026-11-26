@@ -1,0 +1,83 @@
+{
+  "_comment": "ゲームの型（書き方は side_action.json の _comment）。道に沿って後ろから映して進む（レールシューティング風）",
+  "id": "path_behind",
+  "name": "道を進むシューティング風",
+  "description": "引いた道に沿って、後ろから映したまま自動で進みます。道の曲がりに合わせてカメラも向きを変えます。左右で道の横へよけられ、奥行きが離れた敵には攻撃が当たりません。銃の武器で前の敵を撃つ遊び方に向いています。",
+  "camera": {
+    "type": "behind",
+    "useStageBounds": false,
+    "distance": 9,
+    "height": 3.5,
+    "targetHeight": 1.5,
+    "lookAhead": 10
+  },
+  "path": {
+    "follow": true,
+    "playerHalfWidth": 6,
+    "playerHalfHeight": 5,
+    "endFlag": "path_end"
+  },
+  "player": {
+    "depthMovement": true,
+    "depthSpeed": 7,
+    "depthMin": -5,
+    "depthMax": 5,
+    "enemiesFollowDepth": true,
+    "enemyDepthSpeed": 2,
+    "hitHalfDepth": 1
+  },
+  "requiredKinds": [
+    {
+      "kind": "enemy_basic",
+      "label": "敵"
+    }
+  ],
+  "recommendedKinds": [
+    {
+      "kind": "enemy_basic",
+      "label": "敵"
+    },
+    {
+      "kind": "spawn_point",
+      "label": "敵の出現位置"
+    },
+    {
+      "kind": "background",
+      "label": "背景モデル"
+    },
+    {
+      "kind": "breakable",
+      "label": "壊せる物"
+    }
+  ],
+  "tips": [
+    "道の左右に背景モデルを並べると、進んでいる感じが強く出ます",
+    "道を大きく曲げるとカメラも回ります。急な曲がりは酔いやすいので、点を増やしてゆるやかにします"
+  ],
+  "controls": [
+    {
+      "keys": "{ArenaForward} {ArenaBack}",
+      "label": "先へ進む・下がる"
+    },
+    {
+      "keys": "{ArenaLeft} {ArenaRight}",
+      "label": "奥行き方向へよける"
+    },
+    {
+      "keys": "{ArenaJump}",
+      "label": "ジャンプ"
+    },
+    {
+      "keys": "{Attack}",
+      "label": "攻撃（続けて押すとコンボ）"
+    },
+    {
+      "keys": "{Shoot}",
+      "label": "射撃"
+    },
+    {
+      "keys": "{Dodge}",
+      "label": "回避"
+    }
+  ]
+}

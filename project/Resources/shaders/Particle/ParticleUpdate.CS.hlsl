@@ -130,6 +130,8 @@ RWStructuredBuffer<GPUParticleState> gParticles : register(u0);
 RWStructuredBuffer<ParticleForGPU> gInstancing : register(u1);
 RWStructuredBuffer<uint> gFreeList : register(u2);
 RWStructuredBuffer<int> gCounter : register(u3);
+// 生きている粒の番号の一覧（頂点シェーダーはこの番号の粒だけを描く）
+RWStructuredBuffer<uint> gDrawList : register(u4);
 
 // 場の力で速さを変える（中心から離れるほど弱く、半径の外では効かない）
 float3 ApplyFields(float3 position, float3 velocity)
@@ -239,6 +241,11 @@ void main(uint3 DTid : SV_DispatchThreadID)
     }
 
     // --- 生存パーティクルのみ以下を処理 ---
+
+    // 生きている粒の番号を描く一覧へ積む（積んだ数がそのまま描く数になる）
+    int drawSlot = 0;
+    InterlockedAdd(gCounter[kDrawCountIndex], 1, drawSlot);
+    gDrawList[drawSlot] = idx;
 
     // curveFlag == 1: enemyDeath 螺旋軌道
     if (p.curveFlag == 1)

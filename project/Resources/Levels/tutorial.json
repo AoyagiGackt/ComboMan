@@ -363,7 +363,7 @@
         1,
         0.95
       ],
-      "text": "3. 持ち替え：{Slot1} {Slot2} {Slot3} で持ち替え。同じ武器ばかりだと効きが落ちる。{Skill} 固有技",
+      "text": "3. 持ち替え：{Slot1} {Slot2} {Slot3} で持ち替え。同じ武器ばかりだと効きが落ちる。{Skill} 固有技\n武器が2本以上なら {ThrowWeapon} で投げて壊せる。最後の1本は投げられない。",
       "activationFlag": "zone_c"
     },
     {

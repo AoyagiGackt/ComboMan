@@ -1,7 +1,8 @@
 {
-  "_comment": "auto=元素材の追加・変更・削除があればcook、それ以外はuse。元素材のない提出先はuse。pakはexeの隣のResourcesへ出力。off/cook/useの明示指定も可能。",
+  "_comment": "auto=元素材の追加・変更・削除があればcook、それ以外はuse。元素材のない提出先はuse。素材は1つずつ圧縮して入れる（縮まない mp3 などは元のまま）。excludeRawPrefixes=元ファイルのまま入れる素材（JSON・mp3・wav）のうち pak に入れない場所（ゲームで使っていない素材のフォルダ）。pakはexeの隣のResourcesへ出力。off/cook/useの明示指定も可能。",
   "mode": "auto",
   "path": "Resources/game.pak",
+  "excludeRawPrefixes": ["Resources/music/"],
   "textureCompression": {
     "enabled": true,
     "excludePrefixes": [

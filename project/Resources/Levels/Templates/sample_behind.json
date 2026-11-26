@@ -1,0 +1,157 @@
+{
+  "_comment": "奥へ進むアクションのお手本。床は奥行きを広くしてある。敵を全員倒すとクリア",
+  "playerSpawn": [
+    5,
+    0.4,
+    0
+  ],
+  "enemySpawn": [
+    28,
+    0.4,
+    0
+  ],
+  "graphPath": "Resources/Graphs/Samples/sample_behind_main.json",
+  "sky": "",
+  "flagGraphs": [],
+  "checkpoints": [],
+  "triggers": [],
+  "objects": [
+    {
+      "name": "floor",
+      "type": "row",
+      "kind": "prop",
+      "axis": "x",
+      "count": 60,
+      "step": 1,
+      "model": "Resources/block/terrain/terrain_ground.obj",
+      "texture": "Resources/block/terrain/terrain_palette_meadow.png",
+      "position": [
+        2,
+        -0.98,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        12
+      ],
+      "lighting": false,
+      "solid": true
+    },
+    {
+      "name": "wall_left",
+      "type": "row",
+      "kind": "prop",
+      "axis": "y",
+      "count": 13,
+      "step": 1,
+      "model": "Resources/block/terrain/terrain_wall.obj",
+      "texture": "Resources/block/terrain/terrain_palette_meadow.png",
+      "position": [
+        2,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        12
+      ],
+      "lighting": false,
+      "solid": true
+    },
+    {
+      "name": "wall_right",
+      "type": "row",
+      "kind": "prop",
+      "axis": "y",
+      "count": 14,
+      "step": 1,
+      "model": "Resources/block/terrain/terrain_wall.obj",
+      "texture": "Resources/block/terrain/terrain_palette_meadow.png",
+      "position": [
+        62,
+        -0.98,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        12
+      ],
+      "lighting": false,
+      "solid": true
+    },
+    {
+      "name": "enemy_1",
+      "type": "static",
+      "kind": "enemy_basic",
+      "position": [
+        16,
+        -0.38,
+        -2
+      ],
+      "spawnType": "basic",
+      "weaponType": "",
+      "enemyModel": "Slime",
+      "enemyGroup": ""
+    },
+    {
+      "name": "enemy_2",
+      "type": "static",
+      "kind": "enemy_basic",
+      "position": [
+        20,
+        -0.38,
+        2
+      ],
+      "spawnType": "basic",
+      "weaponType": "",
+      "enemyModel": "Slime",
+      "enemyGroup": ""
+    },
+    {
+      "name": "enemy_3",
+      "type": "static",
+      "kind": "enemy_basic",
+      "position": [
+        28,
+        -0.38,
+        0
+      ],
+      "spawnType": "basic",
+      "weaponType": "",
+      "enemyModel": "Slime",
+      "enemyGroup": ""
+    },
+    {
+      "name": "enemy_4",
+      "type": "static",
+      "kind": "enemy_basic",
+      "position": [
+        36,
+        -0.38,
+        -3
+      ],
+      "spawnType": "basic",
+      "weaponType": "",
+      "enemyModel": "Slime",
+      "enemyGroup": ""
+    },
+    {
+      "name": "enemy_5",
+      "type": "static",
+      "kind": "enemy_basic",
+      "position": [
+        40,
+        -0.38,
+        3
+      ],
+      "spawnType": "basic",
+      "weaponType": "",
+      "enemyModel": "Slime",
+      "enemyGroup": ""
+    }
+  ],
+  "gameMode": "behind_action"
+}

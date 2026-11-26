@@ -2,6 +2,8 @@
  * @brief 崩れる床の時間設定と演出レシピに従って表示・衝突・粒子を評価する
  */
 #include "FallingFloorBehavior.h"
+// 乱数の種を共通の窓口から取得する。
+#include "RandomSeed.h"
 #include "CombatTuning.h"
 #include "JsonFieldTable.h"
 #include "JsonHelper.h"
@@ -107,7 +109,7 @@ FallingFloorBehavior::Snapshot FallingFloorBehavior::Evaluate(float runtimeTimer
 
 /** @brief 落ちる床の破片に使う乱数生成器を返す */
 static std::mt19937& FallFloorDebrisRng() {
-    static std::mt19937 sRng { std::random_device {}() };
+    static std::mt19937 sRng { engine::randomSeed::Next() };
     return sRng;
 }
 

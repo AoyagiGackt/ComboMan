@@ -1,0 +1,67 @@
+{
+  "_comment": "ゲームの型（書き方は side_action.json の _comment）。レベルの道に沿って画面が自動で進む（強制スクロール）",
+  "id": "path_scroll",
+  "name": "強制スクロール",
+  "description": "このレベルのタブで引いた道に沿って、画面が自動で進みます。プレイヤーは画面の中から出られません。道の終わりに着くと path_end のフラグが立つので、ノードグラフでクリアにつなげられます。",
+  "camera": {
+    "type": "side",
+    "useStageBounds": false,
+    "distance": 24,
+    "height": 3,
+    "targetHeight": 3,
+    "lookAhead": 2
+  },
+  "path": {
+    "follow": true,
+    "playerHalfWidth": 9,
+    "playerHalfHeight": 6,
+    "endFlag": "path_end"
+  },
+  "requiredKinds": [
+    {
+      "kind": "enemy_basic",
+      "label": "敵"
+    }
+  ],
+  "recommendedKinds": [
+    {
+      "kind": "enemy_basic",
+      "label": "敵"
+    },
+    {
+      "kind": "spawn_point",
+      "label": "敵の出現位置"
+    },
+    {
+      "kind": "pickup",
+      "label": "収集物"
+    },
+    {
+      "kind": "terrain",
+      "label": "地形"
+    }
+  ],
+  "tips": [
+    "道の点ごとに速さを変えられます。敵が多い所は遅く、移動だけの所は速くすると緩急が付きます",
+    "敵の出現位置を道の少し先に置くと、画面に入ってきた所で戦えます",
+    "ノードグラフでフラグを待つ（path_end）から、クリアの処理へつなぐとゴールになります"
+  ],
+  "controls": [
+    {
+      "keys": "{Move}",
+      "label": "画面の中で動く（画面は自動で進む）"
+    },
+    {
+      "keys": "{Jump}",
+      "label": "ジャンプ"
+    },
+    {
+      "keys": "{Attack}",
+      "label": "攻撃"
+    },
+    {
+      "keys": "{Shoot}",
+      "label": "射撃"
+    }
+  ]
+}

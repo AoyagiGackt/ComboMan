@@ -108,6 +108,13 @@ namespace {
         { nullptr, "sky", &LevelData::sky },
     };
 
+    constexpr JsonField<PathPointDesc> kPathPointFields[] = {
+        { nullptr, "position", &PathPointDesc::position },
+        { nullptr, "speed", &PathPointDesc::speed },
+    };
+    constexpr const char* kGameModeKey = "gameMode"; // ゲームの型の項目名
+    constexpr const char* kPathKey = "path"; // 道の項目名
+
     /** @brief JSON配列の各要素を対応表で読み、読んだ後に extra で個別の項目を足す */
     template <class Desc, size_t N, class Extra>
     std::vector<Desc> ReadList(const nlohmann::json& list, const JsonField<Desc> (&fields)[N], const Extra& extra) {
@@ -177,6 +184,9 @@ LevelData levelLoader::Load(const std::string& path) {
             desc.activationRadius = (std::max)(desc.activationRadius, kMinCheckpointRadius);
         });
     data.flagGraphs = ReadList(j.value("flagGraphs", nlohmann::json::array()), kFlagGraphFields, NoExtra<nlohmann::json, FlagGraphBinding>);
+    // ゲームの型と道は、書いてあるレベルだけが持つ
+    data.gameMode = j.value(kGameModeKey, std::string());
+    data.path = ReadList(j.value(kPathKey, nlohmann::json::array()), kPathPointFields, NoExtra<nlohmann::json, PathPointDesc>);
     return data;
 }
 
@@ -198,6 +208,13 @@ bool levelLoader::Save(const std::string& path, const LevelData& data) {
     j["triggers"] = WriteList(data.triggers, kTriggerFields, NoExtra<nlohmann::json, TriggerDesc>);
     j["checkpoints"] = WriteList(data.checkpoints, kCheckpointFields, NoExtra<nlohmann::json, CheckpointDesc>);
     j["flagGraphs"] = WriteList(data.flagGraphs, kFlagGraphFields, NoExtra<nlohmann::json, FlagGraphBinding>);
+    // 横スクロールのままのレベルに、使わない項目を増やさない
+    if (!data.gameMode.empty()) {
+        j[kGameModeKey] = data.gameMode;
+    }
+    if (!data.path.empty()) {
+        j[kPathKey] = WriteList(data.path, kPathPointFields, NoExtra<nlohmann::json, PathPointDesc>);
+    }
 
     return JsonHelper::Save(path, j);
 }

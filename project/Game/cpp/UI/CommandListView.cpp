@@ -3,6 +3,7 @@
  * @brief CommandListViewのJSON読み込み、武器と技の選択、一覧と説明欄の描画を実装するファイル
  */
 #include "CommandListView.h"
+#include "EngineContext.h"
 #include "Audio.h"
 #include "Camera.h"
 #include "DirectXCommon.h"
@@ -244,7 +245,7 @@ void CommandListView::InitializePreview(engine::graphics::ModelCommon* modelComm
     }
     previewTarget_ = std::make_unique<Object3d>();
     previewTarget_->Initialize(modelCommon);
-    previewTarget_->SetModel(engine::graphics::ModelManager::GetInstance()->GetOrLoad(modelCommon, kTargetModelPath, kTargetTexturePath));
+    previewTarget_->SetModel(engine::Services().models->GetOrLoad(modelCommon, kTargetModelPath, kTargetTexturePath));
     previewTarget_->SetEnableLighting(false);
     previewTarget_->SetScale({ kTargetModelScale, kTargetModelScale, kTargetModelScale });
 }

@@ -4,6 +4,7 @@
  * @note 分割ファイル。クラスは GamePlayScene のまま、クリアまわりの定義だけをここに置く
  */
 #include "GamePlayScene.h"
+#include "GameAudio.h"
 #include "CrashBreadcrumbs.h"
 #include "GameConstants.h"
 #include "GameRules.h"

@@ -3,6 +3,7 @@
  * @brief マップへ戻った時のステージ解放演出（StageLiberation）の段階ごとの処理と、stage_liberation.json の読み込み
  */
 #include "StageLiberation.h"
+#include "GameActions.h"
 #include "AudioBridge.h"
 #include "Easing.h"
 #include "FontRenderer.h"
@@ -267,7 +268,7 @@ void StageLiberation::Update(const Input* input) {
     if (!playing_) {
         return;
     }
-    if (input != nullptr && input->TriggerCinematicSkip()) {
+    if (input != nullptr && TriggerCinematicSkip(*input)) {
         Finish();
         return;
     }

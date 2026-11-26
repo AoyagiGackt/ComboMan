@@ -3,6 +3,7 @@
  * @brief 操作説明の板の描き方と、ステージの最初に一度だけ出す操作説明（controls_guide.json）
  */
 #include "GuidePanel.h"
+#include "GameActions.h"
 #include "FontRenderer.h"
 #include "GameConstants.h"
 #include "Input.h"
@@ -34,7 +35,7 @@ struct StageGuideTuning {
     std::string level = "Resources/Levels/level01.json"; ///< 操作説明を出すレベル（空なら出さない）
     std::string extraLevel = "Resources/Levels/tutorial.json"; ///< ほかにも操作説明を出すレベル（どちらかで一度見せたら、もう一方では出さない）
     std::string title = "操作説明";
-    std::string lines = "{Move}  移動\n{Jump}  ジャンプ\n{Attack}  攻撃（続けて押すとコンボ）\n{Down}+{Attack}  打ち上げ\n{Shoot}  射撃\n{Dodge}  回避（攻撃に合わせるとジャスト回避）\n{Skill}  武器の固有技\n{Steal}  倒した敵の武器を奪う\n{Awaken}  覚醒    {Finisher}  フィニッシャー\n{Pause}  ポーズ・音量設定";
+    std::string lines = "{Move}  移動\n{Jump}  ジャンプ\n{Attack}  攻撃（続けて押すとコンボ）\n{Down}+{Attack}  打ち上げ\n{Shoot}  射撃\n{Dodge}  回避（攻撃に合わせるとジャスト回避）\n{Skill}  武器の固有技\n{Steal}  倒した敵の武器を奪う\n{ThrowWeapon}  装備中の武器を投げて捨てる（2本以上のとき）\n{Awaken}  覚醒    {Finisher}  フィニッシャー\n{Pause}  ポーズ・音量設定";
     std::string confirm = "{Attack} / 決定キー で始める";
     float minSeconds = 0.6f; ///< 開いてから決定を受け付けるまで
     float fadeSeconds = 0.3f; ///< 出入りの長さ
@@ -100,6 +101,19 @@ void StageControlsGuide::Arm(const std::string& levelPath) {
     const StageGuideTuning& tune = StageTune();
     const bool listed = (!tune.level.empty() && levelPath == tune.level) || (!tune.extraLevel.empty() && levelPath == tune.extraLevel);
     armed_ = !sStageGuideShown && listed;
+    // ふつうの操作説明に戻す（型の操作説明は ArmCustom の後でだけ使う）
+    customTitle_.clear();
+    customLines_.clear();
+}
+
+/** @brief 決めた見出しと本文で出す準備をする（ふつうの操作説明を出す準備ができていれば、そちらを優先する） */
+void StageControlsGuide::ArmCustom(const std::string& title, const std::string& lines) {
+    if (armed_ || lines.empty()) {
+        return;
+    }
+    customTitle_ = title;
+    customLines_ = lines;
+    armed_ = true;
 }
 
 /** @brief 1フレーム進める（開いていて閉じ始めていない間と、閉じた攻撃ボタンが離されるまでは true） */
@@ -112,7 +126,10 @@ bool StageControlsGuide::Update(const Input& input, bool canOpen) {
         open_ = true;
         closing_ = false;
         timer_ = 0.0f;
-        sStageGuideShown = true;
+        // 型の操作説明を出した時は、ふつうの操作説明をもう見せたことにしない
+        if (customLines_.empty()) {
+            sStageGuideShown = true;
+        }
     }
     // 閉じ始めたら薄くして、消え切ったら終わり（その間はもう操作できる）
     if (!open_ || closing_) {
@@ -121,13 +138,13 @@ bool StageControlsGuide::Update(const Input& input, bool canOpen) {
             open_ = alpha_ > 0.0f;
         }
         // 閉じたボタンを押し続けている間は止めたままにする（オートコンボは長押しでも攻撃を出すため、消え切った後も離すまで待つ）
-        holdingCloseAttack_ = holdingCloseAttack_ && input.PushAction(Input::Action::kAttack);
+        holdingCloseAttack_ = holdingCloseAttack_ && input.PushAction(GameAction::kAttack);
         return holdingCloseAttack_;
     }
     timer_ += gameConstants::kFrameDeltaTime;
     alpha_ = (std::min)(alpha_ + fadeStep, 1.0f);
     // 出してすぐは受け付けない（読まずに閉じないように）
-    if (timer_ >= tune.minSeconds && (input.TriggerMenuConfirm() || input.TriggerAction(Input::Action::kAttack))) {
+    if (timer_ >= tune.minSeconds && (input.TriggerMenuConfirm() || input.TriggerAction(GameAction::kAttack))) {
         // 閉じる時に押したボタンで攻撃が出ないよう、このフレームまではゲームを止めておく
         closing_ = true;
         holdingCloseAttack_ = true;
@@ -141,9 +158,11 @@ void StageControlsGuide::Draw(FontRenderer& font, const Input& input) const {
         return;
     }
     const StageGuideTuning& tune = StageTune();
+    // 型の操作説明を出す時は、決めた見出しと本文を使う
+    const bool custom = !customLines_.empty();
     const GuidePanel::Text text = {
-        input.ExpandPrompts(StringUtility::ConvertString(tune.title)),
-        input.ExpandPrompts(StringUtility::ConvertString(tune.lines)),
+        input.ExpandPrompts(StringUtility::ConvertString(custom ? customTitle_ : tune.title)),
+        input.ExpandPrompts(StringUtility::ConvertString(custom ? customLines_ : tune.lines)),
         input.ExpandPrompts(StringUtility::ConvertString(tune.confirm)),
     };
     GuidePanel::Queue(font, kStageLayoutName, text, alpha_);

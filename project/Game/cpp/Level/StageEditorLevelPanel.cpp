@@ -66,6 +66,7 @@ void StageEditor::RenderLevelPanel() {
     }
 
     RenderSkyPicker();
+    RenderGameModePanel();
 
     // 常駐グラフはここでも選べる（フラグ起動グラフはグラフのタブで編集）
     ImGui::SeparatorText("常駐グラフ");

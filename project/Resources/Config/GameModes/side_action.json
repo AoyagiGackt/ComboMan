@@ -1,0 +1,40 @@
+{
+  "_comment": "ゲームの型。レベル JSON の gameMode に id を書くと使われる（書いていないレベルはこの型）。camera.type は side（横から）か behind（後ろから）。useStageBounds が true の横からは、今までどおりステージの端でカメラを止める。path.follow が true だとレベルの道に沿って自動で進む。player.depthMovement が true だと、前後のキーで先へ進み左右のキーで奥行き方向へ動く（depthMin〜depthMax の範囲、enemiesFollowDepth で敵も同じ奥行きへ寄る。hitHalfDepth より奥行きが離れていると攻撃が当たらない）。requiredKinds は無いと点検で知らせる配置物、recommendedKinds は部品の棚で先に並べる配置物（kind と表示名 label）。tips はエディタに出す作り方のこつ。controls はこの型の操作の表（keys に {Jump} のような操作名、label に何ができるか。キーを変えても正しい名前で出る。書いた型は本編で初めて遊ぶ時に操作説明として出る）",
+  "id": "side_action",
+  "name": "横スクロールアクション",
+  "description": "左右に進んで敵を倒していく、今までの遊び方です。カメラは横から映し、ステージの端で止まります。",
+  "camera": {
+    "type": "side",
+    "useStageBounds": true
+  },
+  "path": {
+    "follow": false
+  },
+  "requiredKinds": [],
+  "recommendedKinds": [
+    {
+      "kind": "terrain",
+      "label": "地形"
+    },
+    {
+      "kind": "enemy_basic",
+      "label": "敵"
+    },
+    {
+      "kind": "gimmick",
+      "label": "ギミック"
+    },
+    {
+      "kind": "pickup",
+      "label": "収集物"
+    },
+    {
+      "kind": "breakable",
+      "label": "壊せる物"
+    }
+  ],
+  "tips": [
+    "まず床と壁の地形を置き、プレイヤーの出る位置から右へ進めるようにします",
+    "敵のグループと全滅の条件をそろえると、部屋を片付けたら扉が開く流れが作れます"
+  ]
+}

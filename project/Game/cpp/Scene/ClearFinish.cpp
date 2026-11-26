@@ -3,6 +3,8 @@
  * @brief クリアの決め演出（ClearFinish）の段階ごとの処理（調整値の読み込みは ClearFinishTuning.cpp）
  */
 #include "ClearFinish.h"
+#include "TestCoverage.h"
+
 #include "ClearFinishTuning.h"
 #include "GameSounds.h"
 #include "AudioBridge.h"
@@ -450,6 +452,10 @@ ClearFinish::~ClearFinish() = default;
 
 /** @brief 暗幕・斬線・弾痕のスプライトを作る（シーンの Initialize で1回） */
 void ClearFinish::Initialize(SpriteCommon* spriteCommon) {
+    // 自動テストの網羅のまとめに数える
+    testCoverage::Declare("clear_finish", "blade");
+    testCoverage::Declare("clear_finish", "gun");
+    testCoverage::Declare("clear_finish", "bomb");
     // 途中で作ったり捨てたりしないよう、設定にある本数ぶんを最初に作っておく
     auto create = [spriteCommon](const char* texture) {
         auto sprite = std::make_unique<Sprite>();
@@ -488,6 +494,9 @@ void ClearFinish::Initialize(SpriteCommon* spriteCommon) {
 
 /** @brief 演出を最初から始める */
 void ClearFinish::Start(const Setup& setup, const Services& services) {
+    // 自動テストの網羅のまとめに数える
+    const char* styleName = setup.style == Style::kGun ? "gun" : setup.style == Style::kBomb ? "bomb" : "blade";
+    testCoverage::Cover("clear_finish", styleName);
     setup_ = setup;
     services_ = services;
     style_ = &StyleFor(setup.style);

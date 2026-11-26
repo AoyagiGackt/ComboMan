@@ -3,6 +3,7 @@
  * @brief 変換済み素材pakの目次読み込み・データ取得・書き出し（AssetPack）の実装
  */
 #include "AssetPack.h"
+#include "AssetReferenceScanner.h"
 #include "JsonHelper.h"
 #include "Logger.h"
 #include "StringUtility.h"
@@ -13,6 +14,8 @@
 #include <stdexcept>
 #define NOMINMAX
 #include <windows.h>
+#include <compressapi.h>
+#pragma comment(lib, "Cabinet.lib")
 
 namespace engine {
 namespace {
@@ -21,7 +24,7 @@ constexpr const char* kDefaultPackName = "Resources/game.pak";
 constexpr const char* kLegacyPackName = "game.pak"; // 以前の3ファイル構成のpak
 constexpr const char* kSourceSnapshotKey = "manifest:resources";
 constexpr char kMagic[4] = { 'E', 'P', 'A', 'K' };
-constexpr uint32_t kVersion = 2;
+constexpr uint32_t kVersion = 3; // 3 から素材ごとに圧縮し、目次に元の大きさを持つ
 constexpr double kBytesPerMegabyte = 1024.0 * 1024.0;
 constexpr const char* kResourceRoot = "Resources";
 constexpr const char* kRawKeyPrefix = "raw:";
@@ -33,8 +36,12 @@ constexpr const char* kAutoSaveMarker = ".autosave.";
 
 // ファイル先頭: マジック(4) + バージョン(4) + 項目数(8) + 目次の大きさ(8)
 constexpr uint64_t kHeaderSize = sizeof(kMagic) + sizeof(uint32_t) + sizeof(uint64_t) + sizeof(uint64_t);
-// 目次1件: キー長(8) + キー + データ位置(8) + データの大きさ(8)
-constexpr uint64_t kIndexFixedSize = sizeof(uint64_t) * 3;
+// 目次1件: キー長(8) + キー + データ位置(8) + データの大きさ(8) + 元の大きさ(8)
+constexpr uint64_t kIndexFixedSize = sizeof(uint64_t) * 4;
+// 圧縮してもこの割合より小さくならない素材（mp3 など、もう圧縮されている物）は、展開の手間を省くため元のまま入れる
+constexpr double kMinCompressedRatio = 0.95;
+// 展開の速い方式（Windows に入っている圧縮の仕組み。外部のライブラリは使わない）
+constexpr DWORD kCompressionAlgorithm = COMPRESS_ALGORITHM_XPRESS_HUFF;
 
 /** @brief 素材フォルダと実行ファイルの大きさ・更新日時の一覧を作る（pak を作り直すかの判定に使う） */
 std::string ResourceSnapshot() {
@@ -123,6 +130,8 @@ void AssetPack::Initialize(bool forceCook, bool prepareAssets) {
             textureCompressionExcludePrefixes_ = compression.value("excludePrefixes", textureCompressionExcludePrefixes_);
         }
     }
+    // 元ファイルのまま入れる素材のうち、pak に入れない場所
+    rawExcludePrefixes_ = settings.is_object() ? settings.value("excludeRawPrefixes", std::vector<std::string>()) : std::vector<std::string>();
     compressedTextureCount_ = 0;
     textureBytesBefore_ = 0;
     textureBytesAfter_ = 0;
@@ -246,7 +255,7 @@ bool AssetPack::OpenPack(const std::wstring& path) {
     entries_.clear();
     entries_.reserve(static_cast<size_t>(count));
     for (uint64_t i = 0; i < count; ++i) {
-        // 1件は 素材名の長さ・素材名・ファイル内の位置・大きさ の順に並んでいる
+        // 1件は 素材名の長さ・素材名・ファイル内の位置・大きさ・元の大きさ の順に並んでいる
         uint64_t keyLength = 0;
         Entry entry;
         if (!ReadRaw(file_, keyLength)) {
@@ -255,7 +264,7 @@ bool AssetPack::OpenPack(const std::wstring& path) {
         // 長さぶんの領域を先に確保して、素材名をそこへ読む
         std::string key(static_cast<size_t>(keyLength), '\0');
         file_.read(key.data(), static_cast<std::streamsize>(keyLength));
-        if (!ReadRaw(file_, entry.offset) || !ReadRaw(file_, entry.size)) {
+        if (!ReadRaw(file_, entry.offset) || !ReadRaw(file_, entry.size) || !ReadRaw(file_, entry.rawSize)) {
             break;
         }
         entries_.emplace(std::move(key), entry);
@@ -282,25 +291,42 @@ bool AssetPack::Read(const std::string& key, std::vector<uint8_t>& out) {
         Logger::LogWarning("[AssetPack] pakに無い素材: " + key);
         return false;
     }
-    out.resize(static_cast<size_t>(it->second.size));
+    const Entry& entry = it->second;
+    std::vector<uint8_t> stored(static_cast<size_t>(entry.size));
     file_.clear();
-    file_.seekg(static_cast<std::streamoff>(it->second.offset));
-    file_.read(reinterpret_cast<char*>(out.data()), static_cast<std::streamsize>(out.size()));
+    file_.seekg(static_cast<std::streamoff>(entry.offset));
+    file_.read(reinterpret_cast<char*>(stored.data()), static_cast<std::streamsize>(stored.size()));
     if (!file_) {
         ++missCount_;
+        return false;
+    }
+    // 元の大きさと違えば圧縮してあるので、元に戻してから渡す
+    if (entry.rawSize == entry.size) {
+        out = std::move(stored);
+    } else if (!Decompress(stored, entry.rawSize, out)) {
+        ++missCount_;
+        Logger::LogError("[AssetPack] pakの素材を元に戻せませんでした: " + key);
         return false;
     }
     ++hitCount_;
     return true;
 }
 
-/** @brief useモードで、pakにキーが入っているか（元ファイルが無くても読めるかの判定用） */
+/** @brief 使用中または作成中のパックにキーがあるかを調べる */
 bool AssetPack::Contains(const std::string& key) const {
-    if (mode_ != Mode::kUse) {
-        return false;
-    }
     std::scoped_lock lock(mutex_);
-    return entries_.count(key) != 0;
+    if (mode_ == Mode::kCook) {
+        return recordedIndex_.contains(key);
+    }
+    return mode_ == Mode::kUse && entries_.contains(key);
+}
+
+/** @brief ファイル名の後に区切りとプロファイルが続く記録キーを探す */
+bool AssetPack::ContainsShader(const std::string& path) const {
+    const std::string prefix = "shader:" + path + "|";
+    std::scoped_lock lock(mutex_);
+    return std::any_of(recordedIndex_.begin(), recordedIndex_.end(),
+        [&](const auto& entry) { return entry.first.starts_with(prefix); });
 }
 
 /** @brief 元ファイルが無い時に、pakへそのまま入れたファイル（"raw:"+パス）を読む */
@@ -331,9 +357,12 @@ void AssetPack::RecordRawFiles() {
         for (const char* rawExtension : kRawExtensions) {
             isRaw = isRaw || extension == rawExtension;
         }
-        // 自動保存の途中データはゲームで使わないので入れない
+        // 自動保存の途中データと、設定で外した場所（使っていない素材のフォルダなど）は入れない
         const std::string path = item.path().generic_string();
-        if (!isRaw || path.find(".autosave.") != std::string::npos) {
+        const bool excluded = std::any_of(rawExcludePrefixes_.begin(), rawExcludePrefixes_.end(), [&path](const std::string& prefix) {
+            return path.starts_with(prefix);
+        });
+        if (!isRaw || excluded || path.find(".autosave.") != std::string::npos) {
             continue;
         }
         std::ifstream in(item.path(), std::ios::binary);
@@ -360,6 +389,44 @@ void AssetPack::Record(const std::string& key, std::vector<uint8_t> data, size_t
     recorded_.emplace_back(key, std::move(data));
 }
 
+/** @brief 素材を圧縮する（縮まない素材は圧縮しない） */
+bool AssetPack::Compress(const std::vector<uint8_t>& raw, std::vector<uint8_t>& stored) {
+    if (raw.empty()) {
+        return false;
+    }
+    COMPRESSOR_HANDLE compressor = nullptr;
+    if (!CreateCompressor(kCompressionAlgorithm, nullptr, &compressor)) {
+        return false;
+    }
+    // 先に必要な大きさを聞き、その大きさの入れ物へ圧縮する
+    SIZE_T needed = 0;
+    ::Compress(compressor, raw.data(), raw.size(), nullptr, 0, &needed);
+    stored.resize(needed);
+    SIZE_T written = 0;
+    const bool compressed = needed != 0 && ::Compress(compressor, raw.data(), raw.size(), stored.data(), stored.size(), &written);
+    CloseCompressor(compressor);
+    // 縮まない素材は、展開の手間を省くため元のまま入れる
+    if (!compressed || static_cast<double>(written) > static_cast<double>(raw.size()) * kMinCompressedRatio) {
+        stored.clear();
+        return false;
+    }
+    stored.resize(written);
+    return true;
+}
+
+/** @brief 圧縮した素材を元に戻す */
+bool AssetPack::Decompress(const std::vector<uint8_t>& stored, uint64_t rawSize, std::vector<uint8_t>& out) {
+    DECOMPRESSOR_HANDLE decompressor = nullptr;
+    if (!CreateDecompressor(kCompressionAlgorithm, nullptr, &decompressor)) {
+        return false;
+    }
+    out.resize(static_cast<size_t>(rawSize));
+    SIZE_T written = 0;
+    const bool ok = ::Decompress(decompressor, stored.data(), stored.size(), out.data(), out.size(), &written) && written == rawSize;
+    CloseDecompressor(decompressor);
+    return ok;
+}
+
 /** @brief 設定で指定パスのテクスチャ圧縮が許可されているかを返す */
 bool AssetPack::ShouldCompressTexture(const std::string& path) const {
     if (!textureCompressionEnabled_) {
@@ -382,7 +449,7 @@ bool AssetPack::ShouldCompressTexture(const std::string& path) const {
 }
 
 /** @brief cookなら記録した素材をpakへ書き出す（終了時に呼ぶ） */
-void AssetPack::Finalize() {
+void AssetPack::Finalize(DirectXCommon* device, graphics::ModelCommon* modelCommon) {
     // pak を使っていた時は、pak から読めた数と読めなかった数を記録して閉じる
     if (mode_ == Mode::kUse) {
         Logger::Log("[AssetPack] pakから読んだ素材: " + std::to_string(hitCount_)
@@ -395,9 +462,25 @@ void AssetPack::Finalize() {
     }
     // pak を作る時: 元ファイルのまま入れる素材と、作った時の素材の状態も記録に足す
     RecordRawFiles();
+    graphics::AssetReferenceScanner::CompleteCook(*this, device, modelCommon);
     Record(kSourceSnapshotKey, std::vector<uint8_t>(sourceSnapshot_.begin(), sourceSnapshot_.end()));
     if (recorded_.empty()) {
         return;
+    }
+
+    // 素材ごとに圧縮する（縮まない物は元のまま）。目次には元の大きさも書く
+    std::vector<uint64_t> rawSizes;
+    rawSizes.reserve(recorded_.size());
+    uint64_t bytesBefore = 0;
+    uint64_t bytesAfter = 0;
+    for (auto& [key, data] : recorded_) {
+        rawSizes.push_back(data.size());
+        bytesBefore += data.size();
+        std::vector<uint8_t> stored;
+        if (Compress(data, stored)) {
+            data = std::move(stored);
+        }
+        bytesAfter += data.size();
     }
 
     // 目次の大きさを先に求め、各素材の位置を決められるようにする
@@ -421,11 +504,13 @@ void AssetPack::Finalize() {
         WriteRaw(out, static_cast<uint64_t>(recorded_.size()));
         WriteRaw(out, indexSize);
         uint64_t offset = kHeaderSize + indexSize;
-        for (const auto& [key, data] : recorded_) {
+        for (size_t i = 0; i < recorded_.size(); ++i) {
+            const auto& [key, data] = recorded_[i];
             WriteRaw(out, static_cast<uint64_t>(key.size()));
             out.write(key.data(), static_cast<std::streamsize>(key.size()));
             WriteRaw(out, offset);
             WriteRaw(out, static_cast<uint64_t>(data.size()));
+            WriteRaw(out, rawSizes[i]);
             offset += data.size();
         }
         for (const auto& [key, data] : recorded_) {
@@ -444,6 +529,7 @@ void AssetPack::Finalize() {
     Logger::Log("[AssetPack] 画像圧縮: " + std::to_string(compressedTextureCount_) + " 枚 / 圧縮前 "
         + std::to_string(textureBytesBefore_) + " bytes / 圧縮後 " + std::to_string(textureBytesAfter_)
         + " bytes / 削減 " + std::to_string(textureBytesBefore_ - textureBytesAfter_) + " bytes（DDS合計）");
+    Logger::Log("[AssetPack] 素材の圧縮: " + std::to_string(bytesBefore) + " bytes -> " + std::to_string(bytesAfter) + " bytes");
     const double megabytes = static_cast<double>(std::filesystem::file_size(packPath_, error)) / kBytesPerMegabyte;
     Logger::Log("[AssetPack] " + std::to_string(recorded_.size()) + " 件の素材を書き出しました（"
         + std::to_string(static_cast<int>(megabytes)) + " MB）: " + StringUtility::ConvertString(packPath_));

@@ -4,7 +4,8 @@ struct TransformationMatrix
 {
     float4x4 WVP;
     float4x4 World;
-    float4x4 LightVP; // ライト空間のビュープロジェクション行列
+    float4x4 WorldInverseTranspose; // C++ 側の並びと合わせるための場所（影では使わない）
+    float4x4 LightVP; // ワールド行列を掛けたライト空間のビュープロジェクション行列
 };
 ConstantBuffer<TransformationMatrix> gTransformationMatrix : register(b0);
 

@@ -60,8 +60,8 @@ void Player::InactiveRampageState::HandleAttackInput(Player&, Input*, const Vect
 /** @brief 敵へ向かって突進し、十分近づいたら打ち上げて空中連撃へ移る */
 void Player::LaunchRampageState::UpdatePhysics(Player& player, const Vector3& enemyPos) const {
     // 壁に阻まれるなどして決めた秒数のうちに着かなければ、突進をやめて操作を返す
-    player.rampageTimer_ += gameConstants::kFrameDeltaTime;
-    if (player.rampageTimer_ > Tuning().rampageLaunchMaxSeconds) {
+    player.rampageData_.timer += gameConstants::kFrameDeltaTime;
+    if (player.rampageData_.timer > Tuning().rampageLaunchMaxSeconds) {
         player.rampage_ = &InactiveRampage();
         return;
     }
@@ -80,29 +80,29 @@ void Player::LaunchRampageState::UpdatePhysics(Player& player, const Vector3& en
         player.SetFrameEvent(FrameEvent::kLaunched);
         player.velocityY_ = Tuning().rampageLaunchSpeed;
         player.rampage_ = &JuggleRampage();
-        player.rampageTimer_ = 0.0f;
+        player.rampageData_.timer = 0.0f;
     }
 }
 /** @brief 攻撃入力のたびに敵の周りの次の角度へ移って斬る（最後の一撃で乱舞を終える） */
 void Player::JuggleRampageState::HandleAttackInput(Player& player, Input* input, const Vector3& enemyPos) const {
     const int effectiveMax = Tuning().juggleMaxSlashes + player.skillMods_.juggleMaxBonus;
-    if (player.juggleSlashCount_ >= effectiveMax) {
+    if (player.rampageData_.juggleSlashCount >= effectiveMax) {
         return;
     }
 
     // 乱舞中 L → 敵の周囲の次の角度へテレポートしてスラッシュ
-    float angle = player.juggleAngleIdx_ * (gameConstants::kTwoPi / effectiveMax);
+    float angle = player.rampageData_.juggleAngleIdx * (gameConstants::kTwoPi / effectiveMax);
     float dx = std::cos(angle) * Tuning().juggleRadius;
     float dy = std::sin(angle) * Tuning().juggleRadius;
     player.pos_.x = std::clamp(enemyPos.x + dx, player.minX_, player.maxX_);
     player.pos_.y = std::clamp(enemyPos.y + dy, Tuning().groundY, Tuning().ceilingY);
     player.velocityY_ = 0.0f;
     player.lastDirX_ = (enemyPos.x >= player.pos_.x) ? 1.0f : -1.0f;
-    player.juggleAngleIdx_ = (player.juggleAngleIdx_ + 1) % effectiveMax;
-    player.juggleSlashCount_++;
-    player.rampageTimer_ = 0.0f;
+    player.rampageData_.juggleAngleIdx = (player.rampageData_.juggleAngleIdx + 1) % effectiveMax;
+    player.rampageData_.juggleSlashCount++;
+    player.rampageData_.timer = 0.0f;
 
-    bool isLast = (player.juggleSlashCount_ >= effectiveMax);
+    bool isLast = (player.rampageData_.juggleSlashCount >= effectiveMax);
     player.SetFrameEvent(FrameEvent::kRampageHit);
     player.SetFrameEvent(FrameEvent::kRampageFinish, isLast);
     if (isLast) {
@@ -112,8 +112,8 @@ void Player::JuggleRampageState::HandleAttackInput(Player& player, Input* input,
 
 /** @brief 空中連撃中は重力を止めて空中に留まる（攻撃入力が決めた秒数途切れたら連撃を終えて落ちる） */
 void Player::JuggleRampageState::UpdatePhysics(Player& player, const Vector3& enemyPos) const {
-    player.rampageTimer_ += gameConstants::kFrameDeltaTime;
-    if (player.rampageTimer_ > Tuning().juggleIdleSeconds) {
+    player.rampageData_.timer += gameConstants::kFrameDeltaTime;
+    if (player.rampageData_.timer > Tuning().juggleIdleSeconds) {
         player.rampage_ = &InactiveRampage();
         return;
     }

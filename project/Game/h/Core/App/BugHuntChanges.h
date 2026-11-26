@@ -39,6 +39,14 @@ public:
     std::string Summary() const;
     /** @brief 今のファイルの様子を次の記録として書き出す（最後まで回った時に呼ぶ） */
     void WriteNextState() const;
+    /** @brief どのステージを遊び、どの配置物を近くで試すかの選び方を書き出す（再生ファイルに入れて、同じ所を回せるようにする） */
+    nlohmann::json ExportSelection() const;
+    /**
+     * @brief 再生ファイルに入れておいた選び方をそのまま使う（今のファイルの様子とは比べない。次の記録も書かない）
+     * @param stages 遊ぶ候補のステージ
+     * @param selection ExportSelection() で書き出したもの
+     */
+    void ImportSelection(const std::vector<Stage>& stages, const nlohmann::json& selection);
 
 private:
     /** @brief ステージ1つ分の今の様子 */
@@ -62,6 +70,8 @@ private:
     std::vector<std::string> selected_; ///< 遊ぶステージのレベルの場所
     bool selectAll_ = true; ///< 全部遊ぶか
     std::string allReason_; ///< 全部遊ぶ理由（報告に出す）
+    bool imported_ = false; ///< 再生ファイルの選び方を使っているか
+    std::map<std::string, std::vector<std::string>> importedChanges_; ///< 再生ファイルにあった、ステージごとの近くで試す配置物
 };
 
 } // namespace engine::game

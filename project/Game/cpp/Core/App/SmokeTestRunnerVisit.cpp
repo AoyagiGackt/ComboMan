@@ -9,6 +9,7 @@
 #include "Logger.h"
 #include "Player.h"
 #include "PlayerBridge.h"
+#include "WeaponManager.h"
 #include "RunData.h"
 #include "SceneManager.h"
 #include "StageEditor.h"
@@ -33,8 +34,60 @@ std::string FormatPosition(const Vector3& position) {
 }
 } // namespace
 
+/** @brief 実際の拾得判定と装備枠を使って、投擲と最後の合体の結果を調べる */
+bool SmokeTestRunner::CheckTrainingWeapon(const Step& step) {
+    if (!IsSettledOn("TRAINING")) {
+        Fail("武器の検証にはトレーニングルームが必要です");
+        return false;
+    }
+    Player* player = PlayerBridge::GetInstance()->Get();
+    auto* weapons = WeaponManager::GetInstance();
+    if (step.action == "resetTrainingWeapons") {
+        weapons->Reset();
+        return true;
+    }
+    if (step.action == "visitTrainingPickup") {
+        // 並んでいる実物の位置に移す。装備は次のシーン更新の接触判定で決まる。
+        static constexpr std::pair<WeaponType, float> kPositions[] = {
+            { WeaponType::kGreatsword, 16.5f }, { WeaponType::kScythe, 19.5f }, { WeaponType::kAxe, 22.5f }
+        };
+        constexpr float kPickupHeight = 3.0f;
+        for (const auto& [type, x] : kPositions) {
+            if (step.weapon == WeaponTypeName(type)) {
+                player->SetPosition({ x, kPickupHeight, 0.0f });
+                return true;
+            }
+        }
+        Fail("検証用の配置位置がありません: " + step.weapon);
+        return false;
+    }
+    if (!weapons->HasEquippedWeapon() || WeaponTypeName(weapons->GetCurrent().type) != step.weapon
+        || (!weapons->IsBossSlotSelected() && !weapons->IsUnlocked(weapons->GetIndex()))) {
+        Fail("期待した装備になっていません: " + step.weapon);
+        return false;
+    }
+    if (step.action == "expectDuplicateWeapon") {
+        const auto state = weapons->SaveSnapshot();
+        if (std::count(state.slots.begin(), state.slots.end(), weapons->GetIndex()) != 2) {
+            Fail("同じ種類の武器が2つの枠に入りませんでした");
+            return false;
+        }
+    }
+    if (step.action == "checkLastFusion") {
+        const int slot = weapons->GetSelectedSlot();
+        if (weapons->TryBreakCurrentWeapon() || !weapons->FuseInto(slot, WeaponType::kAxe, 1)
+            || !weapons->ConsumeFusionDurability(1) || weapons->IsCurrentFused()
+            || weapons->GetSelectedSlot() != slot || !weapons->HasEquippedWeapon()
+            || WeaponTypeName(weapons->GetCurrent().type) != step.weapon) {
+            Fail("最後の合体武器が元の武器に戻りませんでした");
+            return false;
+        }
+    }
+    return true;
+}
+
 /** @brief 前回の記録と比べて、遊ぶステージと近くで試す配置物を決める（--bug-hunt の時だけ） */
-void SmokeTestRunner::PrepareChanges(const std::wstring& commandLine) {
+void SmokeTestRunner::PrepareChanges(const std::wstring& commandLine, const nlohmann::json* importedSelection) {
     const GameRulesData& rules = GameRules::GetInstance()->Get();
     std::vector<BugHuntChanges::Stage> stages;
     if (!rules.tutorialLevelPath.empty()) {
@@ -44,6 +97,11 @@ void SmokeTestRunner::PrepareChanges(const std::wstring& commandLine) {
         stages.push_back({ rules.levelPaths[i], kStageLabelPrefix + std::to_string(i + 1) });
     }
     stages.push_back({ FinalBossTuningStore::Get().level, kFinalBossLabel });
+    // 再生の時は、記録した時と同じステージと配置物を回す
+    if (importedSelection != nullptr) {
+        changes_.ImportSelection(stages, *importedSelection);
+        return;
+    }
     changes_.Prepare(stages, commandLine.find(kAllFlag) != std::wstring::npos, scriptPath_);
 }
 
@@ -168,8 +226,8 @@ void SmokeTestRunner::FinishEarly(const std::string& reason) {
     ReleaseKeys();
     sExpectProgress = false;
     log_.push_back("終わり: " + reason);
+    Finish();
     WriteReport(true, "");
-    finished_ = true;
 }
 
 } // namespace engine::game

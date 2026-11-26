@@ -334,6 +334,8 @@ save/
 log/
 MY/
 crash/
+# 起動を速くするために保存したパイプライン（GPU とドライバごとに違う）
+cache/pipeline_cache.bin
 
 externals/DirectXTex/Bin/
 externals/DirectXTex/x64/
@@ -369,3 +371,4 @@ project/log.txt
 project/scores.txt
 project/playtest_log.csv
 project/smoke_test
+project/cache

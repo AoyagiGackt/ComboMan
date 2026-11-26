@@ -3,6 +3,9 @@
  * @brief Frameworkを継承したゲーム固有の初期化・更新・描画・シーン遷移制御（MyGame）の実装
  */
 #include "MyGame.h"
+#include "EngineContext.h"
+#include "GameActions.h"
+#include "GameAudio.h"
 #include "AssetPack.h"
 #include "Audio.h"
 #include "BossBattleDirector.h"
@@ -35,6 +38,10 @@
 #include "HsvFilter.h"
 #include "ImGuiControlPanel.h"
 #include "ImageFilter.h"
+#include "Object3d.h"
+#include "Object3dRenderQueue.h"
+#include "ParticleManager.h"
+#include "PipelineCache.h"
 #include "InputBuffer.h"
 #include "RenderPassGraph.h"
 #include "PostEffectRenderTarget.h"
@@ -49,6 +56,8 @@
 #include "VignetteEffect.h"
 #include <SrvManager.h>
 #ifdef USE_IMGUI
+#include "EditorFlowRow.h"
+#include "EditorHub.h"
 #include <imgui.h>
 #endif
 using namespace engine::graphics;
@@ -77,6 +86,56 @@ void LogLoadProfile(const std::string& label) {
 }
 
 #ifdef USE_IMGUI
+/**
+ * @brief 今のシーンの名前と、戻る・前へ・次へ・一覧から選んで移動する操作を描く
+ * @note 前へ・次へは開始シーンの一覧の順に進み、端まで行くと反対の端へ回る
+ */
+void DrawSceneNavigation() {
+    using game::SceneManager;
+    SceneManager* scenes = SceneManager::GetInstance();
+    const std::string& current = scenes->GetCurrentSceneName();
+    const int count = SceneManager::GetDebugStartSceneCount();
+    const int currentIndex = SceneManager::FindDebugStartSceneIndex(current);
+    ImGui::Text("今のシーン: %s", SceneManager::SceneLabelFor(current).c_str());
+
+    // さっきまで開いていたシーンへ戻る
+    const bool canGoBack = scenes->CanGoBack();
+    const std::string backLabel = canGoBack
+        ? "戻る（" + SceneManager::SceneLabelFor(scenes->PreviousSceneName()) + "）"
+        : std::string("戻る");
+    ImGui::BeginDisabled(!canGoBack);
+    if (ImGui::Button(backLabel.c_str())) {
+        scenes->GoBack();
+    }
+    ImGui::EndDisabled();
+
+    // 一覧の順で1つ前と1つ後のシーン（一覧に無いシーンにいる時は先頭と末尾から）
+    const int previousIndex = currentIndex < 0 ? count - 1 : (currentIndex + count - 1) % count;
+    const int nextIndex = currentIndex < 0 ? 0 : (currentIndex + 1) % count;
+    const std::string previousLabel = std::string("< 前: ") + SceneManager::GetDebugStartSceneLabel(previousIndex);
+    const std::string nextLabel = std::string("次: ") + SceneManager::GetDebugStartSceneLabel(nextIndex) + " >";
+    // 入りきらなければ次の行へ回す（シーンの名前が長くてもはみ出さない）
+    editor::FlowRow row;
+    if (row.Button(previousLabel.c_str())) {
+        scenes->OpenSceneFromEditor(SceneManager::GetDebugStartSceneName(previousIndex));
+    }
+    if (row.Button(nextLabel.c_str())) {
+        scenes->OpenSceneFromEditor(SceneManager::GetDebugStartSceneName(nextIndex));
+    }
+
+    // 一覧から選んで直接移動する（今のシーンを選び直すと最初からやり直せる）
+    ImGui::TextDisabled("シーンを選んで移動");
+    ImGui::SetNextItemWidth(-1.0f);
+    if (ImGui::BeginCombo("##sceneJump", SceneManager::SceneLabelFor(current).c_str())) {
+        for (int index = 0; index < count; ++index) {
+            if (ImGui::Selectable(SceneManager::GetDebugStartSceneLabel(index), index == currentIndex)) {
+                scenes->OpenSceneFromEditor(SceneManager::GetDebugStartSceneName(index));
+            }
+        }
+        ImGui::EndCombo();
+    }
+}
+
 /** @brief 調整値エディタの対象フォルダと、保存したらすぐ読み直す設定ファイルを登録する */
 void SetupConfigEditor() {
     auto* editor = JsonConfigEditor::GetInstance();
@@ -114,8 +173,15 @@ using namespace engine::game;
 
 /** @brief ゲーム固有の初期化処理 */
 void MyGame::Initialize() {
+    // 自動テストで起動していれば、乱数を作る物より先に乱数の元の種を決める（同じ種なら同じ動きになる）
+    SmokeTestRunner::ApplySeedFromCommandLine();
+
     // 基盤の初期化
     Framework::Initialize();
+    input_->SetActionTable(GameActionTable());
+    input_->SetPromptResolver(ResolveMovementPrompt);
+    // 曲の表とメニュー音はゲームが決めて、エンジンの音へ渡す
+    ConfigureGameAudio(*audio_);
 
     // 工場を作る
     sceneFactory_ = std::make_unique<SceneFactory>();
@@ -152,7 +218,7 @@ void MyGame::Initialize() {
     // --realtime も付けた時は、人が画面を見ながら確かめられるよう、ふだんの速さのまま進める
     constexpr const wchar_t* kRealtimeFlag = L"--realtime";
     const bool realtime = std::wstring(GetCommandLineW()).find(kRealtimeFlag) != std::wstring::npos;
-    if (smokeTest_.StartIfRequested(input_.get()) && !realtime) {
+    if (smokeTest_.StartIfRequested(input_.get(), dxCommon_.get()) && !realtime) {
         dxCommon_->SetVSyncEnabled(false);
         // 1秒60フレームで待つのもやめ、手順の表の speed の回数だけ1回の描画の間にゲームを進める
         dxCommon_->SetFrameLimitEnabled(false);
@@ -166,6 +232,12 @@ void MyGame::Initialize() {
 
 /** @brief ゲーム固有の更新処理（自動テストの速回しの時は、1回描くごとに何回か進める） */
 void MyGame::Update() {
+    // 再生で見つけた所が近づいたら、速回しをやめて人が見られるふつうの速さに戻す
+    if (fastSmokeTest_ && smokeTest_.WantsRealtime()) {
+        dxCommon_->SetVSyncEnabled(true);
+        dxCommon_->SetFrameLimitEnabled(true);
+        fastSmokeTest_ = false;
+    }
     // 1回の更新で進める時間は固定のまま、重くて描画が遅れた時だけ遅れた分の回数を回す（速回しの自動テストは決まった回数）
     const int updates = fastSmokeTest_ ? smokeTest_.GetUpdatesPerDraw() : frameClock_.UpdatesThisFrame();
     for (int i = 0; i < updates; ++i) {
@@ -182,6 +254,9 @@ void MyGame::Update() {
 
 /** @brief ゲームを1回分進める */
 void MyGame::UpdateOnce() {
+    // 自動テストの間は、1回の更新の重さを測り始める
+    smokeTest_.BeginUpdate();
+
     // 基盤の更新
     Framework::Update();
 
@@ -197,7 +272,7 @@ void MyGame::UpdateOnce() {
 
 #ifdef _DEBUG
     // テクスチャのホットリロード（保存したら即座に反映、開発時のみ）
-    TextureManager::GetInstance()->CheckHotReload();
+    engine::Services().textures->CheckHotReload();
 #endif
 
     // シーンマネージャー更新
@@ -209,13 +284,31 @@ void MyGame::UpdateOnce() {
     }
 
 #ifdef USE_IMGUI
-    // F8でエンジン共通の実行時診断を開閉する
+    // F8でエディタの一覧とエンジン共通の実行時診断を開閉する
     if (input_->TriggerKey(DIK_F8)) {
         showEngineDiagnostics_ = !showEngineDiagnostics_;
     }
+    // どのシーンでも使えるエディタも一覧に載せ、一覧で押されたら開閉する
+    auto* editorHub = editor::EditorHub::GetInstance();
+    if (editorHub->Offer("tuning", "調整値エディタ", "", "プレイヤーや敵の強さ、演出の長さなどの数値を、日本語の名前と説明を見ながら直します",
+            JsonConfigEditor::GetInstance()->IsOpen())) {
+        JsonConfigEditor::GetInstance()->Toggle();
+    }
+    if (editorHub->Offer("sound", "音の割り当て", "", "効果音や曲を、どの場面で鳴らすかを選びます", showSoundAssignEditor_)) {
+        showSoundAssignEditor_ = !showSoundAssignEditor_;
+    }
+    if (editorHub->Offer("postProcess", "画面の効果の順番", "", "ブルーム・トーンマップ・空間のゆがみなどを掛ける順番と、掛けるかどうかを場面ごとに決めます", showPostProcessEditor_)) {
+        showPostProcessEditor_ = !showPostProcessEditor_;
+    }
     if (showEngineDiagnostics_) {
-        const bool panelOpen = ImGui::Begin("Engine Diagnostics", &showEngineDiagnostics_);
+        const bool panelOpen = ImGui::Begin("エディタとツール (F8)", &showEngineDiagnostics_);
         if (panelOpen) {
+            // 今のシーンで使えるエディタを、キーを覚えなくても開けるように並べる
+            ImGui::SeparatorText("シーンの移動");
+            DrawSceneNavigation();
+            ImGui::SeparatorText("エディタ");
+            editorHub->DrawList();
+            ImGui::SeparatorText("エンジンの状態");
             auto* profiler = FrameProfiler::GetInstance();
             ImGui::Text("CPU %.2f ms  %.1f FPS", profiler->GetMs(), profiler->GetFPS());
             ImGui::Text("Gamepad %s", input_->IsGamepadConnected() ? "Connected" : "Disconnected");
@@ -224,9 +317,39 @@ void MyGame::UpdateOnce() {
             if (ImGui::Checkbox("配置物の描画を複数のスレッドで記録", &parallelRecording)) {
                 ParallelBundleRecorder::SetEnabled(parallelRecording);
             }
-            bool hotReloadEnabled = TextureManager::GetInstance()->IsHotReloadEnabled();
+            bool hotReloadEnabled = engine::Services().textures->IsHotReloadEnabled();
             if (ImGui::Checkbox("ゲーム中のテクスチャホットリロード", &hotReloadEnabled)) {
-                TextureManager::GetInstance()->SetHotReloadEnabled(hotReloadEnabled);
+                engine::Services().textures->SetHotReloadEnabled(hotReloadEnabled);
+            }
+
+            // 画面外の 3D の物を描かない判定（切ると全部描くので、数と重さを比べられる）
+            bool frustumCulling = Object3d::IsFrustumCullingEnabled();
+            if (ImGui::Checkbox("画面外の物を描かない", &frustumCulling)) {
+                Object3d::SetFrustumCullingEnabled(frustumCulling);
+            }
+            ImGui::Text("3D の物  描いた %u  画面外で省いた %u", lastDrawnObjects_, lastCulledObjects_);
+            // 配置物をモデルごと・手前からの順に並べて描くか（切ると置いた順のまま描くので、重さを比べられる）
+            bool sortObjects = Object3dRenderQueue::IsSortingEnabled();
+            if (ImGui::Checkbox("配置物を並べ替えて描く", &sortObjects)) {
+                Object3dRenderQueue::SetSortingEnabled(sortObjects);
+            }
+            // 同じモデル・同じ見た目の配置物を1回の命令でまとめて描くか（並べ替えを切ると使わない）
+            bool instancing = Object3dRenderQueue::IsInstancingEnabled();
+            if (ImGui::Checkbox("同じ配置物をまとめて1回で描く", &instancing)) {
+                Object3dRenderQueue::SetInstancingEnabled(instancing);
+            }
+            ImGui::Text("配置物  描いた %u  命令 %u  まとめ描き %u", lastQueueStats_.drawn, lastQueueStats_.drawCalls, lastQueueStats_.instancedObjects);
+            // 捨てられた GPU の資源のうち、GPU が使い終わるのを待っている数
+            ImGui::Text("解放待ちの GPU 資源 %zu", dxCommon_->GetDeferredReleaseQueue().GetPendingCount());
+            // GPU が数えて描いた粒の数（数フレーム前の値を読み戻したもの）
+            ImGui::Text("生きている粒 %u", engine::Services().particles->GetGpuAliveParticleCount());
+            // パイプラインの保存と再利用（2回目の起動から取り出せる数が増える）と、シェーダーのホットリロード
+            const PipelineCache::Stats pipelineStats = PipelineCache::GetInstance()->GetStats();
+            ImGui::Text("パイプライン  保存から %u  新しく %u  %.1f ms  読み直し %u", pipelineStats.hits, pipelineStats.misses,
+                pipelineStats.createMilliseconds, pipelineStats.reloaded);
+            bool shaderHotReload = PipelineCache::GetInstance()->IsHotReloadEnabled();
+            if (ImGui::Checkbox("ゲーム中のシェーダーホットリロード", &shaderHotReload)) {
+                PipelineCache::GetInstance()->SetHotReloadEnabled(shaderHotReload);
             }
 
             bool vsync = dxCommon_->IsVSyncEnabled();
@@ -245,36 +368,14 @@ void MyGame::UpdateOnce() {
                 GameSettingsManager::GetInstance()->Save();
             }
 
-            // JSONを手で書かずに直すための編集画面
-            ImGui::Separator();
-            if (ImGui::Button("調整値エディタ")) {
-                JsonConfigEditor::GetInstance()->Toggle();
-            }
-            ImGui::SameLine();
-            if (ImGui::Button("音の割り当て")) {
-                showSoundAssignEditor_ = !showSoundAssignEditor_;
-            }
-
-            ImGui::Separator();
-            if (ImGui::Button("Title")) {
-                SceneManager::GetInstance()->ChangeScene("TITLE");
-            }
-            ImGui::SameLine();
-            if (ImGui::Button("Stage Select")) {
-                SceneManager::GetInstance()->ChangeScene("MAP");
-            }
-            if (ImGui::Button("Training")) {
-                SceneManager::GetInstance()->ChangeScene("TRAINING");
-            }
-            ImGui::SameLine();
-            if (ImGui::Button("Battle Test")) {
-                SceneManager::GetInstance()->ChangeScene("BATTLETEST");
-            }
         }
         ImGui::End();
     }
     JsonConfigEditor::GetInstance()->Draw();
     soundAssignEditor_.Draw(&showSoundAssignEditor_);
+    postProcessEditor_.Draw(&showPostProcessEditor_);
+    // このフレームの一覧を片付け、押された開閉の頼みを次のフレームへ渡す
+    editorHub->EndFrame();
 #endif
 
     ImGuiControlPanel::ShowControls();
@@ -287,9 +388,14 @@ void MyGame::UpdateOnce() {
 void MyGame::Draw() {
     // バックバッファとSRVヒープを描画できる状態にする
     dxCommon_->PreDraw();
+    // 前のフレームに数えた、描いた数と画面外で省いた数を診断パネル用に取っておく
+    const Object3d::CullingStats cullingStats = Object3d::TakeCullingStats();
+    lastDrawnObjects_ = cullingStats.drawn;
+    lastCulledObjects_ = cullingStats.culled;
+    lastQueueStats_ = Object3dRenderQueue::TakeFrameStats();
     // 解放待ちの数え上げはここで1フレームに1回だけ進める（PreDraw は描画中に何度も呼ばれる）
-    SrvManager::GetInstance()->BeginFrame();
-    SrvManager::GetInstance()->PreDraw();
+    engine::Services().srvManager->BeginFrame();
+    engine::Services().srvManager->PreDraw();
 
     // ポストエフェクトの候補（FindActivePostEffect に渡す優先順）
     auto* gs = GrayscaleEffect::GetInstance();
@@ -317,7 +423,7 @@ void MyGame::Draw() {
 
     graph.AddPass("Post Effects", { .reads = { ReadTexture(sceneTexture) } }, [activeEffect] {
         activeEffect->EndScene();
-        activeEffect->Apply(SrvManager::GetInstance());
+        activeEffect->Apply(engine::Services().srvManager);
     }, activeEffect != nullptr);
 
     // ポストエフェクトの後に、画面全体へかける演出・遷移・エディタ用の取り込み・デバッグUIの順で重ねる
@@ -340,7 +446,7 @@ void MyGame::Draw() {
 
     dxCommon_->PostDraw();
     // このフレームに解放したデスクリプタは、今積んだフェンスの値まで GPU が進んでから再利用する
-    SrvManager::GetInstance()->EndFrame();
+    engine::Services().srvManager->EndFrame();
 }
 
 /** @brief ゲーム固有の終了処理 */

@@ -3,6 +3,7 @@
  * @brief ステージ開始演出（StageIntro）の段階ごとの処理と、stage_intro.json の読み込み
  */
 #include "StageIntro.h"
+#include "GameActions.h"
 #include "Easing.h"
 #include "FontRenderer.h"
 #include "GameConstants.h"
@@ -481,7 +482,7 @@ void StageIntro::Update(const Input* input) {
         return;
     }
     totalTimer_ += gameConstants::kFrameDeltaTime;
-    const bool skipPressed = input != nullptr && input->TriggerCinematicSkip();
+    const bool skipPressed = input != nullptr && TriggerCinematicSkip(*input);
     if (skipPressed && totalTimer_ >= Tune().skipLockSeconds) {
         // 飛ばした時は GO! も出さずにそのまま始める
         Finish();

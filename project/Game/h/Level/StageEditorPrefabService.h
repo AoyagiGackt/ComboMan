@@ -13,6 +13,8 @@ namespace engine::game {
 class StageEditorPrefabService {
 public:
     /** @brief 配置物を原点基準のプレハブとして保存し、保存先を返す */
+    static std::string Save(const std::string& name, const std::vector<ObjectDesc>& objects);
+    /** @brief 単独の配置物を原点に合わせて保存する */
     static std::string Save(const std::string& name, const ObjectDesc& object);
 
     /** @brief 名前に対応するプレハブ内の配置物を読み込む */

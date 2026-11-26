@@ -3,6 +3,7 @@
  * @brief シーンの切替・更新・描画を統括するマネージャー（SceneManager）の実装
  */
 #include "SceneManager.h"
+#include "EngineContext.h"
 #include "AssetPack.h"
 #include "GameRules.h"
 #include "WeaponManager.h"
@@ -49,6 +50,8 @@ constexpr DebugStartScene kDebugStartScenes[] = {
     { "OPTIONS", "オプション", false },
 };
 constexpr int kDebugStartSceneCount = static_cast<int>(std::size(kDebugStartScenes));
+/** @brief エディタの戻るで覚えておくシーンの数 */
+constexpr size_t kMaxSceneHistory = 16;
 /** @brief 名前から Debug の開始シーンの定義を探す（無ければ nullptr） */
 const DebugStartScene* FindDebugStartScene(const std::string& scene) {
     const auto found = std::find_if(std::begin(kDebugStartScenes), std::end(kDebugStartScenes),
@@ -111,12 +114,12 @@ void SceneManager::Initialize(DirectXCommon* dxCommon, Input* input, Audio* audi
     dxCommon_->SetDiagnosticContext(startupScene);
     CrashHandler::SetContext(startupScene);
     transition_.Initialize(dxCommon_);
-    TextureManager::GetInstance()->FlushUploads();
+    engine::Services().textures->FlushUploads();
 
     // 起動シーンを読み込み、かかった時間を記録する（テクスチャの転送も済ませてから測る）
     const auto loadingStarted = std::chrono::steady_clock::now();
     currentScene_->Init(dxCommon_, input_, audio_);
-    TextureManager::GetInstance()->FlushUploads();
+    engine::Services().textures->FlushUploads();
     const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
         std::chrono::steady_clock::now() - loadingStarted).count();
     Logger::Log("Startup scene load " + startupScene + ": " + std::to_string(elapsed) + " ms");
@@ -178,7 +181,7 @@ void SceneManager::CookAllScenes() {
             return;
         }
         scene->Init(dxCommon_, input_, audio_);
-        TextureManager::GetInstance()->FlushUploads();
+        engine::Services().textures->FlushUploads();
         dxCommon_->WaitForGpu();
         scene->Shutdown();
     };
@@ -219,6 +222,7 @@ void SceneManager::PerformSceneSwitch() {
     if (!nextScene) {
         Logger::LogError("シーンを生成できません: " + nextSceneName_);
         nextSceneName_ = currentSceneName_;
+        goingBack_ = false;
         transition_.FinishSwitch();
         return;
     }
@@ -243,12 +247,20 @@ void SceneManager::PerformSceneSwitch() {
     currentScene_ = std::move(nextScene);
     currentScene_->Init(dxCommon_, input_, audio_);
     // シーン切り替え時にロードされたテクスチャを一括転送・同期する
-    TextureManager::GetInstance()->FlushUploads();
+    engine::Services().textures->FlushUploads();
 
     // ImGuiのセット
     currentScene_->SetImGuiManager(imguiManager_);
     dxCommon_->SetDiagnosticContext(nextSceneName_);
     CrashHandler::SetContext(nextSceneName_);
+    // 戻る操作でなければ、離れたシーンを戻り先として覚える（やり直しで同じシーンを開き直した時は積まない。古い物から捨てる）
+    if (!goingBack_ && !currentSceneName_.empty() && currentSceneName_ != nextSceneName_) {
+        sceneHistory_.push_back(currentSceneName_);
+        if (sceneHistory_.size() > kMaxSceneHistory) {
+            sceneHistory_.erase(sceneHistory_.begin());
+        }
+    }
+    goingBack_ = false;
     currentSceneName_ = nextSceneName_;
     ++sceneSwitchCount_;
 
@@ -330,6 +342,42 @@ const char* SceneManager::GetDebugStartSceneName(int index) {
 /** @brief 指定した番号の開始シーンのエディタでの表示名を返す */
 const char* SceneManager::GetDebugStartSceneLabel(int index) {
     return kDebugStartScenes[index].label;
+}
+
+/** @brief 名前から開始シーンの番号を探す（一覧に無ければ -1） */
+int SceneManager::FindDebugStartSceneIndex(const std::string& sceneName) {
+    const DebugStartScene* found = FindDebugStartScene(sceneName);
+    return found != nullptr ? static_cast<int>(found - std::begin(kDebugStartScenes)) : -1;
+}
+
+/** @brief エディタに出すシーンの表示名を返す（一覧に無いシーンは名前そのもの） */
+std::string SceneManager::SceneLabelFor(const std::string& sceneName) {
+    const DebugStartScene* found = FindDebugStartScene(sceneName);
+    return found != nullptr ? std::string(found->label) : sceneName;
+}
+
+/** @brief エディタからシーンを開く（ラン中でないと開けない画面なら、先に新しいランを始める） */
+void SceneManager::OpenSceneFromEditor(const std::string& sceneName) {
+    // 切り替え中は次の予約を受け付けないので、何もしない
+    if (transition_.IsChanging()) {
+        return;
+    }
+    const DebugStartScene* found = FindDebugStartScene(sceneName);
+    if (found != nullptr && found->startsRun && !RunData::GetInstance()->IsRunActive()) {
+        RunData::GetInstance()->StartNewRun();
+    }
+    ChangeScene(sceneName);
+}
+
+/** @brief 1つ前に開いていたシーンへ戻る（戻った分は履歴から消える） */
+void SceneManager::GoBack() {
+    if (sceneHistory_.empty() || transition_.IsChanging()) {
+        return;
+    }
+    const std::string previous = sceneHistory_.back();
+    sceneHistory_.pop_back();
+    goingBack_ = true;
+    OpenSceneFromEditor(previous);
 }
 
 /** @brief Debug開始シーンを設定ファイルへ保存する。失敗時はfalse */

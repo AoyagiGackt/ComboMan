@@ -3,6 +3,7 @@
  * @brief プレイヤーの物理の状態（地上・空中と水中）の実装
  */
 #include "GameConstants.h"
+#include "GameActions.h"
 #include "GravityBody.h"
 #include "Input.h"
 #include "Player.h"
@@ -20,13 +21,13 @@ const PlayerTuning& Tuning() {
 
 /** @brief 横移動の入力1つぶん（押している間その向きへ進む） */
 struct MoveInput {
-    Input::Action action;
+    GameAction action;
     float dirX;
 };
 // 両方押した時は後ろの行が向きを決める
 constexpr MoveInput kMoveInputs[] = {
-    { Input::Action::kMoveLeft, -1.0f },
-    { Input::Action::kMoveRight, 1.0f },
+    { GameAction::kMoveLeft, -1.0f },
+    { GameAction::kMoveRight, 1.0f },
 };
 } // namespace
 
@@ -67,7 +68,7 @@ class Player::UnderwaterPhysicsState : public IPhysicsState {
 
 /** @brief 水中での移動・浮力・泳ぎを1フレーム進める */
 void Player::UnderwaterPhysicsState::Update(Player& player, Input* input) const {
-    const float speedMult = (player.isAwakened_ ? Tuning().awakenedSpeedMult : 1.0f) * player.skillMods_.speedMult;
+    const float speedMult = (player.awaken_.isAwakened ? Tuning().awakenedSpeedMult : 1.0f) * player.skillMods_.speedMult;
 
     // 横移動（水の抵抗で遅い）
     player.ApplyHorizontalInput(input, Tuning().waterSpeed * speedMult);
@@ -77,7 +78,7 @@ void Player::UnderwaterPhysicsState::Update(Player& player, Input* input) const 
     player.velocityY_ = (std::max)(player.velocityY_, Tuning().sinkMaxVY);
 
     // ジャンプ長押し = 上昇スイム
-    if (input->PushAction(Input::Action::kJump)) {
+    if (input->PushAction(GameAction::kJump)) {
         player.velocityY_ = (std::min)(player.velocityY_ + Tuning().swimAccel, Tuning().swimMaxVY);
     }
 
@@ -101,19 +102,19 @@ void Player::UnderwaterPhysicsState::Update(Player& player, Input* input) const 
 
 /** @brief 地上・空中での移動・重力・ジャンプを1フレーム進める */
 void Player::GroundedPhysicsState::Update(Player& player, Input* input) const {
-    const float speedMult = (player.isAwakened_ ? Tuning().awakenedSpeedMult : 1.0f) * player.skillMods_.speedMult;
-    const float jumpMult = (player.isAwakened_ ? Tuning().awakenedJumpMult : 1.0f) * player.skillMods_.jumpMult;
+    const float speedMult = (player.awaken_.isAwakened ? Tuning().awakenedSpeedMult : 1.0f) * player.skillMods_.speedMult;
+    const float jumpMult = (player.awaken_.isAwakened ? Tuning().awakenedJumpMult : 1.0f) * player.skillMods_.jumpMult;
 
     // 回避中は回避の移動が位置を決めるので、通常の左右移動とジャンプは受け付けない
     // ワープ中も同じく、ワープの移動だけで進む（歩きを足すと決めた距離からずれて向きも変わる）
-    if (!player.IsRampaging() && !player.finisherCharging_ && !player.dodgeActive_ && !player.warpActive_) {
+    if (!player.IsRampaging() && !player.finisher_.charging && !player.dodge_.active && !player.warp_.active) {
         // 歩くだけの状態（マップを移動する時）は、走りより遅い歩きの速さにする
         const float walkMult = player.explorationMode_ ? Tuning().walkSpeedRatio : 1.0f;
         player.ApplyHorizontalInput(input, Tuning().speed * speedMult * walkMult);
     }
 
-    if (player.onGround_ && !player.finisherCharging_ && !player.dodgeActive_) {
-        if (input->TriggerAction(Input::Action::kJump) || player.autoCombo_.ConsumeJumpRequest()) {
+    if (player.onGround_ && !player.finisher_.charging && !player.dodge_.active) {
+        if (input->TriggerAction(GameAction::kJump) || player.autoCombo_.ConsumeJumpRequest()) {
             // 打ち上げ直後は追撃用に高く跳べる（浮かせた敵にジャンプで追いつく）
             float followMult = (player.launchFollowTimer_ > 0.0f) ? Tuning().launchFollowJumpMult : 1.0f;
             player.velocityY_ = Tuning().jumpPower * jumpMult * followMult;

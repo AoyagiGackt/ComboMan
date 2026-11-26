@@ -15,6 +15,7 @@
 #include <cctype>
 #include <cmath>
 #include <cstring>
+#include <filesystem>
 #include <imgui.h>
 #include <optional>
 #include <utility>
@@ -23,6 +24,8 @@
 namespace engine::game {
 namespace {
 constexpr float kNodeSearchWidth = 200.0f;
+/** @brief お手本のグラフを置くフォルダ（ここに置いた .json はすべて一覧に出る） */
+constexpr const char* kTemplateDirectory = "Resources/Graphs/Templates";
 constexpr ImVec2 kVariablesWindowPos = { 20.0f, 470.0f };
 constexpr ImVec2 kVariablesWindowSize = { 300.0f, 220.0f };
 
@@ -61,6 +64,85 @@ void GraphEditor::AddNodeOfType(const std::string& type) {
         graph_.startNodeId = id;
     }
     SelectOnlyNode(id);
+}
+
+/** @brief お手本の開始位置を右クリック位置に合わせて追加する */
+void GraphEditor::InsertTemplate(const GraphDesc& sample) {
+    const GraphNode* start = sample.FindNode(sample.startNodeId);
+    if (!start) {
+        return;
+    }
+    // 追加したノードとコメントを一度に元に戻せるようにする
+    RecordUndoSnapshotNow();
+    const bool needsStart = graph_.startNodeId.empty();
+    ClearSelection();
+    const float dx = pendingAddX_ - start->editorX;
+    const float dy = pendingAddY_ - start->editorY;
+    std::map<std::string, std::string> ids;
+    for (const auto& [id, node] : sample.nodes) {
+        GraphNode copy = node;
+        copy.id = MakeUniqueNodeId();
+        copy.editorX += dx;
+        copy.editorY += dy;
+        ids[id] = copy.id;
+        selectedNodeIds_.insert(copy.id);
+        graph_.nodes[copy.id] = std::move(copy);
+    }
+
+    // お手本の中の線を追加先につなぎ直し、説明も同じ距離だけ動かす
+    for (const auto& id : selectedNodeIds_) {
+        RemapNodeLinks(graph_.nodes.at(id), ids);
+    }
+    for (const auto& [id, comment] : sample.comments) {
+        GraphComment copy = comment;
+        copy.id = MakeUniqueCommentId();
+        copy.x += dx;
+        copy.y += dy;
+        graph_.comments[copy.id] = std::move(copy);
+    }
+    selectedNodeId_ = ids.at(sample.startNodeId);
+    if (needsStart) {
+        graph_.startNodeId = selectedNodeId_;
+    }
+    statusMessage_ = needsStart ? "お手本を追加しました" : "お手本を追加しました。使いたい場所から実行の線をつないでください";
+    statusTimer_ = kStatusNormalSeconds;
+}
+
+/** @brief 一覧を開いた時にお手本を読み、ファイルの説明を表示する */
+void GraphEditor::DrawTemplateMenu() {
+    if (!ImGui::BeginMenu("お手本から追加")) {
+        return;
+    }
+    // 一覧を開いた時にフォルダを調べ直す（ファイルを置くだけで増やせる。開いている間は読んだ内容を使う）
+    if (ImGui::IsWindowAppearing() || templates_.empty()) {
+        templates_.clear();
+        std::vector<std::string> paths;
+        std::error_code error;
+        for (const auto& file : std::filesystem::directory_iterator(kTemplateDirectory, error)) {
+            if (file.is_regular_file() && file.path().extension() == ".json") {
+                paths.push_back(file.path().generic_string());
+            }
+        }
+        // ファイル名の順に並べ、毎回同じ順で出す
+        std::sort(paths.begin(), paths.end());
+        for (const std::string& path : paths) {
+            templates_.push_back(graphIO::Load(path));
+        }
+    }
+    if (templates_.empty()) {
+        ImGui::TextDisabled("%s にお手本がありません", kTemplateDirectory);
+    }
+    // 先頭のコメント枠の文をお手本の名前として出す
+    for (const auto& sample : templates_) {
+        if (!sample.FindNode(sample.startNodeId) || sample.comments.empty()) {
+            ImGui::TextDisabled("お手本を読み込めませんでした");
+            continue;
+        }
+        if (ImGui::MenuItem(sample.comments.begin()->second.text.c_str())) {
+            InsertTemplate(sample);
+        }
+    }
+    ImGui::EndMenu();
 }
 
 /** @brief ノードを追加するメニューを出す */
@@ -120,6 +202,9 @@ void GraphEditor::DrawAddNodeMenu() {
             ImGui::EndPopup();
             return;
         }
+
+        DrawTemplateMenu();
+        ImGui::Separator();
 
         // カテゴリごとにグループ化する（よく使う分類は直接、他はサブメニューにまとめる）
         std::map<std::string, std::vector<std::string>> byCategory;

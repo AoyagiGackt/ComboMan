@@ -4,7 +4,7 @@
  */
 #pragma once
 #include <string>
-namespace engine::game {
+namespace engine::graphics {
 
 /** @brief UIMenu の選択項目1つ分のデータ */
 struct UIButton {
@@ -12,4 +12,4 @@ struct UIButton {
     bool enabled = true; ///< false の場合は選択不可（グレーアウト表示）
 };
 
-} // namespace engine::game
+} // namespace engine::graphics

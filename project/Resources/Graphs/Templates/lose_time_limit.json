@@ -1,0 +1,47 @@
+{
+  "comments": {
+    "c0": {
+      "text": "負け: 時間切れでゲームオーバー",
+      "x": 0,
+      "y": -200,
+      "w": 460,
+      "h": 72
+    },
+    "c1": {
+      "text": "待つの秒数が過ぎたらゲームオーバーにします。勝ちのお手本と一緒に置くと、制限時間の中でゴールを目指すステージになります（このグラフは別のグラフとして、フラグ起動か常駐で動かします）。",
+      "x": 0,
+      "y": -115,
+      "w": 1050,
+      "h": 72
+    }
+  },
+  "start": "wait",
+  "nodes": {
+    "wait": {
+      "type": "Wait",
+      "params": {
+        "seconds": 90
+      },
+      "next": "message",
+      "editorX": 0,
+      "editorY": 0
+    },
+    "message": {
+      "type": "ShowMessage",
+      "params": {
+        "text": "時間切れ",
+        "seconds": 1
+      },
+      "next": "lose",
+      "editorX": 300,
+      "editorY": 0
+    },
+    "lose": {
+      "type": "RequestGameOver",
+      "params": {},
+      "next": "",
+      "editorX": 600,
+      "editorY": 0
+    }
+  }
+}

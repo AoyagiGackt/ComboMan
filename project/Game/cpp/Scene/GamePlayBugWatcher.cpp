@@ -1,9 +1,12 @@
 /**
- * @file GamePlaySceneBugChecks.cpp
- * @brief 自動テストプレイの間だけ、遊んでいる様子からおかしな所を探して SmokeTestRunner へ知らせる
+ * @file GamePlayBugWatcher.cpp
+ * @brief 自動テストプレイの間だけ、遊んでいる様子からおかしな所を探して SmokeTestRunner へ知らせる見張りを実装するファイル
  * @note 見つけても止めずに記録だけする。一瞬だけの様子（吹き飛んで壁をかすめた等）は数えず、続いた時だけ知らせる
  */
-#include "GamePlayScene.h"
+#include "GamePlayBugWatcher.h"
+#include "AllyBoss.h"
+#include "EnemyEntity.h"
+#include "Player.h"
 #include "GameConstants.h"
 #include "MeleeCombo.h"
 #include "WeaponManager.h"
@@ -127,58 +130,65 @@ bool SustainedFor(std::vector<std::pair<std::string, float>>& timers, const std:
 } // namespace
 
 /** @brief 自動テストプレイの見張りで、プレイヤーの今の様子を直前の記録に足す */
-void GamePlayScene::RecordPlayerTrail(const Vector3& position) {
-    std::string sample = FormatPosition(position) + (player_->IsOnGround() ? " 接地" : " 空中");
+void GamePlayBugWatcher::RecordPlayerTrail(const BugWatchContext& context, const Vector3& position) {
+    const Player* player = context.player;
+    const EnemyEntity* boss = context.boss;
+    std::string sample = FormatPosition(position) + (player->IsOnGround() ? " 接地" : " 空中");
     // 床抜けにつながりそうな動きの最中かを添える
-    if (player_->IsDodging()) {
+    if (player->IsDodging()) {
         sample += " 回避";
     }
-    if (player_->IsMeleeAttacking()) {
-        const MeleeAttackDef* attack = player_->GetActiveMeleeAttack();
+    if (player->IsMeleeAttacking()) {
+        const MeleeAttackDef* attack = player->GetActiveMeleeAttack();
         sample += attack != nullptr ? " 攻撃 " + std::string(attack->id) : " 攻撃";
     }
-    if (player_->IsSkillSequenceActive()) {
+    if (player->IsSkillSequenceActive()) {
         sample += " 固有技";
     }
-    if (player_->IsWarping()) {
+    if (player->IsWarping()) {
         sample += " ワープ";
     }
-    if (player_->IsRampaging()) {
+    if (player->IsRampaging()) {
         sample += " 乱舞";
     }
-    if (bossExecution_.IsActive()) {
+    if (context.executionActive) {
         sample += " とどめ";
     }
-    if (enemy_ != nullptr && !enemy_->IsDefeated()) {
-        sample += " ボス " + FormatPosition(enemy_->GetPosition());
+    if (boss != nullptr && !boss->IsDefeated()) {
+        sample += " ボス " + FormatPosition(boss->GetPosition());
     }
-    bugWatch_.playerTrail.push_back(sample);
-    if (bugWatch_.playerTrail.size() > kPlayerTrailSamples) {
-        bugWatch_.playerTrail.erase(bugWatch_.playerTrail.begin());
+    state_.playerTrail.push_back(sample);
+    if (state_.playerTrail.size() > kPlayerTrailSamples) {
+        state_.playerTrail.erase(state_.playerTrail.begin());
     }
 }
 
 /** @brief 自動テストプレイの時だけ、床抜けを直前の様子と一緒に知らせる */
-void GamePlayScene::ReportPlayerFall(const Vector3& position) {
+void GamePlayBugWatcher::ReportPlayerFall(const Vector3& position, const Vector3& lastSafeGround) const {
     if (!SmokeTestRunner::IsActive()) {
         return;
     }
+    SmokeTestRunner::ReportIssue("プレイヤー", "落下", "床を抜けて地形の一番下より下にいた " + FormatPosition(position)
+        + "（最後に立っていた床へ戻した）。最後に床に立っていた所 " + FormatPosition(lastSafeGround)
+        + "。" + FormatPlayerTrail());
+}
+
+/** @brief 直前の様子の記録を、報告に添える1行の文にする */
+std::string GamePlayBugWatcher::FormatPlayerTrail() const {
     std::string trail;
-    for (const std::string& sample : bugWatch_.playerTrail) {
+    for (const std::string& sample : state_.playerTrail) {
         trail += (trail.empty() ? "" : " → ") + sample;
     }
-    SmokeTestRunner::ReportIssue("プレイヤー", "落下", "床を抜けて地形の一番下より下にいた " + FormatPosition(position)
-        + "（最後に立っていた床へ戻した）。最後に床に立っていた所 " + FormatPosition(lastSafeGround_)
-        + "。直前の様子（約 " + std::to_string(kCheckIntervalFrames) + " フレームごと、古い順）: " + trail);
+    return "直前の様子（約 " + std::to_string(kCheckIntervalFrames) + " フレームごと、古い順）: " + trail;
 }
 
 /** @brief 自動テストプレイの見張りで、武器の持ち方におかしな所が無いか調べる（選ぶ画面が出たまま・合体の番号が範囲の外など） */
-void GamePlayScene::CheckWeaponsForBugs(float elapsed) {
+void GamePlayBugWatcher::CheckWeapons(float elapsed) {
     const WeaponManager* weapons = WeaponManager::GetInstance();
     const int weaponCount = static_cast<int>(weapons->GetList().size());
     // 交換の画面と主軸を選ぶ画面は、自動の操作でも決定キーで閉じるはずなので、長く出たままなら止まっている
     const bool choosing = weapons->HasPendingWeapon() || weapons->HasPendingBossChoice();
-    if (SustainedFor(bugWatch_.suspectSeconds, "weapon_choice", choosing, elapsed, kWeaponChoiceStuckSeconds)) {
+    if (SustainedFor(state_.suspectSeconds, "weapon_choice", choosing, elapsed, kWeaponChoiceStuckSeconds)) {
         SmokeTestRunner::ReportIssue("武器", "選ぶ画面", std::string(weapons->HasPendingBossChoice() ? "ボスの武器の主軸を選ぶ画面" : "武器の交換の画面")
             + "が " + std::to_string(static_cast<int>(kWeaponChoiceStuckSeconds)) + " 秒以上出たまま");
     }
@@ -197,74 +207,76 @@ void GamePlayScene::CheckWeaponsForBugs(float elapsed) {
 }
 
 /** @brief 自動テストプレイの見張りで、味方のボスにおかしな所が無いか調べる（離れすぎたまま・落ちたまま・体力が範囲の外） */
-void GamePlayScene::CheckAllyForBugs(float elapsed) {
-    if (!ally_.IsActive()) {
+void GamePlayBugWatcher::CheckAlly(const BugWatchContext& context, float elapsed) {
+    if (context.ally == nullptr || !context.ally->IsActive()) {
         return;
     }
-    const Vector3& allyPos = ally_.GetPosition();
-    const Vector3 playerPos = player_->GetPosition();
+    const Vector3& allyPos = context.ally->GetPosition();
+    const Vector3 playerPos = context.player->GetPosition();
     // 離れすぎたら戻すはずなので、離れたままなら戻す処理が効いていない
     const bool tooFar = std::abs(allyPos.x - playerPos.x) > AllyTune().leashDistance * kAllyFarRatio;
-    if (SustainedFor(bugWatch_.suspectSeconds, "ally_far", tooFar, elapsed, kSustainSeconds)) {
+    if (SustainedFor(state_.suspectSeconds, "ally_far", tooFar, elapsed, kSustainSeconds)) {
         SmokeTestRunner::ReportIssue("味方のボス", "離れすぎ", "プレイヤー " + FormatPosition(playerPos) + " から離れたまま " + FormatPosition(allyPos));
     }
     const bool fellOut = allyPos.y < playerPos.y - kAllyFallMargin;
-    if (SustainedFor(bugWatch_.suspectSeconds, "ally_fall", fellOut, elapsed, kSustainSeconds)) {
+    if (SustainedFor(state_.suspectSeconds, "ally_fall", fellOut, elapsed, kSustainSeconds)) {
         SmokeTestRunner::ReportIssue("味方のボス", "落下", "プレイヤーよりずっと下にいる " + FormatPosition(allyPos));
     }
-    const float hp = ally_.HpRatio();
+    const float hp = context.ally->HpRatio();
     if (hp < 0.0f || hp > 1.0f) {
         SmokeTestRunner::ReportIssue("味方のボス", "体力", "体力の割合が範囲の外 " + std::to_string(hp));
     }
 }
 
 /** @brief 自動テストプレイの間だけ、遊んでいる様子からおかしな所を探して SmokeTestRunner へ知らせる */
-void GamePlayScene::RunBugChecks() {
-    if (!SmokeTestRunner::IsActive() || clearTriggered_ || playerDefeat_.IsActive()) {
+void GamePlayBugWatcher::Run(const BugWatchContext& context) {
+    if (!SmokeTestRunner::IsActive() || context.player == nullptr || context.editor == nullptr) {
         return;
     }
-    if (--bugWatch_.framesUntilCheck > 0) {
+    if (--state_.framesUntilCheck > 0) {
         return;
     }
-    bugWatch_.framesUntilCheck = kCheckIntervalFrames;
+    state_.framesUntilCheck = kCheckIntervalFrames;
     const float elapsed = static_cast<float>(kCheckIntervalFrames) * gameConstants::kFrameDeltaTime;
 
     // 地形（敵の体と扉を除く）から、ステージの広さを測る
-    const std::vector<AABB> terrain = GetStageEditor().GetCameraBoundColliders();
+    const std::vector<AABB> terrain = context.editor->GetCameraBoundColliders();
     AABB stageBounds {};
     const bool hasBounds = ComputeStageBounds(terrain, stageBounds);
-    CheckPlayerForBugs(stageBounds, hasBounds, terrain, elapsed);
-    CheckWeaponsForBugs(elapsed);
-    CheckAllyForBugs(elapsed);
-    CheckEnemiesForBugs(stageBounds, hasBounds, terrain, elapsed);
-    CheckEnemyGroupConditionsForBugs(stageBounds, hasBounds, terrain, elapsed);
+    CheckPlayer(context, stageBounds, hasBounds, terrain, elapsed);
+    CheckWeapons(elapsed);
+    CheckAlly(context, elapsed);
+    CheckEnemies(context, stageBounds, hasBounds, terrain, elapsed);
+    CheckEnemyGroupConditions(context, stageBounds, hasBounds, terrain, elapsed);
 }
 
 /** @brief プレイヤーの位置・体力・先へ進めるかを調べる */
-void GamePlayScene::CheckPlayerForBugs(const AABB& stageBounds, bool hasBounds, const std::vector<AABB>& terrain, float elapsed) {
-    const Vector3 position = player_->GetPosition();
+void GamePlayBugWatcher::CheckPlayer(const BugWatchContext& context, const AABB& stageBounds, bool hasBounds, const std::vector<AABB>& terrain, float elapsed) {
+    const Player* player = context.player;
+    const EnemyEntity* boss = context.boss;
+    const Vector3 position = player->GetPosition();
     if (!IsFinite(position)) {
         SmokeTestRunner::ReportIssue("プレイヤー", "位置", "位置に数でない値が入った");
         return;
     }
     // 手順がプレイヤーを離れた所へ移した後は、移す前の位置と比べない（壁抜けや先へ進めないと間違えないように）
-    if (bugWatch_.teleportCount != SmokeTestRunner::TeleportCount()) {
-        bugWatch_.teleportCount = SmokeTestRunner::TeleportCount();
-        bugWatch_.hasLastPlayerPosition = false;
-        bugWatch_.wasExpectingProgress = false;
-        bugWatch_.playerTrail.clear();
-        bugWatch_.lastGroundedPosition = position;
+    if (state_.teleportCount != SmokeTestRunner::TeleportCount()) {
+        state_.teleportCount = SmokeTestRunner::TeleportCount();
+        state_.hasLastPlayerPosition = false;
+        state_.wasExpectingProgress = false;
+        state_.playerTrail.clear();
+        state_.lastGroundedPosition = position;
     }
-    if (player_->IsOnGround()) {
-        bugWatch_.lastGroundedPosition = position;
+    if (player->IsOnGround()) {
+        state_.lastGroundedPosition = position;
     }
-    RecordPlayerTrail(position);
+    RecordPlayerTrail(context, position);
     // 前に調べた時から今までに、跳び越せない高さの壁や閉じた扉の真ん中を体の高さで横切っていたら、すり抜けている
-    if (bugWatch_.hasLastPlayerPosition) {
-        const Vector3& from = bugWatch_.lastPlayerPosition;
+    if (state_.hasLastPlayerPosition) {
+        const Vector3& from = state_.lastPlayerPosition;
         const float minX = (std::min)(from.x, position.x);
         const float maxX = (std::max)(from.x, position.x);
-        const std::vector<AABB> solids = GetStageEditor().GetTerrainColliders();
+        const std::vector<AABB> solids = context.editor->GetTerrainColliders();
         // 高さ1のブロックを積んだ壁もあるので、同じ横の位置にすき間なく積み上がったブロックを1本の壁として見る
         // （床・階段・天井のように間の空いたブロックは別々に数える。立っている足元のブロックは体に数えない）
         const auto wallSegmentAt = [&](float centerX, float y, float& bottom, float& top) {
@@ -316,18 +328,18 @@ void GamePlayScene::CheckPlayerForBugs(const AABB& stageBounds, bool hasBounds, 
             const bool sameWall = atFrom && atTo && fromBottom == toBottom && fromTop == toTop;
             if (sameWall && fromTop - fromBottom >= kPassThroughWallHeight) {
                 SmokeTestRunner::ReportIssue("プレイヤー", "壁抜け", FormatPosition(from) + " から " + FormatPosition(position)
-                    + " へ動いた間に、x=" + std::to_string(centerX) + " の壁か閉じた扉をすり抜けた");
+                    + " へ動いた間に、x=" + std::to_string(centerX) + " の壁か閉じた扉をすり抜けた。" + FormatPlayerTrail());
                 break;
             }
         }
     }
-    bugWatch_.lastPlayerPosition = position;
-    bugWatch_.hasLastPlayerPosition = true;
+    state_.lastPlayerPosition = position;
+    state_.hasLastPlayerPosition = true;
     const bool fellOut = hasBounds && position.y < stageBounds.min.y - kFallMargin;
-    if (SustainedFor(bugWatch_.suspectSeconds, "player_fall", fellOut, elapsed, kSustainSeconds)) {
+    if (SustainedFor(state_.suspectSeconds, "player_fall", fellOut, elapsed, kSustainSeconds)) {
         // どこから抜けたかを追えるよう、最後に床に立っていた所も添える
         SmokeTestRunner::ReportIssue("プレイヤー", "落下", "床を抜けて地形の一番下より下にいる " + FormatPosition(position)
-            + "。最後に床に立っていた所 " + FormatPosition(bugWatch_.lastGroundedPosition));
+            + "。最後に床に立っていた所 " + FormatPosition(state_.lastGroundedPosition));
     }
     const RunData* runData = RunData::GetInstance();
     if (runData->GetHp() < 0 || runData->GetHp() > runData->GetMaxHp()) {
@@ -337,51 +349,53 @@ void GamePlayScene::CheckPlayerForBugs(const AABB& stageBounds, bool hasBounds, 
     // 先へ進む操作をしている間に、右へ進めなくなっていないか（ボス戦の最中は止まって当然なので数えない）
     const bool expecting = SmokeTestRunner::IsExpectingProgress();
     if (!expecting) {
-        bugWatch_.wasExpectingProgress = false;
+        state_.wasExpectingProgress = false;
         return;
     }
-    if (!bugWatch_.wasExpectingProgress) {
-        bugWatch_.wasExpectingProgress = true;
-        bugWatch_.bestX = position.x;
-        bugWatch_.stallSeconds = 0.0f;
+    if (!state_.wasExpectingProgress) {
+        state_.wasExpectingProgress = true;
+        state_.bestX = position.x;
+        state_.stallSeconds = 0.0f;
         return;
     }
-    if (position.x > bugWatch_.bestX + kProgressEpsilon) {
-        bugWatch_.bestX = position.x;
-        bugWatch_.stallSeconds = 0.0f;
+    if (position.x > state_.bestX + kProgressEpsilon) {
+        state_.bestX = position.x;
+        state_.stallSeconds = 0.0f;
         return;
     }
-    const bool bossNearOrDown = enemy_ != nullptr
-        && (enemy_->IsDefeated() || std::abs(enemy_->GetPosition().x - position.x) < kBossNearDistance);
-    // 近くに倒せる敵が残っていて扉が閉まっているのは当然（右を向いたままのボットが背中側の敵を倒せていないだけ）
+    const bool bossNearOrDown = boss != nullptr
+        && (boss->IsDefeated() || std::abs(boss->GetPosition().x - position.x) < kBossNearDistance);
+    // 倒せる敵が近くか後ろに残っていて扉が閉まっているのは当然（右へ進み続けるボットが、近くや通り過ぎた敵を倒せていないだけ）
+    // 前の遠くに残っている敵は、閉じた扉の向こうで本当に届かないことがあるので数える
     const auto fightableNear = [&]() {
-        for (const EnemyGroupWatch& watch : GetStageEditor().CollectEnemyGroupWatches()) {
+        for (const EnemyGroupWatch& watch : context.editor->CollectEnemyGroupWatches()) {
             if (watch.met) {
                 continue;
             }
             for (const WatchedEnemyState& enemy : watch.enemies) {
                 const bool fightable = !enemy.defeated && enemy.active
                     && UnreachableReason(enemy.position, enemy.visible, stageBounds, hasBounds, terrain).empty();
-                if (fightable && std::abs(enemy.position.x - position.x) <= kFightableEnemyDistance) {
+                const bool nearOrBehind = std::abs(enemy.position.x - position.x) <= kFightableEnemyDistance || enemy.position.x < position.x;
+                if (fightable && nearOrBehind) {
                     return true;
                 }
             }
         }
         return false;
     };
-    if (bossNearOrDown || IsFinalBossMode() || fightableNear()) {
-        bugWatch_.stallSeconds = 0.0f;
+    if (bossNearOrDown || context.finalBossMode || fightableNear()) {
+        state_.stallSeconds = 0.0f;
         return;
     }
-    bugWatch_.stallSeconds += elapsed;
-    if (bugWatch_.stallSeconds < kStallSeconds) {
+    state_.stallSeconds += elapsed;
+    if (state_.stallSeconds < kStallSeconds) {
         return;
     }
-    bugWatch_.stallSeconds = 0.0f;
+    state_.stallSeconds = 0.0f;
     // どの条件が成立していないかと、その条件で生き残っている敵の様子も添えて、扉の前で止まっている訳を分かるようにする
     std::string unmet;
     std::string survivors;
-    for (const EnemyGroupWatch& watch : GetStageEditor().CollectEnemyGroupWatches()) {
+    for (const EnemyGroupWatch& watch : context.editor->CollectEnemyGroupWatches()) {
         if (watch.met) {
             continue;
         }
@@ -394,37 +408,37 @@ void GamePlayScene::CheckPlayerForBugs(const AABB& stageBounds, bool hasBounds, 
                 + (enemy.active ? "" : " 無効中") + (enemy.visible ? "" : " 見えない");
         }
     }
-    SmokeTestRunner::ReportIssue("先へ進めない", "x=" + std::to_string(static_cast<int>(bugWatch_.bestX)),
+    SmokeTestRunner::ReportIssue("先へ進めない", "x=" + std::to_string(static_cast<int>(state_.bestX)),
         "右へ進む操作を続けても " + FormatPosition(position) + " から進めない。成立していない条件: " + (unmet.empty() ? "なし" : unmet)
             + "。残っている敵: " + (survivors.empty() ? "なし" : survivors));
 }
 
 /** @brief 生きている敵が届かない所にいないか・生き返っていないかを調べる */
-void GamePlayScene::CheckEnemiesForBugs(const AABB& stageBounds, bool hasBounds, const std::vector<AABB>& terrain, float elapsed) {
-    for (const CombatEnemyRef& ref : GetStageEditor().GetCombatEnemies()) {
+void GamePlayBugWatcher::CheckEnemies(const BugWatchContext& context, const AABB& stageBounds, bool hasBounds, const std::vector<AABB>& terrain, float elapsed) {
+    for (const CombatEnemyRef& ref : context.editor->GetCombatEnemies()) {
         const EnemyEntity* enemy = ref.enemy;
         const std::pair<const EnemyEntity*, uint64_t> identity = { enemy, ref.instanceId };
-        auto& seen = bugWatch_.defeatedSeen;
+        auto& seen = state_.defeatedSeen;
         const bool wasDefeated = std::find(seen.begin(), seen.end(), identity) != seen.end();
         if (enemy->IsDefeated()) {
             if (!wasDefeated) {
                 seen.push_back(identity);
             }
-            SustainedFor(bugWatch_.suspectSeconds, "enemy_" + ref.name, false, elapsed, kSustainSeconds);
+            SustainedFor(state_.suspectSeconds, "enemy_" + ref.name, false, elapsed, kSustainSeconds);
             continue;
         }
         // 前に調べた時から理由も無く一気に遠くへ動いていたら、どこからどこへ動いたかを知らせる（端へ戻された・持ち場へ戻された敵を見つける）
         // ボスの技・吹き飛び・急降下などの台本の動きは速くて当然なので、前か今のどちらかがそうなら数えない
         const Vector3 position = enemy->GetPosition();
         const bool fastMoveExpected = ref.isStageBoss || enemy->IsBlownAway() || enemy->IsScripted();
-        const auto last = bugWatch_.enemyLastPositions.find(ref.instanceId);
-        if (last != bugWatch_.enemyLastPositions.end() && !last->second.fastMoveExpected && !fastMoveExpected
+        const auto last = state_.enemyLastPositions.find(ref.instanceId);
+        if (last != state_.enemyLastPositions.end() && !last->second.fastMoveExpected && !fastMoveExpected
             && std::abs(position.x - last->second.position.x) >= kEnemyTeleportDistance) {
             SmokeTestRunner::ReportIssue("敵の位置", "瞬間移動 " + ref.name,
                 FormatPosition(last->second.position) + " から " + FormatPosition(position) + " へ、吹き飛びも技も無しに一気に動いた（体力 "
                     + std::to_string(enemy->GetHp()) + "）");
         }
-        bugWatch_.enemyLastPositions[ref.instanceId] = { position, fastMoveExpected };
+        state_.enemyLastPositions[ref.instanceId] = { position, fastMoveExpected };
         // 倒されたのを見た敵が、同じ実体のまま倒されていない扱いに戻った
         if (wasDefeated) {
             SmokeTestRunner::ReportIssue("敵が生き返った", ref.name,
@@ -433,7 +447,7 @@ void GamePlayScene::CheckEnemiesForBugs(const AABB& stageBounds, bool hasBounds,
             seen.erase(std::remove(seen.begin(), seen.end(), identity), seen.end());
         }
         const std::string reason = UnreachableReason(enemy->GetPosition(), enemy->IsVisible(), stageBounds, hasBounds, terrain);
-        if (SustainedFor(bugWatch_.suspectSeconds, "enemy_" + ref.name, !reason.empty(), elapsed, kSustainSeconds)) {
+        if (SustainedFor(state_.suspectSeconds, "enemy_" + ref.name, !reason.empty(), elapsed, kSustainSeconds)) {
             SmokeTestRunner::ReportIssue("届かない所の敵", ref.name,
                 reason + " " + FormatPosition(enemy->GetPosition()) + " 体力 " + std::to_string(enemy->GetHp()) + (ref.isStageBoss ? "（ボス）" : ""));
         }
@@ -441,8 +455,8 @@ void GamePlayScene::CheckEnemiesForBugs(const AABB& stageBounds, bool hasBounds,
 }
 
 /** @brief 敵グループの全滅を待つ条件（扉など）が、倒し切ったのに成立しない所を探す */
-void GamePlayScene::CheckEnemyGroupConditionsForBugs(const AABB& stageBounds, bool hasBounds, const std::vector<AABB>& terrain, float elapsed) {
-    for (const EnemyGroupWatch& watch : GetStageEditor().CollectEnemyGroupWatches()) {
+void GamePlayBugWatcher::CheckEnemyGroupConditions(const BugWatchContext& context, const AABB& stageBounds, bool hasBounds, const std::vector<AABB>& terrain, float elapsed) {
+    for (const EnemyGroupWatch& watch : context.editor->CollectEnemyGroupWatches()) {
         // 出現待ちの敵がいる間と、敵がまだ1体も出ていない間は成立しなくて当然
         bool stuck = false;
         std::string detail;
@@ -471,10 +485,16 @@ void GamePlayScene::CheckEnemyGroupConditionsForBugs(const AABB& stageBounds, bo
                 detail = "残りの敵が全員届かない所にいる: " + detail;
             }
         }
-        if (SustainedFor(bugWatch_.suspectSeconds, "condition_" + watch.conditionName, stuck, elapsed, kConditionSustainSeconds)) {
+        if (SustainedFor(state_.suspectSeconds, "condition_" + watch.conditionName, stuck, elapsed, kConditionSustainSeconds)) {
             SmokeTestRunner::ReportIssue("扉の条件が成立しない", watch.conditionName, "グループ " + watch.group + ": " + detail);
         }
     }
+}
+
+/** @brief ステージを読み直した時に、前のステージの様子を忘れる */
+void GamePlayBugWatcher::ResetForLevel() {
+    state_.playerTrail.clear();
+    state_.enemyLastPositions.clear();
 }
 
 } // namespace engine::game

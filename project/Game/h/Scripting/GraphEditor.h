@@ -191,6 +191,27 @@ private:
 
     void DrawLinks(ImDrawList* dl, CanvasFrameState& state);
     void DrawAddNodeMenu();
+    /** @brief お手本を選ぶ一覧を表示する */
+    void DrawTemplateMenu();
+    /** @brief お手本の配線と説明を保って指定位置に追加する */
+    void InsertTemplate(const GraphDesc& sample);
+    /** @brief ノードの実行線と値の線を新しい番号に置き換える */
+    static void RemapNodeLinks(GraphNode& node, const std::map<std::string, std::string>& ids);
+    /** @brief 開始地点から実行線をたどった距離を返す */
+    std::map<std::string, int> FindExecutionDepths() const;
+    /** @brief 実行線を点検し、届かないノードごとの理由を記録する */
+    void UpdateWarnings();
+    /** @brief 点検結果を一覧にし、選んだノードを表示する */
+    void DrawInspection();
+    /** @brief このグラフが今のレベルでどう使われているかと、保存して遊ぶまでの手順を出す（GraphEditorLevelLink.cpp） */
+    void DrawLevelLink();
+    /** @brief グラフの流れを、開始ノードから実行の順に普通の文で出す（GraphEditorLevelLink.cpp） */
+    void DrawFlowSummary();
+    /** @brief 開いた時、今のレベルが変わっていて編集中でなければ、そのレベルの常駐のグラフを開く */
+    void AutoOpenLevelGraph();
+    std::string autoOpenedLevel_; ///< 最後に自動でグラフを開いたレベル（同じレベルでは開き直さない）
+    std::map<std::string, const char*> warnings_; ///< 点検で見つかったノードと、その理由
+    std::vector<GraphDesc> templates_; ///< お手本の一覧（追加のメニューを開いた時に読み直す）
     /** @brief pendingAddX_/Y_の位置に、型ごとの初期パラメータを埋めたtype型のノードを1つ追加する */
     void AddNodeOfType(const std::string& type);
     /** @brief 指定ノードと、そのノードへの参照を取り除く（履歴の記録は呼び出し側で行う） */

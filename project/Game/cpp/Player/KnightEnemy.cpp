@@ -3,6 +3,7 @@
  * @brief 突進してくる騎士の敵（KnightEnemy）の状態・武器の吸収・描画の実装
  */
 #include "KnightEnemy.h"
+#include "EngineContext.h"
 #include "EnemyTuning.h"
 #include "GameConstants.h"
 #include "GroundSupport.h"
@@ -123,7 +124,7 @@ void KnightEnemy::Initialize(ModelCommon* modelCommon, const Vector3& spawnPos) 
     skinCommon_ = SkinnedObject3d::CreateSharedCommon(modelCommon);
 
     // 本体のスキンモデル・骨格・待機と攻撃のアニメーション
-    model_ = ModelManager::GetInstance()->GetOrLoadSkinned(
+    model_ = engine::Services().models->GetOrLoadSkinned(
         modelCommon->GetDxCommon(), kKnightModelPath, kKnightTexture);
     object_ = std::make_unique<SkinnedObject3d>();
     object_->Initialize(skinCommon_.get());
@@ -145,7 +146,7 @@ void KnightEnemy::Initialize(ModelCommon* modelCommon, const Vector3& spawnPos) 
     applyRimLight(*object_);
 
     // 手に持つ剣（本体と同じリムライトを当てる）
-    swordModel_ = ModelManager::GetInstance()->GetOrLoad(modelCommon, kSwordModelPath, kSwordTexture);
+    swordModel_ = engine::Services().models->GetOrLoad(modelCommon, kSwordModelPath, kSwordTexture);
     swordObject_ = std::make_unique<Object3d>();
     swordObject_->Initialize(modelCommon);
     swordObject_->SetModel(swordModel_);

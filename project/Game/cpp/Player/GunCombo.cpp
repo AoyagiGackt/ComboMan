@@ -3,6 +3,7 @@
  * @brief 銃の種類ごとの射撃コンボの表と、射撃コンボの進行（GunComboController）の実装
  */
 #include "GunCombo.h"
+#include "TestCoverage.h"
 #include "Easing.h"
 #include "GameConstants.h"
 #include "JsonFieldTable.h"
@@ -204,6 +205,10 @@ bool GunComboController::TryShoot(GunType type) {
 
 /** @brief 指定した段を始め、経過時間と命中済みの印を消す */
 void GunComboController::StartStep(const GunShotDef* def, int tableIdx) {
+    // 開始した射撃の段を記録する。
+    if (testCoverage::IsEnabled() && def != nullptr) {
+        testCoverage::Cover("gun_shot", def->id);
+    }
     active_ = def;
     stepIdx_ = tableIdx;
     stepDisplay_ = tableIdx + 1;

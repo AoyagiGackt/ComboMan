@@ -1,0 +1,351 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Development|x64">
+      <Configuration>Development</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>17.0</VCProjectVersion>
+    <Keyword>Win32Proj</Keyword>
+    <ProjectGuid>{b7e4c2a1-5d3f-4e8a-9c61-2f0a7d3e9b54}</ProjectGuid>
+    <RootNamespace>EngineLib</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+    <ProjectName>EngineLib</ProjectName>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v145</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v145</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Development|x64'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v145</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="Shared">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Development|x64'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <OutDir>$(SolutionDir)..\Generated\Outputs\$(Configuration)\</OutDir>
+    <IntDir>$(SolutionDir)..\Generated\Obj\$(ProjectName)\$(Configuration)\</IntDir>
+    <IncludePath>$(SolutionDir)imgui;$(IncludePath)</IncludePath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Development|x64'">
+    <OutDir>$(SolutionDir)..\Generated\Outputs\$(Configuration)\</OutDir>
+    <IntDir>$(SolutionDir)..\Generated\Obj\$(ProjectName)\$(Configuration)\</IntDir>
+    <IncludePath>$(SolutionDir)imgui;$(IncludePath)</IncludePath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <OutDir>$(SolutionDir)..\Generated\Outputs\$(Configuration)\</OutDir>
+    <IntDir>$(SolutionDir)..\Generated\Obj\$(ProjectName)\$(Configuration)\</IntDir>
+    <IncludePath>$(SolutionDir)imgui;$(IncludePath)</IncludePath>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>_AMD64_;_DEBUG;USE_IMGUI;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpp23</LanguageStandard>
+      <AdditionalOptions>/utf-8 /FS %(AdditionalOptions)</AdditionalOptions>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
+      <TreatWarningAsError>true</TreatWarningAsError>
+      <AdditionalIncludeDirectories>$(ProjectDir)Engine\math\h;$(ProjectDir)Engine\graphics\cpp;$(ProjectDir)Engine\graphics\h;$(ProjectDir)Engine\core\h;$(ProjectDir)Engine\core\h\Window;$(ProjectDir)Engine\core\h\Device;$(ProjectDir)Engine\core\h\Input;$(ProjectDir)Engine\core\h\Audio;$(ProjectDir)Engine\core\h\Time;$(ProjectDir)Engine\core\h\App;$(ProjectDir)Engine\core\h\Util;$(ProjectDir)Engine\core\h\Object;$(ProjectDir)Engine\core\h\Collision;$(ProjectDir)Engine\graphics\h\2D;$(ProjectDir)Engine\graphics\h\3D;$(ProjectDir)Engine\graphics\h\Camera;$(ProjectDir)Engine\graphics\h\Diagnostics;$(ProjectDir)Engine\graphics\h\Effect;$(ProjectDir)Engine\graphics\h\ImGui;$(ProjectDir)Engine\graphics\h\Light;$(ProjectDir)Engine\graphics\h\Manager;$(ProjectDir)Engine\graphics\h\Offscreen;$(ProjectDir)Engine\graphics\h\Particle;$(ProjectDir)Engine\graphics\h\Skeleton;$(ProjectDir)Engine\graphics\h\Text;$(ProjectDir)Engine\graphics\h\UI;$(ProjectDir)Engine\scripting\h;$(ProjectDir)Engine\editor\h;$(ProjectDir)Resources\shaders\lighting;$(ProjectDir)Resources\shaders\object3d;$(SolutionDir)..\externals\imgui;$(SolutionDir)..\externals\DirectXTex;$(SolutionDir)..\externals\assimp\include;$(SolutionDir)..\externals\json;$(ProjectDir)Resources\shaders\Particle;$(ProjectDir)Resources;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>_AMD64_;ENGINE_RELEASE;</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpp23</LanguageStandard>
+      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <Optimization>MinSpace</Optimization>
+      <AdditionalIncludeDirectories>$(ProjectDir)Engine\math\h;$(ProjectDir)Engine\graphics\cpp;$(ProjectDir)Engine\graphics\h;$(ProjectDir)Engine\core\h;$(ProjectDir)Engine\core\h\Window;$(ProjectDir)Engine\core\h\Device;$(ProjectDir)Engine\core\h\Input;$(ProjectDir)Engine\core\h\Audio;$(ProjectDir)Engine\core\h\Time;$(ProjectDir)Engine\core\h\App;$(ProjectDir)Engine\core\h\Util;$(ProjectDir)Engine\core\h\Object;$(ProjectDir)Engine\core\h\Collision;$(ProjectDir)Engine\graphics\h\2D;$(ProjectDir)Engine\graphics\h\3D;$(ProjectDir)Engine\graphics\h\Camera;$(ProjectDir)Engine\graphics\h\Diagnostics;$(ProjectDir)Engine\graphics\h\Effect;$(ProjectDir)Engine\graphics\h\ImGui;$(ProjectDir)Engine\graphics\h\Light;$(ProjectDir)Engine\graphics\h\Manager;$(ProjectDir)Engine\graphics\h\Offscreen;$(ProjectDir)Engine\graphics\h\Particle;$(ProjectDir)Engine\graphics\h\Skeleton;$(ProjectDir)Engine\graphics\h\Text;$(ProjectDir)Engine\graphics\h\UI;$(ProjectDir)Engine\scripting\h;$(ProjectDir)Engine\editor\h;$(ProjectDir)Resources\shaders\lighting;$(ProjectDir)Resources\shaders\object3d;$(SolutionDir)..\externals\imgui;$(SolutionDir)..\externals\DirectXTex;$(SolutionDir)..\externals\assimp\include;$(SolutionDir)..\externals\json;$(ProjectDir)Resources\shaders\Particle;$(ProjectDir)Resources;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Development|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>_AMD64_;ENGINE_DEVELOPMENT;</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpp23</LanguageStandard>
+      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <Optimization>Disabled</Optimization>
+      <AdditionalIncludeDirectories>$(ProjectDir)Engine\math\h;$(ProjectDir)Engine\graphics\cpp;$(ProjectDir)Engine\graphics\h;$(ProjectDir)Engine\core\h;$(ProjectDir)Engine\core\h\Window;$(ProjectDir)Engine\core\h\Device;$(ProjectDir)Engine\core\h\Input;$(ProjectDir)Engine\core\h\Audio;$(ProjectDir)Engine\core\h\Time;$(ProjectDir)Engine\core\h\App;$(ProjectDir)Engine\core\h\Util;$(ProjectDir)Engine\core\h\Object;$(ProjectDir)Engine\core\h\Collision;$(ProjectDir)Engine\graphics\h\2D;$(ProjectDir)Engine\graphics\h\3D;$(ProjectDir)Engine\graphics\h\Camera;$(ProjectDir)Engine\graphics\h\Diagnostics;$(ProjectDir)Engine\graphics\h\Effect;$(ProjectDir)Engine\graphics\h\ImGui;$(ProjectDir)Engine\graphics\h\Light;$(ProjectDir)Engine\graphics\h\Manager;$(ProjectDir)Engine\graphics\h\Offscreen;$(ProjectDir)Engine\graphics\h\Particle;$(ProjectDir)Engine\graphics\h\Skeleton;$(ProjectDir)Engine\graphics\h\Text;$(ProjectDir)Engine\graphics\h\UI;$(ProjectDir)Engine\scripting\h;$(ProjectDir)Engine\editor\h;$(ProjectDir)Resources\shaders\lighting;$(ProjectDir)Resources\shaders\object3d;$(SolutionDir)..\externals\imgui;$(SolutionDir)..\externals\DirectXTex;$(SolutionDir)..\externals\assimp\include;$(SolutionDir)..\externals\json;$(ProjectDir)Resources\shaders\Particle;$(ProjectDir)Resources;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="Engine\editor\cpp\PostProcessOrderEditor.cpp" />
+    <ClCompile Include="Engine\graphics\cpp\Manager\AssetReferenceScanner.cpp" />
+    <ClCompile Include="Engine\graphics\cpp\Effect\PostProcessStack.cpp" />
+    <ClCompile Include="Engine\graphics\cpp\3D\Object3dRenderQueue.cpp" />
+    <ClCompile Include="Engine\core\cpp\Audio\AudioStream.cpp" />
+    <ClCompile Include="Engine\core\cpp\Device\DeferredReleaseQueue.cpp" />
+    <ClCompile Include="Engine\core\cpp\Collision\UniformGridX.cpp" />
+    <ClCompile Include="Engine\graphics\cpp\Skeleton\Animation.cpp" />
+    <ClCompile Include="Engine\core\cpp\Audio\Audio.cpp" />
+    <ClCompile Include="Engine\core\cpp\App\Framework.cpp" />
+    <ClCompile Include="Engine\core\cpp\Object\GameObject.cpp" />
+    <ClCompile Include="Engine\core\cpp\Time\TimeManager.cpp" />
+    <ClCompile Include="Engine\core\cpp\Time\FixedStepClock.cpp" />
+    <ClCompile Include="Engine\core\cpp\Util\JsonHelper.cpp" />
+    <ClCompile Include="Engine\core\cpp\Util\CrashBreadcrumbs.cpp" />
+    <ClCompile Include="Engine\graphics\cpp\Light\LightingMode.cpp" />
+    <ClCompile Include="Engine\graphics\cpp\Camera\Camera.cpp" />
+    <ClCompile Include="Engine\core\cpp\Device\DirectXCommon.cpp" />
+    <ClCompile Include="Engine\core\cpp\Device\DirectXCommonCapture.cpp" />
+    <ClCompile Include="Engine\core\cpp\Device\FrameUploadAllocator.cpp" />
+    <ClCompile Include="Engine\core\cpp\Device\DirectXCommonInit.cpp" />
+    <ClCompile Include="Engine\core\cpp\Device\DirectXCommonShader.cpp" />
+    <ClCompile Include="Engine\core\cpp\Device\DirectXCommonPresent.cpp" />
+    <ClCompile Include="Engine\core\cpp\Device\ResourceStateTracker.cpp" />
+    <ClCompile Include="Engine\core\cpp\Device\ParallelBundleRecorder.cpp" />
+    <ClCompile Include="Engine\graphics\cpp\Diagnostics\CrashHandler.cpp" />
+    <ClCompile Include="Engine\graphics\cpp\Diagnostics\CrashContext.cpp" />
+    <ClCompile Include="Engine\graphics\cpp\Diagnostics\Logger.cpp" />
+    <ClCompile Include="Engine\core\cpp\Window\WinApp.cpp" />
+    <ClCompile Include="Engine\core\cpp\Util\StringUtility.cpp" />
+    <ClCompile Include="Engine\core\cpp\Util\WorkerPool.cpp" />
+    <ClCompile Include="Engine\core\cpp\Util\PoolOverflowCounter.cpp" />
+    <ClCompile Include="Engine\core\cpp\Util\RandomSeed.cpp" />
+    <ClCompile Include="Engine\graphics\cpp\Diagnostics\GpuProfiler.cpp" />
+    <ClCompile Include="Engine\graphics\cpp\Effect\Fade.cpp" />
+    <ClCompile Include="Engine\graphics\cpp\Effect\BladeFlashEffect.cpp" />
+    <ClCompile Include="Engine\graphics\cpp\Effect\WeaponTrailEffect.cpp" />
+    <ClCompile Include="Engine\graphics\cpp\Effect\ImpactRadialBlurEffect.cpp" />
+    <ClCompile Include="Engine\graphics\cpp\Effect\GlassShatterEffect.cpp" />
+    <ClCompile Include="Engine\graphics\cpp\Effect\WaterSurfaceEffect.cpp" />
+    <ClCompile Include="Engine\graphics\cpp\Effect\MeshSliceEffect.cpp" />
+    <ClCompile Include="Engine\graphics\cpp\Effect\SpaceDistortionEffect.cpp" />
+    <ClCompile Include="Engine\graphics\cpp\Effect\GrayscaleEffect.cpp" />
+    <ClCompile Include="Engine\graphics\cpp\Effect\HsvFilter.cpp" />
+    <ClCompile Include="Engine\graphics\cpp\Effect\PostEffectFullscreenPass.cpp" />
+    <ClCompile Include="Engine\graphics\cpp\Effect\ImageFilter.cpp" />
+    <ClCompile Include="Engine\graphics\cpp\ImGui\EditorUI.cpp" />
+    <ClCompile Include="Engine\graphics\cpp\ImGui\JsonConfigEditor.cpp" />
+    <ClCompile Include="Engine\graphics\cpp\ImGui\JsonConfigEditorLabels.cpp" />
+    <ClCompile Include="Engine\graphics\cpp\ImGui\JsonConfigEditorVisuals.cpp" />
+    <ClCompile Include="Engine\graphics\cpp\ImGui\ImGuiControlPanel.cpp" />
+    <ClCompile Include="Engine\graphics\cpp\Light\LightManager.cpp" />
+    <ClCompile Include="Engine\graphics\cpp\Light\CascadedShadowMap.cpp" />
+    <ClCompile Include="Engine\graphics\cpp\Manager\MaterialManager.cpp" />
+    <ClCompile Include="Engine\graphics\cpp\Manager\MeshManager.cpp" />
+    <ClCompile Include="Engine\graphics\cpp\Manager\PipelineHelper.cpp" />
+    <ClCompile Include="Engine\graphics\cpp\Manager\PipelineCacheHotReload.cpp" />
+    <ClCompile Include="Engine\graphics\cpp\Manager\PipelineCache.cpp" />
+    <ClCompile Include="Engine\core\cpp\Input\Input.cpp" />
+    <ClCompile Include="Engine\core\cpp\Input\GamepadRumble.cpp" />
+    <ClCompile Include="Engine\graphics\cpp\ImGui\ImGuiManager.cpp" />
+    <ClCompile Include="Engine\graphics\cpp\Skeleton\Skeleton.cpp" />
+    <ClCompile Include="Engine\graphics\cpp\Skeleton\SkeletonOverlayRenderer.cpp" />
+    <ClCompile Include="Engine\graphics\cpp\Skeleton\SkinCS.cpp" />
+    <ClCompile Include="Engine\graphics\cpp\Skeleton\SkinnedModel.cpp" />
+    <ClCompile Include="Engine\graphics\cpp\Skeleton\SkinCommon.cpp" />
+    <ClCompile Include="Engine\graphics\cpp\Skeleton\SkinnedObject3d.cpp" />
+    <ClCompile Include="Engine\graphics\cpp\3D\Skydome.cpp" />
+    <ClCompile Include="Engine\graphics\cpp\2D\SpriteCommon.cpp" />
+    <ClCompile Include="Engine\graphics\cpp\2D\Sprite.cpp" />
+    <ClCompile Include="Engine\graphics\cpp\Manager\TextureManager.cpp" />
+    <ClCompile Include="Engine\graphics\cpp\Manager\AssetPack.cpp" />
+    <ClCompile Include="Engine\graphics\cpp\3D\Object3dCommon.cpp" />
+    <ClCompile Include="Engine\graphics\cpp\Light\ShadowManager.cpp" />
+    <ClCompile Include="Engine\graphics\cpp\3D\Model.cpp" />
+    <ClCompile Include="Engine\graphics\cpp\3D\ModelThumbnailBaker.cpp" />
+    <ClCompile Include="Engine\graphics\cpp\3D\Object3d.cpp" />
+    <ClCompile Include="Engine\graphics\cpp\Manager\ModelManager.cpp" />
+    <ClCompile Include="Engine\graphics\cpp\3D\ModelCommon.cpp" />
+    <ClCompile Include="Engine\graphics\cpp\Manager\SrvManager.cpp" />
+    <ClCompile Include="Engine\graphics\cpp\Particle\ParticleManager.cpp" />
+    <ClCompile Include="Engine\graphics\cpp\Particle\ParticleManagerEmit.cpp" />
+    <ClCompile Include="Engine\graphics\cpp\Particle\ParticleManagerPipeline.cpp" />
+    <ClCompile Include="Engine\graphics\cpp\3D\Cylinder.cpp" />
+    <ClCompile Include="Engine\graphics\cpp\3D\Ring.cpp" />
+    <ClCompile Include="Engine\graphics\cpp\3D\RevolvedMeshBase.cpp" />
+    <ClCompile Include="Engine\graphics\cpp\Offscreen\RenderTexture.cpp" />
+    <ClCompile Include="Engine\graphics\cpp\Effect\VideoPlayer.cpp" />
+    <ClCompile Include="Engine\graphics\cpp\Effect\VignetteEffect.cpp" />
+    <ClCompile Include="Engine\graphics\cpp\Effect\BloomEffect.cpp" />
+    <ClCompile Include="Engine\editor\cpp\StageEditorSnap.cpp" />
+    <ClCompile Include="Engine\editor\cpp\EditorHub.cpp" />
+    <ClCompile Include="Engine\scripting\cpp\NodeTypeRegistry.cpp" />
+    <ClCompile Include="Engine\graphics\cpp\UI\MenuSelection.cpp" />
+    <ClCompile Include="Engine\graphics\cpp\Text\BitmapFontRenderer.cpp" />
+    <ClCompile Include="Engine\graphics\cpp\Effect\ToneMapEffect.cpp" />
+    <ClCompile Include="Engine\graphics\cpp\Effect\OutlineEffect.cpp" />
+    <ClCompile Include="Engine\graphics\cpp\Effect\SSAOEffect.cpp" />
+    <ClCompile Include="Engine\graphics\cpp\ImGui\ImGuiControlSceneSettings.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="Engine\editor\h\PostProcessOrderEditor.h" />
+    <ClInclude Include="Engine\graphics\h\Manager\AssetReferenceScanner.h" />
+    <ClInclude Include="Engine\graphics\h\Effect\PostProcessStack.h" />
+    <ClInclude Include="Engine\graphics\h\3D\Object3dRenderQueue.h" />
+    <ClInclude Include="Engine\core\h\App\EngineContext.h" />
+    <ClInclude Include="Engine\core\h\Device\DeferredReleaseQueue.h" />
+    <ClInclude Include="Engine\graphics\h\Skeleton\Animation.h" />
+    <ClInclude Include="Engine\core\h\Audio\Audio.h" />
+    <ClInclude Include="Engine\core\h\Collision\CollisionConfig.h" />
+    <ClInclude Include="Engine\core\h\Collision\UniformGridX.h" />
+    <ClInclude Include="Engine\core\h\App\Framework.h" />
+    <ClInclude Include="Engine\core\h\Object\GameObject.h" />
+    <ClInclude Include="Engine\core\h\Time\TimeManager.h" />
+    <ClInclude Include="Engine\core\h\Time\FixedStepClock.h" />
+    <ClInclude Include="Engine\core\h\Util\JsonHelper.h" />
+    <ClInclude Include="Engine\core\h\Util\CrashBreadcrumbs.h" />
+    <ClInclude Include="Engine\graphics\h\Light\LightingMode.h" />
+    <ClInclude Include="Engine\graphics\h\Diagnostics\CrashHandler.h" />
+    <ClInclude Include="Engine\graphics\h\Diagnostics\CrashContext.h" />
+    <ClInclude Include="Engine\graphics\h\Diagnostics\EngineAssert.h" />
+    <ClInclude Include="Engine\graphics\h\Diagnostics\Logger.h" />
+    <ClInclude Include="Engine\graphics\h\3D\BlendMode.h" />
+    <ClInclude Include="Engine\graphics\h\Camera\Camera.h" />
+    <ClInclude Include="Engine\graphics\h\Camera\CameraRig.h" />
+    <ClInclude Include="Engine\graphics\h\Diagnostics\D3D12ResourceLeakChecker.h" />
+    <ClInclude Include="Engine\core\h\Device\DirectXCommon.h" />
+    <ClInclude Include="Engine\core\h\Device\FrameUploadAllocator.h" />
+    <ClInclude Include="Engine\core\h\Device\ResourceStateTracker.h" />
+    <ClInclude Include="Engine\core\h\Device\ParallelBundleRecorder.h" />
+    <ClInclude Include="Engine\core\h\Window\WinApp.h" />
+    <ClInclude Include="Engine\graphics\h\Diagnostics\GpuProfiler.h" />
+    <ClInclude Include="Engine\graphics\h\Effect\Fade.h" />
+    <ClInclude Include="Engine\graphics\h\Light\LightManager.h" />
+    <ClInclude Include="Engine\graphics\h\Light\CascadedShadowMap.h" />
+    <ClInclude Include="Engine\graphics\h\Manager\MaterialManager.h" />
+    <ClInclude Include="Engine\graphics\h\Manager\MeshManager.h" />
+    <ClInclude Include="Engine\graphics\h\Manager\PipelineHelper.h" />
+    <ClInclude Include="Engine\graphics\h\Manager\PipelineCache.h" />
+    <ClInclude Include="Engine\graphics\h\Skeleton\Skeleton.h" />
+    <ClInclude Include="Engine\graphics\h\Skeleton\PoseLayer.h" />
+    <ClInclude Include="Engine\graphics\h\Skeleton\SkeletonOverlayRenderer.h" />
+    <ClInclude Include="Engine\graphics\h\Skeleton\SkinCS.h" />
+    <ClInclude Include="Engine\graphics\h\Skeleton\SkinnedModel.h" />
+    <ClInclude Include="Engine\graphics\h\Skeleton\SkinCommon.h" />
+    <ClInclude Include="Engine\graphics\h\Skeleton\SkinnedObject3d.h" />
+    <ClInclude Include="Engine\graphics\h\3D\Skydome.h" />
+    <ClInclude Include="Engine\graphics\h\Effect\VideoPlayer.h" />
+    <ClInclude Include="Engine\graphics\h\Effect\VignetteEffect.h" />
+    <ClInclude Include="Engine\math\h\MakeAffine.h" />
+    <ClInclude Include="Engine\math\h\PathTrack.h" />
+    <ClInclude Include="Engine\math\h\MathCollision.h" />
+    <ClInclude Include="Engine\math\h\FrustumCulling.h" />
+    <ClInclude Include="Engine\math\h\Matrix4x4.h" />
+    <ClInclude Include="Engine\math\h\Quaternion.h" />
+    <ClInclude Include="Engine\math\h\Transform.h" />
+    <ClInclude Include="Engine\math\h\Vector2.h" />
+    <ClInclude Include="Engine\math\h\Vector3.h" />
+    <ClInclude Include="Engine\math\h\Vector4.h" />
+    <ClInclude Include="Engine\core\h\Input\Input.h" />
+    <ClInclude Include="Engine\core\h\Input\GamepadRumble.h" />
+    <ClInclude Include="Engine\core\h\Util\StringUtility.h" />
+    <ClInclude Include="Engine\graphics\h\ImGui\ImGuiManager.h" />
+    <ClInclude Include="Engine\graphics\h\2D\SpriteCommon.h" />
+    <ClInclude Include="Engine\graphics\h\2D\Sprite.h" />
+    <ClInclude Include="Engine\graphics\h\Manager\TextureManager.h" />
+    <ClInclude Include="Engine\graphics\h\Manager\AssetPack.h" />
+    <ClInclude Include="Engine\graphics\h\3D\Object3dCommon.h" />
+    <ClInclude Include="Engine\graphics\h\3D\ObjectMaterialLayout.h" />
+    <ClInclude Include="Engine\graphics\h\Light\ShadowManager.h" />
+    <ClInclude Include="Engine\graphics\h\3D\Model.h" />
+    <ClInclude Include="Engine\graphics\h\3D\ModelThumbnailBaker.h" />
+    <ClInclude Include="Engine\graphics\h\3D\AssimpVertexReader.h" />
+    <ClInclude Include="Engine\graphics\h\3D\Object3d.h" />
+    <ClInclude Include="Engine\graphics\h\Manager\ModelManager.h" />
+    <ClInclude Include="Engine\graphics\h\3D\ModelCommon.h" />
+    <ClInclude Include="Engine\graphics\h\Manager\SrvManager.h" />
+    <ClInclude Include="Engine\graphics\h\Particle\ParticleManager.h" />
+    <ClInclude Include="Engine\graphics\h\3D\Cylinder.h" />
+    <ClInclude Include="Engine\graphics\h\3D\Ring.h" />
+    <ClInclude Include="Engine\graphics\h\3D\RevolvedMeshBase.h" />
+    <ClInclude Include="Engine\graphics\h\Effect\BladeFlashEffect.h" />
+    <ClInclude Include="Engine\graphics\h\Effect\GraphicsTuning.h" />
+    <ClInclude Include="Engine\graphics\h\Effect\WeaponTrailEffect.h" />
+    <ClInclude Include="Engine\graphics\h\Effect\ImpactRadialBlurEffect.h" />
+    <ClInclude Include="Engine\graphics\h\Effect\GlassShatterEffect.h" />
+    <ClInclude Include="Engine\graphics\h\Effect\WaterSurfaceEffect.h" />
+    <ClInclude Include="Engine\graphics\h\Effect\MeshSliceEffect.h" />
+    <ClInclude Include="Engine\graphics\h\Effect\SpaceDistortionEffect.h" />
+    <ClInclude Include="Engine\graphics\h\Effect\GrayscaleEffect.h" />
+    <ClInclude Include="Engine\graphics\h\Effect\HsvFilter.h" />
+    <ClInclude Include="Engine\graphics\h\Effect\ImageFilter.h" />
+    <ClInclude Include="Engine\graphics\h\Effect\PostEffectRenderTarget.h" />
+    <ClInclude Include="Engine\graphics\h\Effect\PostEffectFullscreenPass.h" />
+    <ClInclude Include="Engine\graphics\h\Offscreen\RenderTexture.h" />
+    <ClInclude Include="Engine\graphics\h\ImGui\EditorUI.h" />
+    <ClInclude Include="Engine\graphics\h\ImGui\JsonConfigEditor.h" />
+    <ClInclude Include="Engine\graphics\h\ImGui\JsonConfigEditorShared.h" />
+    <ClInclude Include="Engine\graphics\h\ImGui\ImGuiControlPanel.h" />
+    <ClInclude Include="Engine\graphics\h\Effect\BloomEffect.h" />
+    <ClInclude Include="Engine\editor\h\StageEditorSnap.h" />
+    <ClInclude Include="Engine\editor\h\EditorUiStyle.h" />
+    <ClInclude Include="Engine\editor\h\SnapshotHistory.h" />
+    <ClInclude Include="Engine\editor\h\EditorHub.h" />
+    <ClInclude Include="Engine\editor\h\EditorFlowRow.h" />
+    <ClInclude Include="Engine\editor\h\FieldMemory.h" />
+    <ClInclude Include="Engine\editor\h\PanelEditSession.h" />
+    <ClInclude Include="Engine\scripting\h\NodeTypeRegistry.h" />
+    <ClInclude Include="Engine\scripting\h\GraphValue.h" />
+    <ClInclude Include="Engine\graphics\h\UI\UIButton.h" />
+    <ClInclude Include="Engine\graphics\h\UI\MenuSelection.h" />
+    <ClInclude Include="Engine\graphics\h\Text\BitmapFontRenderer.h" />
+    <ClInclude Include="Engine\graphics\h\Effect\ToneMapEffect.h" />
+    <ClInclude Include="Engine\graphics\h\Effect\OutlineEffect.h" />
+    <ClInclude Include="Engine\graphics\h\Effect\PipelineStateGuard.h" />
+    <ClInclude Include="Engine\graphics\h\Effect\SSAOEffect.h" />
+    <ClInclude Include="Engine\graphics\h\Diagnostics\FrameProfiler.h" />
+    <ClInclude Include="Engine\graphics\h\RenderPassGraph.h" />
+    <ClInclude Include="Engine\graphics\h\Manager\ResourceAlignment.h" />
+    <ClInclude Include="Engine\core\h\Util\TextBufferCapacity.h" />
+    <ClInclude Include="Engine\core\h\Util\EngineConstants.h" />
+    <ClInclude Include="Engine\core\h\Util\WorkerPool.h" />
+    <ClInclude Include="Engine\core\h\Util\PoolOverflowCounter.h" />
+    <ClInclude Include="Engine\core\h\Util\RandomSeed.h" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>

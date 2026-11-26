@@ -3,9 +3,12 @@
  * @brief 武器種別ごとの固有技（Weapon Behavior Strategy）と、その状態を持つBehaviorの実装
  */
 #include "Easing.h"
+#include "GameActions.h"
 #include "GameConstants.h"
 #include "Input.h"
 #include "Player.h"
+#include "TestCoverage.h"
+
 #include "PlayerTuning.h"
 #include "Weapon.h"
 #include <algorithm>
@@ -96,8 +99,10 @@ public:
             SkillSequenceBehavior::Update(player, input);
             return;
         }
-        if (input->TriggerAction(Input::Action::kSkill) && airDashAvailable_) {
+        if (input->TriggerAction(GameAction::kSkill) && airDashAvailable_) {
             const PlayerTuning& t = Tuning();
+        // 発動した固有技を記録する
+            testCoverage::Cover("weapon_skill", WeaponTypeName(WeaponType::kDagger));
             airDashAvailable_ = false;
             player.StopVerticalMotion();
             player.BeginDash(airDash_, player.GetLastDirX() * t.daggerAirDashDist * player.GetSkillMods().blinkDistMult);
@@ -124,11 +129,13 @@ public:
     /** @brief 固有技の長押し中は球を連射し、空中ではくるくる回る */
     void Update(Player& player, Input* input) override {
         // スピン連射 + 空中くるくる
-        if (!input->PushAction(Input::Action::kSkill)) {
+        if (!input->PushAction(GameAction::kSkill)) {
             return;
         }
         const PlayerTuning& t = Tuning();
-        if (input->TriggerAction(Input::Action::kSkill)) {
+        if (input->TriggerAction(GameAction::kSkill)) {
+        // 発動した固有技を記録する
+            testCoverage::Cover("weapon_skill", WeaponTypeName(WeaponType::kBall));
             player.PlaySkillAnim(&CharacterRig::punchAnim, t.ballSpinShotAnimSpeed);
         }
         if (shootCooldown_ <= 0.0f) {
@@ -159,7 +166,7 @@ public:
     void Update(Player& player, Input* input) override {
         // 投げ回転斬り 大剣そのものを投げ、途中で静止して渦のように回転し、周囲の敵を巻き込みながら多段ヒットする
         // 発生（投げる瞬間）だけここで扱う。進行中の状態（飛行→渦→帰還）はTick()が装備武器に関係なく毎フレーム進める
-        if (active_ || !input->TriggerAction(Input::Action::kSkill) || cooldown_ > 0.0f) {
+        if (active_ || !input->TriggerAction(GameAction::kSkill) || cooldown_ > 0.0f) {
             return;
         }
         const PlayerTuning& t = Tuning();
@@ -168,6 +175,8 @@ public:
         restPos_.x = player.ClampToStageX(startPos_.x + player.GetLastDirX() * t.greatswordThrowDist);
         timer_ = 0.0f;
         spinHitTimer_ = 0.0f;
+        // 発動した固有技を記録する
+        testCoverage::Cover("weapon_skill", WeaponTypeName(WeaponType::kGreatsword));
         active_ = true;
         returnCaptured_ = false;
         cooldown_ = t.greatswordThrowCooldown;
@@ -190,7 +199,7 @@ public:
         const float spinElapsed = timer_ - t.greatswordThrowTravelTime;
         if (spinElapsed < t.greatswordVortexMaxDuration) {
             // 渦の最中にもう一度スペースを押したら、上限まで待たずにその場で帰還を開始する（手動リコール）
-            if (input->TriggerAction(Input::Action::kSkill)) {
+            if (input->TriggerAction(GameAction::kSkill)) {
                 timer_ = t.greatswordThrowTravelTime + t.greatswordVortexMaxDuration;
                 return;
             }
@@ -292,10 +301,12 @@ public:
             hoverTimer_ = (std::min)(hoverTimer_ + gameConstants::kFrameDeltaTime * t.scytheHoverRecoverRate, t.scytheHoverMax);
             return;
         }
-        if (!input->PushAction(Input::Action::kSkill) || hoverTimer_ <= 0.0f) {
+        if (!input->PushAction(GameAction::kSkill) || hoverTimer_ <= 0.0f) {
             return;
         }
-        if (input->TriggerAction(Input::Action::kSkill)) {
+        if (input->TriggerAction(GameAction::kSkill)) {
+        // 発動した固有技を記録する
+            testCoverage::Cover("weapon_skill", WeaponTypeName(WeaponType::kScythe));
             player.PlaySkillAnim(&CharacterRig::slashAnim, t.scytheHoverAnimSpeed);
             player.SetFrameEvent(FrameEvent::kScytheSpin);
         }
@@ -319,10 +330,12 @@ public:
             }
             return;
         }
-        if (!input->TriggerAction(Input::Action::kSkill) || cooldown_ > 0.0f) {
+        if (!input->TriggerAction(GameAction::kSkill) || cooldown_ > 0.0f) {
             return;
         }
         const PlayerTuning& t = Tuning();
+        // 発動した固有技を記録する
+        testCoverage::Cover("weapon_skill", WeaponTypeName(WeaponType::kAxe));
         player.BeginDash(dash_, player.GetLastDirX() * t.axeChargeDist);
         cooldown_ = t.axeSkillCooldown;
         rageTimer_ = t.axeRageDuration;
@@ -432,7 +445,7 @@ void Player::NotifyWeaponSkillsLanded() {
 bool Player::TryStartSkillSequence(Input* input, WeaponType type, float& cooldown, float cooldownSeconds) {
     // 段の進行・ヒット・振りの見た目は通常コンボと同じ仕組み（MeleeComboController）に乗せる
     // オートコンボのルートが固有技で締める回なら、ボタンを押さなくても出す
-    const bool requested = input->TriggerAction(Input::Action::kSkill) || autoCombo_.ConsumeSkillRequest();
+    const bool requested = input->TriggerAction(GameAction::kSkill) || autoCombo_.ConsumeSkillRequest();
     if (!requested || cooldown > 0.0f || meleeCombo_.IsSequenceActive()) {
         return false;
     }
@@ -441,6 +454,8 @@ bool Player::TryStartSkillSequence(Input* input, WeaponType type, float& cooldow
         return false;
     }
     // 1段目のモーションは次フレームのHandleMeleeCombat()で段の開始として再生される
+    // 自動テストの網羅のまとめに数える
+    testCoverage::Cover("weapon_skill", WeaponTypeName(type));
     meleeCombo_.StartSequence(sequence);
     cooldown = cooldownSeconds;
     return true;

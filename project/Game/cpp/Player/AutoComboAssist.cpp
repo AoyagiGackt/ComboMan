@@ -3,6 +3,8 @@
  * @brief 攻撃ボタンだけで技を出し分ける入力アシスト（AutoComboAssist）の実装
  */
 #include "AutoComboAssist.h"
+// 乱数の種を共通の窓口から取得する。
+#include "RandomSeed.h"
 #include "WeaponManager.h"
 #include "MeleeCombo.h"
 #include "Weapon.h"
@@ -123,7 +125,7 @@ bool IsRouteAvailable(const ComboRoute& route, WeaponType type) {
 
 /** @brief コンボルートを選ぶ乱数を初期化する */
 AutoComboAssist::AutoComboAssist()
-    : rng_(std::random_device {}()) {
+    : rng_(engine::randomSeed::Next()) {
 }
 
 /** @brief アシストの有効/無効を切り替える（無効にしたら出しかけの追撃ジャンプ・固有技も取り消す） */

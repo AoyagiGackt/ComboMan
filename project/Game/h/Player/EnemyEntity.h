@@ -557,8 +557,9 @@ private:
 
     // 装備ビジュアル（武器の見た目スケール・本体からのオフセット・傾き）
     static constexpr Vector3 kDefaultWeaponScale = { 0.14f, 0.14f, 0.14f };
-    static constexpr Vector3 kSpearWeaponScale = { 0.11f, 0.11f, 0.22f };
-    static constexpr Vector3 kHeavyWeaponScale = { 0.16f, 0.16f, 0.16f }; // Hammer/Axe
+    // 敵の武器の大きさは、プレイヤーが手に持つ時の大きさ（CharacterVisuals.h の gripScale）にこれを掛ける
+    // （武器どうしの大小をプレイヤーとそろえ、刀の高さが前の敵の剣と同じくらいになる値）
+    static constexpr float kEnemyWeaponScaleRatio = 0.175f;
     static constexpr float kWeaponOffsetX = 0.35f; // 本体から向いている方向へのオフセット
     static constexpr float kWeaponOffsetY = 0.75f;
     static constexpr float kWeaponOffsetZ = 0.15f;
@@ -699,6 +700,7 @@ private:
     Model* weaponModel_ = nullptr;
     std::unique_ptr<Object3d> weaponObject_;
     Vector3 weaponScale_ = kDefaultWeaponScale;
+    float weaponBaseYaw_ = 0.0f; ///< 武器のモデルの向きの補正（ハンマーや鎌のように、刃がプレイヤーと同じ向きになるよう回す角度）
 
     int maxHp_ = 20;
     int hp_ = 20;

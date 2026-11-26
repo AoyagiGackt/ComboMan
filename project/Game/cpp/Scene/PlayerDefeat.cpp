@@ -3,6 +3,7 @@
  * @brief プレイヤーのやられ演出（PlayerDefeat）の段階ごとの処理と、player_defeat.json の読み込み
  */
 #include "PlayerDefeat.h"
+#include "GameActions.h"
 #include "PlayerDefeatTuning.h"
 #include "AudioBridge.h"
 #include "Collision.h"
@@ -451,7 +452,7 @@ void PlayerDefeat::Update(Input* input) {
     UpdateWeaponDrop();
 
     const IPhase* phase = PhaseAt(phaseIndex_);
-    const bool skipPressed = input != nullptr && input->TriggerCinematicSkip();
+    const bool skipPressed = input != nullptr && TriggerCinematicSkip(*input);
     if (skipPressed && phase->CanSkip(*this)) {
         OpenChoice();
         return;

@@ -38,13 +38,16 @@ public:
     static std::string TypeName(const std::string& type);
     /** @brief ノードのパラメータの表示名を返す */
     static std::string ParamName(const std::string& type, const std::string& param);
+    /** @brief パラメーターの意味の説明を返す（表に無ければ汎用の説明） */
+    static std::string ParamHelp(const std::string& type, const std::string& param);
+    /** @brief ノードの流れの文の型を返す（_summary。{パラメータ名} を値に置き換えて使う。無ければ空） */
+    static std::string SummaryTemplate(const std::string& type);
     /** @brief 表を読み直す（JSONを書き換えた後にエディタから呼ぶ） */
     static void Reload();
 };
 
 class GraphEditor;
 struct GraphNode;
-enum class GraphValueType;
 
 /**
  * @brief グラフ描画で共有する寸法、色、当たり判定を提供する

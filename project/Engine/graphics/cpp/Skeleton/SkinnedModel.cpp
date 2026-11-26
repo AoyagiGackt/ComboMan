@@ -7,6 +7,7 @@
 #include "AssimpVertexReader.h"
 #include "AssetPack.h"
 #include "EngineAssert.h"
+#include "FrustumCulling.h"
 #include "TextureManager.h"
 #include <assimp/Importer.hpp>
 #include <assimp/postprocess.h>
@@ -58,6 +59,9 @@ void SkinnedModel::Initialize(DirectXCommon* dxCommon,
         // pak作成中なら、解析結果を次回から読めるよう同じ並びで記録する
         RecordPackedGeometry(packKey);
     }
+
+    // 画面外の判定に使う、構えの姿勢で全頂点を囲む箱
+    ComputeVertexBounds(vertices_, localBoundsMin_, localBoundsMax_);
 
     // 頂点が1つも無いモデルは描けないので止める
     size_t sizeInBytes = sizeof(VertexData) * vertices_.size();

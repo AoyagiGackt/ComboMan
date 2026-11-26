@@ -3,6 +3,7 @@
  * @brief ラスボスの攻撃の予兆（床の円と帯）を、床に寝かせた板で描く
  */
 #include "FinalBossTelegraph.h"
+#include "EngineContext.h"
 #include "GameConstants.h"
 #include "ModelManager.h"
 
@@ -21,7 +22,7 @@ constexpr float kLayFlat = -gameConstants::kHalfPi; ///< 板を X 軸回りに�
 std::unique_ptr<Object3d> CreateMark(ModelCommon* modelCommon, const char* texture) {
     auto object = std::make_unique<Object3d>();
     object->Initialize(modelCommon);
-    object->SetModel(ModelManager::GetInstance()->GetOrLoad(modelCommon, kPlaneModel, texture));
+    object->SetModel(engine::Services().models->GetOrLoad(modelCommon, kPlaneModel, texture));
     object->SetEnableLighting(false);
     object->SetRotation({ kLayFlat, 0.0f, 0.0f });
     return object;

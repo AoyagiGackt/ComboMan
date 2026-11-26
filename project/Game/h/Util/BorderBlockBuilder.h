@@ -4,6 +4,7 @@
  */
 #pragma once
 #include "JsonFieldTable.h"
+#include "EngineContext.h"
 #include "JsonHelper.h"
 #include "Model.h"
 #include "ModelCommon.h"
@@ -75,7 +76,7 @@ inline void BuildBorderBlocks(engine::graphics::ModelCommon* modelCommon, engine
     auto* ceilingModel = modelBlock;
     auto* wallModel = modelBlock;
     if (!layout.palette.empty()) {
-        auto* manager = engine::graphics::ModelManager::GetInstance();
+        auto* manager = engine::Services().models;
         groundModel = manager->GetOrLoad(modelCommon, kGroundModelPath, layout.palette);
         ceilingModel = manager->GetOrLoad(modelCommon, kCeilingModelPath, layout.palette);
         wallModel = manager->GetOrLoad(modelCommon, kWallModelPath, layout.palette);
