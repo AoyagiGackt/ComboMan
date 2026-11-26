@@ -3,6 +3,8 @@
  * @brief 攻撃で吹き飛ばした爆弾を飛ばし、ぶつかった所で爆発させる
  */
 #include "KickedBombPool.h"
+#include "EngineContext.h"
+#include "PoolOverflowCounter.h"
 #include "JsonFieldTable.h"
 #include "JsonHelper.h"
 #include "Logger.h"
@@ -82,7 +84,7 @@ KickedBombPool::~KickedBombPool() = default;
 /** @brief 見た目の実体を全部作る（シーンの初期化で一度だけ呼ぶ） */
 void KickedBombPool::Initialize(engine::graphics::ModelCommon* modelCommon) {
     const BombKickTuning& tuning = BombKickTuningStore::Get();
-    auto* modelManager = engine::graphics::ModelManager::GetInstance();
+    auto* modelManager = engine::Services().models;
     bombModel_ = modelManager->GetOrLoad(modelCommon, tuning.model, tuning.texture);
     wallModel_ = modelManager->GetOrLoad(modelCommon, tuning.wallModel, tuning.texture);
     // 使い回す数だけ先に作り、ゲーム中は位置と向きとモデルの差し替えだけにする
@@ -102,6 +104,8 @@ bool KickedBombPool::Launch(const Vector3& position, float dirX, const Vector3& 
         return !bomb.active;
     });
     if (freeSlot == bombs_.end()) {
+        // 空きがない依頼を数える。
+        engine::poolOverflowCounter::Count("kicked_bomb_pool");
         return false;
     }
     // 向きだけを残し、速さは種類ごとの調整値で決める

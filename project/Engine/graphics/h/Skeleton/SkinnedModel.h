@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 #include <wrl/client.h>
+#include "DeferredReleaseQueue.h"
 namespace engine::graphics {
 
 // ボーン重み付き頂点データを持つ GLTF スキンメッシュ
@@ -58,6 +59,14 @@ public:
     ID3D12Resource* GetVertexResource() const {
         return vertexResource_.Get();
     }
+    /** @brief 構えの姿勢で全頂点を囲む箱の最小の角（モデル内の座標） */
+    const Vector3& GetLocalBoundsMin() const {
+        return localBoundsMin_;
+    }
+    /** @brief 構えの姿勢で全頂点を囲む箱の最大の角（モデル内の座標） */
+    const Vector3& GetLocalBoundsMax() const {
+        return localBoundsMax_;
+    }
     /** @brief 頂点数を返す */
     UINT GetVertexCount() const {
         return static_cast<UINT>(vertices_.size());
@@ -73,10 +82,13 @@ private:
 
     std::string textureFilePath_;
 
-    Microsoft::WRL::ComPtr<ID3D12Resource> vertexResource_;
+    DeferredComPtr<ID3D12Resource> vertexResource_;
     D3D12_VERTEX_BUFFER_VIEW vertexBufferView_ { };
 
     std::vector<VertexData> vertices_;
+    /** @brief 構えの姿勢で全頂点を囲む箱（動きで手足がはみ出す分は描く側で広げる） */
+    Vector3 localBoundsMin_ {};
+    Vector3 localBoundsMax_ {};
     std::vector<Matrix4x4> inverseBindMatrices_;
     std::vector<std::string> boneNames_;
 };

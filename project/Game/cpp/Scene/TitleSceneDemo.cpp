@@ -2,6 +2,8 @@
  * @brief タイトルの自動戦闘デモの初期化と更新
  */
 #include "TitleScene.h"
+#include "EngineContext.h"
+#include "GameActions.h"
 #include "GameConstants.h"
 #include "GameSettings.h"
 #include "HitEffectLibrary.h"
@@ -196,7 +198,7 @@ const DemoWeaponStyle& DemoWeaponStyle::For(WeaponType type) {
 /** @brief 背景デモの初期化（3D共通設定・プレイヤー・足場ブロック・武器全解放） */
 void TitleScene::InitializeDemo() {
     // 3D描画の共通設定を作り、カメラを闘技場の固定位置へ置く
-    BuildRenderFoundation(dxCommon_, SrvManager::GetInstance(),
+    BuildRenderFoundation(dxCommon_, engine::Services().srvManager,
         { modelCommon_, objectCommon_, shadowManager_, camera_ });
 
     const TitleDemoTuning& tune = TitleDemoTune();
@@ -210,7 +212,7 @@ void TitleScene::InitializeDemo() {
     player_->SetPosition({ tune.startX, tune.groundY, 0.0f });
 
     // パーティクルの設定と背景の天球
-    particleManager_ = ParticleManager::GetInstance();
+    particleManager_ = engine::Services().particles;
     sceneShared::CreateParticleGroupsFromJson(particleManager_, "Resources/particles/gameplay.json");
 
     skydome_ = std::make_unique<Skydome>();
@@ -221,7 +223,7 @@ void TitleScene::InitializeDemo() {
     // 床と背景のビルはレベルJSON（Resources/Levels/title.json）に置き、F2のステージエディタで編集する
 
     // 的は初期配置の表どおりに置き、番号ごとに揺れ・速さ・攻撃間隔をずらす
-    dummyModel_ = ModelManager::GetInstance()->GetOrLoad(modelCommon_.get(),
+    dummyModel_ = engine::Services().models->GetOrLoad(modelCommon_.get(),
         "Resources/AnimatedMonsterPackby@Quaternius/OBJ/Slime.obj",
         "Resources/AnimatedMonsterPackby@Quaternius/OBJ/SlimePalette.png");
     demoDummies_.clear();
@@ -275,14 +277,14 @@ struct TitleScene::DemoFrame {
     bool walkingRight = false; ///< 右へ歩かせるか
     bool walkingLeft = false; ///< 左へ歩かせるか
     bool dodgeAwayFromTarget = false; ///< 回避を的から離れる向きに出すか
-    std::array<bool, static_cast<size_t>(Input::Action::kCount)> pressed {}; ///< 押させるボタン（Input::Action の並び順）
+    std::array<bool, static_cast<size_t>(GameAction::kCount)> pressed {}; ///< 押させるボタン（GameAction の並び順）
 
     /** @brief ボタンを押す（on=false で離す） */
-    void Press(Input::Action action, bool on = true) {
+    void Press(GameAction action, bool on = true) {
         pressed[static_cast<size_t>(action)] = on;
     }
     /** @brief ボタンを押させることにしたか */
-    bool IsPressed(Input::Action action) const {
+    bool IsPressed(GameAction action) const {
         return pressed[static_cast<size_t>(action)];
     }
 };
@@ -380,7 +382,7 @@ void TitleScene::DecideDemoMovement(DemoFrame& frame) {
                 && enemy.attackAnimTimer > tune.incomingStrikeWindowStart && enemy.attackAnimTimer < tune.incomingStrikeWindowEnd
                 && std::abs(enemy.x - frame.playerX) < tune.incomingStrikeRange;
             if (incomingStrike) {
-                frame.Press(Input::Action::kDodge);
+                frame.Press(GameAction::kDodge);
                 frame.dodgeAwayFromTarget = true;
                 demoEnemyDodgeCooldown_ = tune.enemyDodgeCooldown;
                 break;
@@ -401,18 +403,18 @@ void TitleScene::DecideDemoMovement(DemoFrame& frame) {
     /** @brief 的との距離と高さから接近アクションを選ぶ規則 */
     struct MoveTrick {
         bool (*applies)(const DemoDummy& target, float distance);
-        Input::Action action;
+        GameAction action;
     };
     static constexpr MoveTrick kMoveTricks[] = {
         {
             [](const DemoDummy& t, float distance) {
                 return t.airborne && distance <= TitleDemoTune().jumpToAirborneRange;
-            }, Input::Action::kJump
+            }, GameAction::kJump
         },
         {
             [](const DemoDummy& t, float distance) {
                 return !t.airborne && distance > TitleDemoTune().dodgeApproachMinDistance;
-            }, Input::Action::kDodge
+            }, GameAction::kDodge
         },
     };
     // 移動を始めて少し経ったら、1区間に1回だけ当てはまった接近アクションを出す
@@ -450,23 +452,23 @@ void TitleScene::UpdateDemoAttack(DemoFrame& frame) {
         /** @brief 的とコンボ段数から攻撃アクションを選ぶ規則 */
         struct StrikeRule {
             bool (*applies)(const DemoDummy& target, const DemoWeaponStyle& style, int pulseIndex, int attackCount);
-            Input::Action action;
+            GameAction action;
         };
         static constexpr StrikeRule kStrikeRules[] = {
             {
                 [](const DemoDummy& t, const DemoWeaponStyle&, int, int) {
                     return t.airborne;
-                }, Input::Action::kShoot
+                }, GameAction::kShoot
             },
             {
                 [](const DemoDummy&, const DemoWeaponStyle& s, int p, int c) {
                     return s.IsSkillPulse(p, c);
-                }, Input::Action::kSkill
+                }, GameAction::kSkill
             },
             {
                 [](const DemoDummy&, const DemoWeaponStyle&, int, int) {
                     return true;
-                }, Input::Action::kAttack
+                }, GameAction::kAttack
             },
         };
         for (const StrikeRule& rule : kStrikeRules) {
@@ -507,9 +509,9 @@ void TitleScene::EmitDemoHitEffects(const DemoFrame& frame) {
     // 武器ごとの軌跡で、命中前から装備中の戦闘スタイルを見せる。
     fx.Trail(style.HitTrail(), weaponPos, color);
     fx.Star("title_hit", targetPos, { .color = color });
-    style.EmitHit({ fx, weaponPos, targetPos, facing, color, frame.IsPressed(Input::Action::kSkill) });
+    style.EmitHit({ fx, weaponPos, targetPos, facing, color, frame.IsPressed(GameAction::kSkill) });
     // 射撃なら銃口に発射の輪も出す
-    if (frame.IsPressed(Input::Action::kShoot)) {
+    if (frame.IsPressed(GameAction::kShoot)) {
         fx.Ring("title_shot", weaponPos);
     }
 }
@@ -540,16 +542,16 @@ void TitleScene::DefeatDemoTarget(DemoFrame& frame) {
 
 /** @brief 決めたボタンを Input のアクションオーバーライドへ書き込む */
 void TitleScene::ApplyDemoInput(DemoFrame& frame) {
-    frame.Press(Input::Action::kMoveRight, frame.walkingRight);
-    frame.Press(Input::Action::kMoveLeft, frame.walkingLeft);
+    frame.Press(GameAction::kMoveRight, frame.walkingRight);
+    frame.Press(GameAction::kMoveLeft, frame.walkingLeft);
     // 回避は移動入力が無いと向いている方向の逆へ下がるので、進みたい側の移動入力も押して向きを決める
-    if (frame.IsPressed(Input::Action::kDodge)) {
+    if (frame.IsPressed(GameAction::kDodge)) {
         const bool moveRight = frame.dodgeAwayFromTarget ? frame.targetDeltaX < 0.0f : frame.targetDeltaX >= 0.0f;
-        frame.Press(moveRight ? Input::Action::kMoveRight : Input::Action::kMoveLeft);
+        frame.Press(moveRight ? GameAction::kMoveRight : GameAction::kMoveLeft);
     }
     // 実機の入力に一切左右されないよう、全アクションを毎フレーム明示的に指定する
     for (size_t i = 0; i < frame.pressed.size(); ++i) {
-        input_->SetActionOverride(static_cast<Input::Action>(i), frame.pressed[i]);
+        input_->SetActionOverride(static_cast<GameAction>(i), frame.pressed[i]);
     }
 }
 

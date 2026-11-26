@@ -26,7 +26,7 @@ void StageEditorSelectionService::AppendCopy(StageEditor& editor, const ObjectDe
     entry.desc = source;
     entry.desc.name = "obj_" + std::to_string(editor.nextSerial_++);
     entry.desc.parent.clear();
-    entry.desc.position.x += editor.snapEnabled_ ? editor.snapStep_ : kCopyOffsetX;
+    entry.desc.position.x += editor.snap_.Enabled() ? editor.snap_.Step() : kCopyOffsetX;
     editor.objects_.push_back(std::move(entry));
     editor.RegenerateInstances(editor.objects_.back());
     editor.selectedObjectIndices_.push_back(static_cast<int>(editor.objects_.size()) - 1);

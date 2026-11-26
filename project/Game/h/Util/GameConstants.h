@@ -30,4 +30,9 @@ namespace gameConstants {
     inline constexpr float kCameraFollowOffsetY = 3.0f;
 
 }
+
+/** @brief TimeManager の時間の通り道の番号（その物の更新で IsChannelStopped を見る） */
+namespace timeChannel {
+    inline constexpr int kEnemies = 0; ///< 敵とボスの体・ボスの技の進行（プレイヤーより長く止めて、斬った後の間を作る）
+}
 } // namespace engine

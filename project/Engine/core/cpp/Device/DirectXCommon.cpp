@@ -60,6 +60,8 @@ void DirectXCommon::Initialize(WinApp* winApp) {
     InitializeDevice();
     frameUploadAllocator_.Initialize(this, kFrameCount);
     bundleRecorder_.Initialize(device_.Get(), kFrameCount);
+    // DeferredComPtr が消える時の預け先にする
+    DeferredReleaseQueue::SetCurrent(&deferredReleaseQueue_);
     // コマンド関連初期化
     CreateCommand();
     // ディスクリプタヒープ作成
@@ -68,6 +70,8 @@ void DirectXCommon::Initialize(WinApp* winApp) {
     CreateSwapChain();
     // レンダーターゲットビュー作成
     CreateRTV();
+    // シーンを描く色バッファ作成
+    CreateSceneColorBuffer();
     // 深度バッファ作成
     CreateDepthBuffer();
     CreateBackBufferDepthBuffer();
@@ -75,12 +79,21 @@ void DirectXCommon::Initialize(WinApp* winApp) {
     CreateFence();
     // DXCコンパイラ初期化
     InitializeDXC();
+    // パイプラインの保存と再利用を始める（これより後に作るパイプラインはすべてここを通る）
+    graphics::PipelineCache::GetInstance()->Initialize(this);
+    // 色バッファをスワップチェーンへ写すパイプライン作成（シェーダーを使うのでコンパイラの後）
+    CreatePresentPipeline();
 }
 
 /** @brief DirectX12基盤の終了処理 */
 void DirectXCommon::Finalize() {
     // GPU の処理がすべて終わるまで待つ
     WaitForGpu();
+    // もう命令は残っていないので、預かっていた資源を全部手放し、以後は預けずにその場で手放させる
+    deferredReleaseQueue_.ReleaseAll();
+    DeferredReleaseQueue::SetCurrent(nullptr);
+    // このプレイで新しく作ったパイプラインをファイルへ保存し、覚えていたパイプラインを手放す
+    graphics::PipelineCache::GetInstance()->Finalize();
 
 #ifdef _DEBUG
     if (infoQueue_ && diagnosticsCallbackCookie_ != 0) {
@@ -120,6 +133,9 @@ void DirectXCommon::PreDraw() {
         WaitForSingleObject(fenceEvent_, INFINITE);
     }
 
+    // GPU が使い終えたフレームで捨てられた資源を、ここで本当に手放す
+    deferredReleaseQueue_.ReleaseCompleted(fence_->GetCompletedValue());
+
     // GPUの使用が完了した定数領域を再利用する。
     frameUploadAllocator_.BeginFrame(backBufferIndex);
     bundleRecorder_.BeginFrame(backBufferIndex);
@@ -130,18 +146,15 @@ void DirectXCommon::PreDraw() {
     hr = commandList_->Reset(commandAllocators_[backBufferIndex].Get(), nullptr);
     ENGINE_ASSERT(SUCCEEDED(hr));
 
-    // リソースバリア
-    TransitionBarrier(commandList_.Get(), swapChainResources_[backBufferIndex].Get(),
-        D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
-
-    // 描画先と深度を設定
+    // 描画先はシーンの色バッファ（いつも描画先の状態で置いてあるのでバリアは要らない）と深度
+    const D3D12_CPU_DESCRIPTOR_HANDLE sceneColorRtv = GetCurrentBackBufferHandle();
     D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = GetBackBufferDsvHandle();
-    commandList_->OMSetRenderTargets(1, &rtvHandles_[backBufferIndex], false, &dsvHandle);
+    commandList_->OMSetRenderTargets(1, &sceneColorRtv, false, &dsvHandle);
     SetActiveDepthTarget(DepthTarget::kBackBuffer);
 
     // 縦横比が異なる画面のレターボックス部分は黒でクリアする。
     static constexpr float kClearColor[] = { 0.0f, 0.0f, 0.0f, 1.0f };
-    commandList_->ClearRenderTargetView(rtvHandles_[backBufferIndex], kClearColor, 0, nullptr);
+    commandList_->ClearRenderTargetView(sceneColorRtv, kClearColor, 0, nullptr);
 
     // 深度クリア
     commandList_->ClearDepthStencilView(dsvHandle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
@@ -160,10 +173,9 @@ void DirectXCommon::PreDraw() {
 void DirectXCommon::PostDraw() {
     HRESULT hr;
 
-    // リソースバリア
+    // 描き終えた色バッファをスワップチェーンへ写し、画面へ出す状態にする
     UINT backBufferIndex = swapChain_->GetCurrentBackBufferIndex();
-    TransitionBarrier(commandList_.Get(), swapChainResources_[backBufferIndex].Get(),
-        D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
+    CopySceneColorToSwapChain(backBufferIndex);
 
     // コマンドリストを閉じる
     hr = commandList_->Close();
@@ -185,6 +197,11 @@ void DirectXCommon::PostDraw() {
     }
     ENGINE_ASSERT(SUCCEEDED(hr));
     frameFenceValues_[backBufferIndex] = fenceValue_;
+    // このフレームに捨てられた資源は、GPU がこの値まで進んだら手放す
+    deferredReleaseQueue_.EndFrame(fenceValue_);
+
+    // 頼まれていれば、描き終えた絵を画面へ出す前に写し取って保存する
+    CaptureRequestedScreenshot(backBufferIndex);
 
     // フリップ (画面更新)
     // VSyncオフ時はSyncInterval=0。ティアリング許可済みならALLOW_TEARINGを付けて真の非同期表示にする
@@ -212,120 +229,6 @@ void DirectXCommon::PostDraw() {
     }
 }
 
-// ══════════════════════════════════════════════════════
-// シェーダーコンパイル
-// ══════════════════════════════════════════════════════
-
-/** @brief シェーダーをコンパイルする（同じファイルとプロファイルの結果はキャッシュから返す） */
-Microsoft::WRL::ComPtr<IDxcBlob> DirectXCommon::CompileShader(const std::wstring& filePath, const wchar_t* profile) {
-    // 同じファイル・同じプロファイルを一度コンパイルしていれば、その結果を使い回す
-    const std::wstring cacheKey = filePath + L"|" + profile;
-    {
-        std::scoped_lock lock(shaderCacheMutex_);
-        const auto cached = shaderCache_.find(cacheKey);
-        if (cached != shaderCache_.end()) {
-            return cached->second;
-        }
-    }
-
-    // pakにコンパイル済みのバイトコードがあれば、DXCでのコンパイルを省く
-    const std::string packKey = "shader:" + StringUtility::ConvertString(cacheKey);
-    std::vector<uint8_t> packed;
-    if (AssetPack::GetInstance()->Read(packKey, packed)) {
-        Microsoft::WRL::ComPtr<IDxcBlobEncoding> packedBlob;
-        if (SUCCEEDED(dxcUtils_->CreateBlob(packed.data(), static_cast<UINT32>(packed.size()), DXC_CP_ACP, &packedBlob))) {
-            Microsoft::WRL::ComPtr<IDxcBlob> shaderBlob;
-            packedBlob.As(&shaderBlob);
-            std::scoped_lock lock(shaderCacheMutex_);
-            shaderCache_[cacheKey] = shaderBlob;
-            return shaderBlob;
-        }
-    }
-
-    // hlslファイルを読む
-    Logger::Log(StringUtility::ConvertString(std::format(L"Begin CompileShader, path:{}, profile:{}", filePath, profile)));
-
-    IDxcBlobEncoding* shaderSource = nullptr;
-    HRESULT hr = dxcUtils_->LoadFile(filePath.c_str(), nullptr, &shaderSource);
-    ENGINE_ASSERT(SUCCEEDED(hr));
-
-    // 読んだソースを UTF-8 としてコンパイラへ渡す
-    DxcBuffer shaderSourceBuffer;
-    shaderSourceBuffer.Ptr = shaderSource->GetBufferPointer();
-    shaderSourceBuffer.Size = shaderSource->GetBufferSize();
-    shaderSourceBuffer.Encoding = DXC_CP_UTF8;
-
-    // Compileする
-    // 入口は main、行優先の行列で出す。
-    // デバッグ版はシェーダーの中を追えるようデバッグ情報を埋め込んで最適化なし、
-    // それ以外の版はデバッグ情報を付けず一番強い最適化をかける
-#ifdef _DEBUG
-    LPCWSTR arguments[] = {
-        filePath.c_str(),
-        L"-E",
-        L"main",
-        L"-T",
-        profile,
-        L"-Zi",
-        L"-Qembed_debug",
-        L"-Od",
-        L"-Zpr",
-    };
-#else
-    LPCWSTR arguments[] = {
-        filePath.c_str(),
-        L"-E",
-        L"main",
-        L"-T",
-        profile,
-        L"-O3",
-        L"-Zpr",
-    };
-#endif
-
-    IDxcResult* shaderResult = nullptr;
-    hr = dxcCompiler_->Compile(
-        &shaderSourceBuffer,
-        arguments,
-        _countof(arguments),
-        includeHandler_.Get(),
-        IID_PPV_ARGS(&shaderResult));
-    ENGINE_ASSERT(SUCCEEDED(hr));
-
-    // 警告・エラー確認
-    IDxcBlobUtf8* shaderError = nullptr;
-    shaderResult->GetOutput(DXC_OUT_ERRORS, IID_PPV_ARGS(&shaderError), nullptr);
-
-    if (shaderError != nullptr && shaderError->GetStringLength() != 0) {
-        Logger::LogError(shaderError->GetStringPointer());
-        ENGINE_ASSERT(false);
-    }
-
-    // 結果を受け取る
-    Microsoft::WRL::ComPtr<IDxcBlob> shaderBlob;
-    hr = shaderResult->GetOutput(DXC_OUT_OBJECT, IID_PPV_ARGS(&shaderBlob), nullptr);
-    ENGINE_ASSERT(SUCCEEDED(hr));
-
-    Logger::Log(StringUtility::ConvertString(std::format(L"Compile Succeeded, path:{}, profile:{}", filePath, profile)));
-
-    // コンパイルに使った一時オブジェクトを解放する
-    shaderSource->Release();
-    shaderResult->Release();
-
-    // pak を作っている最中なら、次回からコンパイルを省けるようバイトコードを記録する
-    if (AssetPack::GetInstance()->IsCooking()) {
-        const auto* begin = static_cast<const uint8_t*>(shaderBlob->GetBufferPointer());
-        AssetPack::GetInstance()->Record(packKey, std::vector<uint8_t>(begin, begin + shaderBlob->GetBufferSize()));
-    }
-
-    // 次に同じシェーダーを頼まれた時のためにキャッシュへ入れる
-    {
-        std::scoped_lock lock(shaderCacheMutex_);
-        shaderCache_[cacheKey] = shaderBlob;
-    }
-
-    return shaderBlob;
-}
 
 
 // ══════════════════════════════════════════════════════
@@ -356,6 +259,7 @@ void DirectXCommon::OnResize(uint32_t width, uint32_t height) {
     ENGINE_ASSERT(SUCCEEDED(hr));
 
     CreateRTV();
+    CreateSceneColorBuffer();
     CreateBackBufferDepthBuffer();
 }
 
@@ -429,16 +333,14 @@ void DirectXCommon::SetBackBufferRenderTarget() {
 }
 
 
-/** @brief 現在のバックバッファのRTVハンドルを取得 */
+/** @brief 今の描画先（シーンの色バッファ）の RTV ハンドルを取得 */
 D3D12_CPU_DESCRIPTOR_HANDLE DirectXCommon::GetCurrentBackBufferHandle() {
-    UINT backBufferIndex = swapChain_->GetCurrentBackBufferIndex();
-    return rtvHandles_[backBufferIndex];
+    return sceneColorRtvHeap_->GetCPUDescriptorHandleForHeapStart();
 }
 
-/** @brief 現在のバックバッファリソースを取得 */
+/** @brief 今の描画先（シーンの色バッファ）のリソースを取得 */
 ID3D12Resource* DirectXCommon::GetCurrentBackBufferResource() {
-    UINT backBufferIndex = swapChain_->GetCurrentBackBufferIndex();
-    return swapChainResources_[backBufferIndex].Get();
+    return sceneColorResource_.Get();
 }
 
 // ヘルパー関数（バッファ作成用）
@@ -466,6 +368,9 @@ void DirectXCommon::WaitForFence(
 /** @brief コマンドキューにフェンス値を積み、GPUがそこまでの処理を完了するまでCPU側で待機する */
 void DirectXCommon::WaitForGpu() {
     WaitForFence(commandQueue_.Get(), fence_.Get(), fenceValue_, fenceEvent_);
+    // 出した命令は全部終わったので、フェンスの値を付けて待たせていた物を手放す
+    // （このフレームに捨てられ、まだ値の付いていない物は、記録中の命令が使うかもしれないので残す）
+    deferredReleaseQueue_.ReleaseCompleted(fence_->GetCompletedValue());
 }
 
 /** @brief リソースの状態遷移バリア（TYPE_TRANSITION）を構築するだけで発行はしない */

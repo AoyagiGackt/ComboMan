@@ -11,6 +11,7 @@
 #include <string>
 #include <vector>
 #include <wrl.h>
+#include "DeferredReleaseQueue.h"
 namespace engine::graphics {
 
 /**
@@ -128,7 +129,7 @@ private:
      * @brief 読み込み済みのテクスチャ1つ分のデータを保持する構造体
      */
     struct TextureData {
-        Microsoft::WRL::ComPtr<ID3D12Resource> resource; ///< GPU上のテクスチャリソース
+        DeferredComPtr<ID3D12Resource> resource; ///< GPU上のテクスチャリソース
         uint32_t srvIndex; ///< デスクリプタヒープ上のインデックス
         DirectX::TexMetadata metadata; ///< テクスチャのメタデータ（幅、高さ、形式等）
         /** @brief 最終更新日時（ファイルからの読み込みでない場合は既定値のまま＝ホットリロード対象外） */

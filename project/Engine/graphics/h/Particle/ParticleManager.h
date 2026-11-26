@@ -171,6 +171,14 @@ struct ParticleGroup {
     uint32_t srvIndex = 0;
     Microsoft::WRL::ComPtr<ID3D12Resource> instancingResource;
 
+    // 生きている粒の番号の一覧と、その数だけ描く間接描画の引数（ParticleUpdate.CS が一覧を、ParticleBuildArgs.CS が引数を書く）
+    Microsoft::WRL::ComPtr<ID3D12Resource> drawListBuffer;
+    Microsoft::WRL::ComPtr<ID3D12Resource> drawArgsBuffer;
+    // GPU が数えた生きている粒の数を CPU へ写す先（画像の番号ごとに1つ。数フレーム遅れの値を表示だけに使う）
+    Microsoft::WRL::ComPtr<ID3D12Resource> aliveCountReadback;
+    const uint32_t* aliveCountMapped = nullptr; ///< 写す先を開いたままにした場所
+    uint32_t gpuAliveCount = 0; ///< 読み戻した生きている粒の数
+
     float groupTime = 0.0f;
     // CPU が知っている、最後の粒が消える時刻の見込み（GPU から読み戻さずに、描く・更新するかを決める）
     float aliveUntil = 0.0f;
@@ -178,7 +186,7 @@ struct ParticleGroup {
     // このフレームに出してほしい粒の一覧（次の Update で GPU へ送る）
     std::vector<GPUParticleState> pendingSpawns;
 
-    bool instancingInSRV = false; // false=UAV  true=NON_PIXEL_SHADER_RESOURCE
+    bool instancingInSRV = false; // false=UAV  true=描く側の状態（描画用と描く一覧は NON_PIXEL_SHADER_RESOURCE、引数は INDIRECT_ARGUMENT）
     bool needsReset = true; // 次の Update で全部の粒を消し、空き一覧を詰め直す
     bool buffersFresh = true; // 作成直後の COMMON 状態か（最初の更新で UAV へ移す）
     bool additiveBlend = true; // false = alpha blend (SRC_ALPHA / INV_SRC_ALPHA)
@@ -342,6 +350,9 @@ public:
         softParticlesEnabled_ = enabled;
     }
 
+    /** @brief GPU が数えた、全グループの生きている粒の数（数フレーム前の値。診断の表示用） */
+    uint32_t GetGpuAliveParticleCount() const;
+
     /** @brief 1フレームに効かせられる場の数 */
     static constexpr uint32_t kMaxFields = 16;
     /**
@@ -456,6 +467,12 @@ private:
     void DispatchEmitCS(ParticleGroup& group, ID3D12GraphicsCommandList* cmd, float dt);
     /** @brief 生きている粒を動かし、寿命の尽きた粒の枠を空き一覧へ返す */
     void DispatchUpdateCS(ParticleGroup& group, ID3D12GraphicsCommandList* cmd, D3D12_GPU_VIRTUAL_ADDRESS constants, D3D12_GPU_VIRTUAL_ADDRESS fields);
+    /** @brief 生きている粒の数から間接描画の引数を作り、数を CPU へ写す（数は次のフレームのために 0 へ戻す） */
+    void DispatchBuildDrawArgsCS(ParticleGroup& group, ID3D12GraphicsCommandList* cmd);
+    /** @brief 生きている粒の一覧・間接描画の引数・数を読み戻す先を作る */
+    void CreateDrawListResources(ParticleGroup& group);
+    /** @brief 間接描画（インデックス付きの描画1回）の命令の形を作る */
+    void CreateDrawCommandSignature();
     /** @brief 粒の状態・空き一覧・空きの数の書き込みが終わるのを待つ（次の CS が読む前に挟む） */
     static void UavBarrier(ID3D12GraphicsCommandList* cmd);
     /** @brief 今のフレームの領域へ書いてアドレスを返す */
@@ -503,6 +520,9 @@ private:
     ComputePass spawnPass_; ///< ParticleSpawn.CS（頼まれた粒を出す）
     ComputePass emitPass_; ///< EmitParticle.CS（エミッター）
     ComputePass updatePass_; ///< ParticleUpdate.CS（動かす・寿命の判定・空き一覧へ返す）
+    ComputePass buildArgsPass_; ///< ParticleBuildArgs.CS（生きている粒の数から間接描画の引数を作る）
+    /** @brief 間接描画の命令の形（インデックス付きの描画1回だけ。ルートの値は変えない） */
+    Microsoft::WRL::ComPtr<ID3D12CommandSignature> drawCommandSignature_;
 
     std::unordered_map<std::string, ParticleGroup> particleGroups_;
     uint32_t frameCounter_ = 0; ///< 更新の通し番号（GPU での出し直しの乱数の種）

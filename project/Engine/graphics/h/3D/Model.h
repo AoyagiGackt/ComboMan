@@ -7,6 +7,7 @@
 #include "MakeAffine.h"
 #include <string>
 #include <vector>
+#include "DeferredReleaseQueue.h"
 namespace engine::graphics {
 
 class ModelCommon;
@@ -48,6 +49,20 @@ public:
      * @param modelCommon モデル描画の共通設定を持つオブジェクトのポインタ
      */
     void Draw(ModelCommon* modelCommon);
+
+    /**
+     * @brief 頂点・添字のバッファとテクスチャを設定する（DrawIndexed の前に1回）
+     * @param modelCommon モデル描画の共通設定を持つオブジェクトのポインタ
+     * @note 同じモデルを続けて描く時は、最初の1回だけ設定して DrawIndexed を繰り返せる
+     */
+    void BindForDraw(ModelCommon* modelCommon);
+
+    /**
+     * @brief 設定済みのバッファで描画の命令（DrawIndexedInstanced）だけを積む
+     * @param modelCommon モデル描画の共通設定を持つオブジェクトのポインタ
+     * @param instanceCount 何体分を1回で描くか（まとめ描きの時だけ 2 以上）
+     */
+    void DrawIndexed(ModelCommon* modelCommon, UINT instanceCount = 1);
 
     /**
      * @brief シャドウパス用の描画（テクスチャバインドなし、頂点バッファのみ）
@@ -103,6 +118,15 @@ public:
         return indices_;
     }
 
+    /** @brief 全頂点を囲む箱の最小の角（ローカル空間。画面外の物を描かない判定に使う） */
+    const Vector3& GetLocalBoundsMin() const {
+        return localBoundsMin_;
+    }
+    /** @brief 全頂点を囲む箱の最大の角（ローカル空間） */
+    const Vector3& GetLocalBoundsMax() const {
+        return localBoundsMax_;
+    }
+
     /**
      * @brief 環境マップ用キューブマップを設定する（事前にLoadTextureが呼ばれている必要あり）
      * @param filePath キューブマップの DDS ファイルパス
@@ -137,6 +161,9 @@ private:
     /** @brief vertices_/indices_ から三角形ごとにタンジェントを計算し格納する */
     void ComputeTangents();
 
+    /** @brief vertices_ の全頂点を囲む箱を計算する（頂点が無ければ原点の点にする） */
+    void ComputeLocalBounds();
+
     /**
      * @brief Assimpを使ってGLTF/FBX等のメッシュを読み込む内部関数
      * @param filePath 読み込むファイルのパス
@@ -147,13 +174,13 @@ private:
     ModelCommon* modelCommon_ = nullptr;
 
     /** @brief GPU側の頂点バッファリソース */
-    Microsoft::WRL::ComPtr<ID3D12Resource> vertexResource_;
+    DeferredComPtr<ID3D12Resource> vertexResource_;
 
     /** @brief 頂点バッファビュー（GPUに頂点データの位置とサイズを伝えるための構造体） */
     D3D12_VERTEX_BUFFER_VIEW vertexBufferView_ { };
 
     /** @brief GPU側のインデックスバッファリソース */
-    Microsoft::WRL::ComPtr<ID3D12Resource> indexResource_;
+    DeferredComPtr<ID3D12Resource> indexResource_;
 
     /** @brief インデックスバッファビュー */
     D3D12_INDEX_BUFFER_VIEW indexBufferView_ { };
@@ -166,6 +193,10 @@ private:
 
     /** @brief CPU側で保持するインデックスデータの配列 */
     std::vector<uint32_t> indices_;
+
+    /** @brief 全頂点を囲む箱の最小の角と最大の角（ローカル空間） */
+    Vector3 localBoundsMin_ = { 0.0f, 0.0f, 0.0f };
+    Vector3 localBoundsMax_ = { 0.0f, 0.0f, 0.0f };
 
     /** @brief テクスチャがキューブマップかどうか（スロット選択に使用） */
     bool isCubemap_ = false;

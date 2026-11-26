@@ -3,6 +3,7 @@
  * @brief タイトル画面の立体ロゴ（FloatingTitle）の初期化・更新・描画の実装
  */
 #include "FloatingTitle.h"
+#include "EngineContext.h"
 #include "UILayout.h"
 #include "DirectXCommon.h"
 #include "GameConstants.h"
@@ -84,7 +85,7 @@ void FloatingTitle::Initialize(DirectXCommon* graphics, Input* input, ModelCommo
     shadowManager_ = shadows;
 
     // ロゴのモデルを読み、頂点の範囲から回転の中心と大きさを求める
-    Model* model = ModelManager::GetInstance()->GetOrLoad(modelCommon_,
+    Model* model = engine::Services().models->GetOrLoad(modelCommon_,
         "Resources/title/title.obj", "Resources/white.png");
     Vector3 minimum = { FLT_MAX, FLT_MAX, FLT_MAX };
     Vector3 maximum = { -FLT_MAX, -FLT_MAX, -FLT_MAX };
@@ -221,7 +222,7 @@ void FloatingTitle::Draw() {
     cmd->RSSetScissorRects(1, &scissor);
     modelCommon_->CommonDrawSettings();
     lighting_->SetDefaultLight(cmd);
-    shadowManager_->SetShadowMap(cmd, SrvManager::GetInstance());
+    shadowManager_->SetShadowMap(cmd, engine::Services().srvManager);
     object_->Draw();
     const auto fullScissor = dxCommon_->GetCenteredClientScissorRect();
     cmd->RSSetViewports(1, &client);

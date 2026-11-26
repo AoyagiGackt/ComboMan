@@ -1,0 +1,76 @@
+{
+  "_comment": "ゲームの型（書き方は side_action.json の _comment）。後ろから映して奥へ進む見え方にする",
+  "id": "behind_action",
+  "name": "奥へ進むアクション",
+  "description": "プレイヤーの後ろからカメラで映し、ステージの奥（右の方向）へ進んでいく見え方です。前後で先へ進み、左右で奥行き方向へ動きます。敵はプレイヤーと同じ奥行きへ寄ってきて、奥行きが離れていると攻撃は当たりません。",
+  "camera": {
+    "type": "behind",
+    "useStageBounds": false,
+    "distance": 10,
+    "height": 4,
+    "targetHeight": 1.5,
+    "lookAhead": 6
+  },
+  "path": {
+    "follow": false
+  },
+  "player": {
+    "depthMovement": true,
+    "depthSpeed": 6,
+    "depthMin": -4,
+    "depthMax": 4,
+    "enemiesFollowDepth": true,
+    "enemyDepthSpeed": 3,
+    "hitHalfDepth": 1
+  },
+  "requiredKinds": [],
+  "recommendedKinds": [
+    {
+      "kind": "terrain",
+      "label": "地形"
+    },
+    {
+      "kind": "enemy_basic",
+      "label": "敵"
+    },
+    {
+      "kind": "background",
+      "label": "背景モデル"
+    },
+    {
+      "kind": "breakable",
+      "label": "壊せる物"
+    }
+  ],
+  "tips": [
+    "奥が見える分、背景モデルを道の左右に並べると広がりが出ます",
+    "奥へ動けるので、床の地形は奥行き（大きさの Z）を動ける幅より広くします",
+    "カメラが近いので、敵どうしの間を横スクロールより広めに空けると見やすくなります"
+  ],
+  "controls": [
+    {
+      "keys": "{ArenaForward} {ArenaBack}",
+      "label": "先へ進む・下がる"
+    },
+    {
+      "keys": "{ArenaLeft} {ArenaRight}",
+      "label": "奥行き方向へよける"
+    },
+    {
+      "keys": "{ArenaJump}",
+      "label": "ジャンプ"
+    },
+    {
+      "keys": "{Attack}",
+      "label": "攻撃（続けて押すとコンボ）"
+    },
+    {
+      "keys": "{Shoot}",
+      "label": "射撃"
+    },
+    {
+      "keys": "{Dodge}",
+      "label": "回避"
+    }
+  ]
+}

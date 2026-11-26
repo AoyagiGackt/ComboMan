@@ -5,6 +5,11 @@
  * 敵/巡回/イベント条件の評価）をまとめている。クラス自体はStageEditorのまま、定義の置き場所だけを分けている
  */
 #include "StageEditor.h"
+#include "EngineContext.h"
+#include "StageEditorPlaytest.h"
+#ifdef USE_IMGUI
+#include <imgui.h>
+#endif
 #include "GroundSupport.h"
 #include "EnemySeparation.h"
 #include <unordered_map>
@@ -42,10 +47,22 @@ using namespace engine::graphics;
 
 
 namespace engine::game {
+/** @brief 編集停止とゲーム動作テストを切り替えて時間倍率を同期する */
+void StageEditor::SetPlayTestMode(bool enabled) {
+#ifdef USE_IMGUI
+    stagePlaytest::End(*this);
+    if (enabled) {
+        stagePlaytest::Begin(*this);
+    }
+#endif
+    playTestMode_ = enabled;
+    TimeManager::GetInstance()->SetTimeScale(enabled ? savedTimeScale_ : 0.0f);
+}
+
 /** @brief モデル+テクスチャの組み合わせをキャッシュから探し、無ければロードして登録する */
 Model* StageEditor::GetOrLoadModel(const std::string& modelPath, const std::string& texPath) {
     const std::string key = modelPath + '|' + texPath;
-    Model* model = ModelManager::GetInstance()->GetOrLoad(modelCommon_, modelPath, texPath);
+    Model* model = engine::Services().models->GetOrLoad(modelCommon_, modelPath, texPath);
     modelCache_[key] = model;
     return model;
 }
@@ -101,6 +118,18 @@ void StageEditor::RegenerateInstances(ObjectEntry& entry) {
 
 /** @brief ファクトリが生成した配置データをレベル実体へ追加する */
 void StageEditor::AppendGeneratedContent(StageEditorGeneratedContent content) {
+#ifdef USE_IMGUI
+    // 部屋や敵の列はまとまりのまま下ろし、トリガーも同じだけ動かす
+    const float shift = GroupFloorShift(content.objects);
+    for (auto& part : content.objects) {
+        if (part.kind != objectKindName::kUIText || part.textSpace == TextSpace::kWorld) {
+            part.position.y += shift;
+        }
+    }
+    for (auto& trigger : content.triggers) {
+        trigger.position.y += shift;
+    }
+#endif
     for (TriggerDesc& desc : content.triggers) {
         TriggerVolume trigger;
         trigger.Init(desc);
@@ -131,26 +160,23 @@ void StageEditor::RefreshTransforms(ObjectEntry& entry) {
 
 /** @brief 画面中央(z=0平面)に新規の配置物(prop)を1つ追加して選択状態にする（+ボタン/アセットパレット共通） */
 void StageEditor::AddPropAtScreenCenter(const std::string& model, const std::string& texture) {
-    // 見えている画面の中央（z=0平面上）に置くカメラをどこへ動かしていても手元に出る
-    Vector3 center = playerSpawn_;
-    center = ViewCenterOnGround();
-
 #ifdef USE_IMGUI
-    RecordUndoSnapshotNow();
-    center.x = SnapValue(center.x);
-    center.y = SnapValue(center.y);
-#endif
-
+    const Vector3 center = ViewCenterOnGround();
+    ObjectDesc part;
+    part.name = "obj";
+    part.model = model;
+    part.texture = texture;
+    PlacePart(part, { SnapValue(center.x), SnapValue(center.y), center.z });
+#else
     ObjectEntry entry;
     entry.desc.name = "obj_" + std::to_string(nextSerial_++);
-    entry.desc.kind = "prop";
-    entry.desc.type = PlacementType::kStatic;
-    entry.desc.position = center;
+    entry.desc.position = ViewCenterOnGround();
     entry.desc.model = model;
     entry.desc.texture = texture;
     objects_.push_back(std::move(entry));
     RegenerateInstances(objects_.back());
     SelectLastObject();
+#endif
 }
 
 /** @brief 「敵を作る」で作った種類の敵を画面中央に置いて選択する */
@@ -213,6 +239,11 @@ bool StageEditor::IsRuntimeActive(const ObjectDesc& desc) const {
 void StageEditor::UpdateObjects(ParticleManager* pm, const Vector3& playerPos) {
     // 描画済み状態を更新開始時に戻し、BaseScene側の二重描画判定をフレーム単位に保つ
     objectsDrawnThisFrame_ = false;
+#ifdef USE_IMGUI
+    if (playTestMode_ && !gameplayHeld_) {
+        stagePlaytest::Tick(*this, playerPos, ImGui::GetIO().DeltaTime);
+    }
+#endif
     // 編集プレビュー中（プレイテスト前）はTimeManagerがゲーム停止用に0倍速へ落としているため、
     // その間もギミックのプレビューが動き続けるよう固定delta（従来通り）を使う。
     // プレイ中（プレイテスト/実プレイ）はヒットストップ・時間倍率と歩調を合わせないと、

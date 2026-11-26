@@ -3,6 +3,7 @@
  * @brief Frameworkを継承し、ゲーム固有の進行（初期化・更新・描画）を記述するファイル
  */
 #pragma once
+#include "Object3dRenderQueue.h"
 #include "BaseScene.h"
 #include "EngineConstants.h"
 #include "FixedStepClock.h"
@@ -10,6 +11,8 @@
 #include "SceneFactory.h"
 #include "SmokeTestRunner.h"
 #include "SoundAssignEditor.h"
+#include "PostProcessOrderEditor.h"
+#include <cstdint>
 #include <memory>
 namespace engine {
 using engine::game::AbstractSceneFactory;
@@ -56,9 +59,15 @@ private:
     std::unique_ptr<AbstractSceneFactory> sceneFactory_;
     /** @brief F8 で開閉するエンジン共通の実行時診断パネルを表示しているか */
     bool showEngineDiagnostics_ = false;
+    uint32_t lastDrawnObjects_ = 0; ///< 前のフレームに描いた 3D の物の数（診断パネルに出す）
+    uint32_t lastCulledObjects_ = 0; ///< 前のフレームに画面外なので描かなかった 3D の物の数
+    engine::graphics::Object3dRenderQueue::Stats lastQueueStats_ {}; ///< 前のフレームに並べて描いた配置物の数（命令の数・まとめ描きの数）
     bool fastSmokeTest_ = false; ///< 自動テストを速回ししているか（--realtime なしで起動した時）
     /** @brief 効果音・BGMの割り当て画面（F8のパネルから開く） */
     engine::game::SoundAssignEditor soundAssignEditor_;
+    /** @brief 画面全体へ掛けるエフェクトの順番を変えるエディタ（post_process.json） */
+    engine::editor::PostProcessOrderEditor postProcessEditor_;
+    bool showPostProcessEditor_ = false; ///< 画面の効果の順番のエディタを開いているか
     /** @brief 音の割り当て画面を表示しているか */
     bool showSoundAssignEditor_ = false;
     /** @brief 自動テストプレイ（--smoke-test で起動した時だけ動く） */

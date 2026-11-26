@@ -3,6 +3,7 @@
  * @brief 武器枠と所持武器アイコンの HUD 表示（WeaponSlotHud）の実装
  */
 #include "WeaponSlotHud.h"
+#include "EngineContext.h"
 #include "Camera.h"
 #include "DirectXCommon.h"
 #include "FontRenderer.h"
@@ -117,7 +118,7 @@ void WeaponSlotHud::Initialize(const HudServices& services) {
         icon.baseYaw = asset.baseYaw;
         icon.object = std::make_unique<Object3d>();
         icon.object->Initialize(models_);
-        icon.object->SetModel(ModelManager::GetInstance()->GetOrLoad(models_, asset.modelPath, asset.texturePath));
+        icon.object->SetModel(engine::Services().models->GetOrLoad(models_, asset.modelPath, asset.texturePath));
         icon.object->SetEnableLighting(true);
     };
     for (int slot = 0; slot <= kSlotCount; ++slot) {

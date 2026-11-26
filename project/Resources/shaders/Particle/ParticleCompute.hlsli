@@ -27,6 +27,8 @@ struct ParticleForGPU
 
 // 空き一覧の数え上げ（C++ の kFreeCountIndex と同じ番号）
 static const uint kFreeCountIndex = 0;
+// このフレームに生きている粒の数（ParticleUpdate.CS が数え、ParticleBuildArgs.CS が描画の引数にして 0 へ戻す）
+static const uint kDrawCountIndex = 1;
 
 // -------------------------------------------------------
 //  空き一覧（空いている枠の番号を積んだ山）

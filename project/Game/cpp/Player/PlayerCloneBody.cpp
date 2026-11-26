@@ -3,6 +3,7 @@
  * @brief 分身の体（PlayerCloneBody）の実装
  */
 #include "PlayerCloneBody.h"
+#include "EngineContext.h"
 #include "AllyBoss.h"
 #include "CharacterVisuals.h"
 #include "GameConstants.h"
@@ -25,7 +26,7 @@ void PlayerCloneBody::Initialize(engine::graphics::ModelCommon* modelCommon, con
     object_ = std::make_unique<SkinnedObject3d>();
     object_->Initialize(skinCommon_.get());
     const std::string modelPath = std::string(rig.dir) + "/" + rig.file;
-    object_->SetModel(ModelManager::GetInstance()->GetOrLoadSkinned(modelCommon->GetDxCommon(), modelPath, rig.texture));
+    object_->SetModel(engine::Services().models->GetOrLoadSkinned(modelCommon->GetDxCommon(), modelPath, rig.texture));
     object_->SetSkeleton(engine::graphics::Skeleton::Create(engine::graphics::LoadNodeHierarchyFromFile(rig.dir, rig.file)));
     const float scale = rig.scale * AllyTune().cloneScale;
     object_->SetScale({ scale, scale, scale });
@@ -51,7 +52,7 @@ void PlayerCloneBody::Initialize(engine::graphics::ModelCommon* modelCommon, con
         weaponVisual_ = &visual;
         weaponObject_ = std::make_unique<engine::graphics::Object3d>();
         weaponObject_->Initialize(modelCommon);
-        weaponObject_->SetModel(ModelManager::GetInstance()->GetOrLoad(modelCommon, visual.modelPath, visual.texturePath));
+        weaponObject_->SetModel(engine::Services().models->GetOrLoad(modelCommon, visual.modelPath, visual.texturePath));
         weaponObject_->SetEnableLighting(true);
         break;
     }

@@ -43,6 +43,9 @@ constexpr UINT kRegisterParticles = 0; // u0
 constexpr UINT kRegisterInstances = 1; // u1
 constexpr UINT kRegisterFreeList = 2; // u2
 constexpr UINT kRegisterCounter = 3; // u3
+constexpr UINT kRegisterDrawList = 4; // u4（ParticleUpdate.CS が生きている粒の番号を書く）
+constexpr UINT kRegisterDrawArgs = 5; // u5（ParticleBuildArgs.CS が間接描画の引数を書く）
+constexpr UINT kRegisterDrawListSrv = 3; // t3（頂点シェーダーが生きている粒の番号を読む）
 
 } // namespace
 
@@ -76,11 +79,14 @@ void ParticleManager::CreateRootSignature() {
     // slot 1: t1 (PS が読む Texture2D)
     // slot 2: b0 (PS が読むソフトパーティクルの定数。Draw で必ず設定する)
     // slot 3: t2 (PS が読む、写し取った深度)
-    D3D12_ROOT_PARAMETER rootParameters[4] { };
+    // slot 4: t3 (VS が読む、生きている粒の番号の一覧。バッファを直接指す)
+    D3D12_ROOT_PARAMETER rootParameters[5] { };
     rootParameters[pipelineHelper::particleRootSlot::kInstances] = pipelineHelper::MakeSrvTableParam(rangeT0, D3D12_SHADER_VISIBILITY_VERTEX);
     rootParameters[pipelineHelper::particleRootSlot::kTexture] = pipelineHelper::MakeSrvTableParam(rangeT1, D3D12_SHADER_VISIBILITY_PIXEL);
     rootParameters[pipelineHelper::particleRootSlot::kSoftConstants] = pipelineHelper::MakeCbvParam(kRegisterB0, D3D12_SHADER_VISIBILITY_PIXEL);
     rootParameters[pipelineHelper::particleRootSlot::kSceneDepth] = pipelineHelper::MakeSrvTableParam(rangeT2, D3D12_SHADER_VISIBILITY_PIXEL);
+    rootParameters[pipelineHelper::particleRootSlot::kDrawList] = MakeRootSrvParam(kRegisterDrawListSrv);
+    rootParameters[pipelineHelper::particleRootSlot::kDrawList].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
 
     D3D12_STATIC_SAMPLER_DESC sampler = pipelineHelper::MakePixelSampler(D3D12_FILTER_MIN_MAG_MIP_LINEAR,
         D3D12_TEXTURE_ADDRESS_MODE_WRAP, D3D12_TEXTURE_ADDRESS_MODE_WRAP, D3D12_TEXTURE_ADDRESS_MODE_WRAP);
@@ -121,13 +127,32 @@ void ParticleManager::CreateComputePipelines() {
     emitPass_.pipeline = pipelineHelper::CreateComputePipeline(dxCommon_, emitPass_.rootSignature.Get(),
         L"Resources/shaders/Particle/EmitParticle.CS.hlsl");
 
-    // 動かす: b0 定数, b1 出し直し, u0 粒, u1 描画用, u2 空き一覧, u3 空きの数, b2 場
+    // 動かす: b0 定数, b1 出し直し, u0 粒, u1 描画用, u2 空き一覧, u3 空きの数, b2 場, u4 生きている粒の一覧
     updatePass_.rootSignature = CreateComputeRootSignature(device, {
         MakeCbvParam(kRegisterB0, kAll), MakeCbvParam(kRegisterB1, kAll), MakeUavParam(kRegisterParticles),
         MakeUavParam(kRegisterInstances), MakeUavParam(kRegisterFreeList), MakeUavParam(kRegisterCounter),
-        MakeCbvParam(kRegisterB2, kAll) });
+        MakeCbvParam(kRegisterB2, kAll), MakeUavParam(kRegisterDrawList) });
     updatePass_.pipeline = pipelineHelper::CreateComputePipeline(dxCommon_, updatePass_.rootSignature.Get(),
         L"Resources/shaders/Particle/ParticleUpdate.CS.hlsl");
+
+    // 間接描画の引数を作る: b0 定数, u3 空きの数と生きている数, u5 間接描画の引数
+    buildArgsPass_.rootSignature = CreateComputeRootSignature(device, {
+        MakeCbvParam(kRegisterB0, kAll), MakeUavParam(kRegisterCounter), MakeUavParam(kRegisterDrawArgs) });
+    buildArgsPass_.pipeline = pipelineHelper::CreateComputePipeline(dxCommon_, buildArgsPass_.rootSignature.Get(),
+        L"Resources/shaders/Particle/ParticleBuildArgs.CS.hlsl");
+}
+
+/** @brief 間接描画（インデックス付きの描画1回）の命令の形を作る */
+void ParticleManager::CreateDrawCommandSignature() {
+    // 引数はインデックス付きの描画1回分だけ。ルートの値は書き換えないので、ルートシグネチャは渡さない
+    D3D12_INDIRECT_ARGUMENT_DESC argument {};
+    argument.Type = D3D12_INDIRECT_ARGUMENT_TYPE_DRAW_INDEXED;
+    D3D12_COMMAND_SIGNATURE_DESC desc {};
+    desc.ByteStride = sizeof(D3D12_DRAW_INDEXED_ARGUMENTS);
+    desc.NumArgumentDescs = 1;
+    desc.pArgumentDescs = &argument;
+    const HRESULT hr = dxCommon_->GetDevice()->CreateCommandSignature(&desc, nullptr, IID_PPV_ARGS(&drawCommandSignature_));
+    ENGINE_ASSERT(SUCCEEDED(hr));
 }
 
 /** @brief 粒子1枚分の板ポリゴンの頂点・インデックスバッファを作る */

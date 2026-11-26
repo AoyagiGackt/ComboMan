@@ -4,7 +4,6 @@
  */
 #ifdef USE_IMGUI
 #include "StageEditorPanels.h"
-#include "StageEditorObjectPresets.h"
 #include "TextBufferCapacity.h"
 #include "Camera.h"
 #include "EditorUI.h"
@@ -12,6 +11,7 @@
 #include "GameFlags.h"
 #include "KnightEnemy.h"
 #include "StageEditor.h"
+#include "ObjectKind.h"
 #include "StageEditorUiStyle.h"
 #include "WinApp.h"
 #include <algorithm>
@@ -341,10 +341,10 @@ void StageEditorHierarchyPanel::RenderFileAndHistoryActions(StageEditor& editor)
     }
     ImGui::EndDisabled();
     // 配置の座標をそろえる間隔
-    ImGui::Checkbox("スナップ", &editor.snapEnabled_);
+    ImGui::Checkbox("スナップ", &editor.snap_.Enabled());
     ImGui::SameLine();
     ImGui::SetNextItemWidth(kSnapStepWidth);
-    ImGui::DragFloat("##snapStep", &editor.snapStep_, editorUi::kDragStepPosition, editorUi::kMinSnapStep, editorUi::kMaxSnapStep, "%.1f");
+    ImGui::DragFloat("##snapStep", &editor.snap_.Step(), editorUi::kDragStepPosition, editorUi::kMinSnapStep, editorUi::kMaxSnapStep, "%.1f");
     // 選択物を子にして、次にクリックした物を親にする親子付け
     const bool canLink = editor.selKind_ == StageEditor::SelKind::kObject
         && editor.selIndex_ >= 0 && editor.selIndex_ < static_cast<int>(editor.objects_.size());
@@ -426,52 +426,22 @@ void StageEditorHierarchyPanel::RenderObjectTree(StageEditor& editor, const std:
     if (ImGui::BeginPopup("AddObjectPopup")) {
         // 見えている画面の中央（z=0平面上）に置くカメラをどこへ動かしていても手元に出る
         const Vector3 center = editor.ViewCenterOnGround();
-        /** @brief 完成した配置設定をUndo記録後に追加し、実体生成と選択更新を一度だけ行う */
-        auto addEntry = [&](const std::string& namePrefix, const std::string& kind,
-                            const char* preset = nullptr, bool activateOnFlag = false) {
-            StageEditor::ObjectEntry entry;
-            // 画面中央をスナップした位置に置き、プリセットがあれば見た目や設定を当てる
-            entry.desc.kind = kind;
-            entry.desc.position = center;
-            entry.desc.position.x = editor.SnapValue(entry.desc.position.x);
-            entry.desc.position.y = editor.SnapValue(entry.desc.position.y);
-            if (preset && !stageEditorObjectPresets::TryApply(preset, entry.desc)) {
-                editor.statusMessage_ = "配置プリセットを読み込めませんでした。設定ファイルを確認してください";
-                editor.statusTimer_ = StageEditor::kStatusNormalSeconds;
-                return;
-            }
-            editor.RecordUndoSnapshotNow();
-            entry.desc.name = namePrefix + "_" + std::to_string(editor.nextSerial_++);
-            if (activateOnFlag) {
-                entry.desc.activationFlag = entry.desc.name + "_active";
-            }
-            editor.objects_.push_back(std::move(entry));
-            editor.RegenerateInstances(editor.objects_.back());
-            // 追加した物だけを選択した状態にする
-            editor.SelectLastObject();
-        };
+        editor.RenderPlacementPresets(true);
         /** @brief 追加メニューの1項目（表示名・名前の頭・種類・プリセット・フラグで動かすか） */
         struct AddMenuItem {
             const char* label;
             const char* namePrefix; ///< nullptr なら文章UIとして画面中央に追加する
             const char* kind;
-            const char* preset;
             bool activateOnFlag;
         };
         static constexpr AddMenuItem kAddMenuItems[] = {
-            { "配置物（ブロック）", "obj", "prop", "prop", false },
-            { "背景モデル", "background", "background", "background", false },
-            { "敵：ナイト", "knight", "enemy_knight", nullptr, false },
-            { "敵：汎用エネミー", "enemy", "enemy_basic", nullptr, false },
-            { "SpawnPoint", "spawn", "spawn_point", nullptr, true },
-            { "ギミック", "gimmick", "gimmick", "gimmick", true },
-            { "カメラポイント", "camera", "camera_point", nullptr, true },
-            { "収集物（エネルギーコア）", "pickup", "pickup", "pickup", false },
-            { "壊せる物（爆発バレル）", "breakable", "breakable", "breakable", false },
-            { "巡回Waypoint", "waypoint", "patrol_point", nullptr, false },
-            { "イベント条件", "condition", "event_condition", nullptr, false },
-            { "文章UI（画面に固定）", nullptr, nullptr, nullptr, false },
-            { "Terrain", "terrain", "terrain", "terrain", false },
+            { "敵：ナイト", "knight", "enemy_knight", false },
+            { "敵：汎用エネミー", "enemy", "enemy_basic", false },
+            { "敵の出現位置", "spawn", "spawn_point", true },
+            { "カメラポイント", "camera", "camera_point", true },
+            { "巡回地点", "waypoint", "patrol_point", false },
+            { "イベント条件", "condition", "event_condition", false },
+            { "文章UI（画面に固定）", nullptr, nullptr, false },
         };
         // 表の順に並べ、選ばれた項目だけを追加する
         for (const AddMenuItem& item : kAddMenuItems) {
@@ -481,7 +451,10 @@ void StageEditorHierarchyPanel::RenderObjectTree(StageEditor& editor, const std:
             if (item.namePrefix == nullptr) {
                 editor.AddUITextAt(editorUi::kScreenCenterPosition);
             } else {
-                addEntry(item.namePrefix, item.kind, item.preset, item.activateOnFlag);
+                ObjectDesc part;
+                part.name = item.namePrefix;
+                part.kind = item.kind;
+                editor.PlacePart(part, { editor.SnapValue(center.x), editor.SnapValue(center.y), center.z }, item.activateOnFlag);
             }
         }
         ImGui::EndPopup();

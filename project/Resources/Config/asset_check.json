@@ -1,0 +1,8 @@
+{
+  "_comment": "textureExtensions は画像、modelExtensions はモデル、shaderExtensions はシェーダー、audioExtensions は音声の拡張子。excludePrefixes に一致するフォルダと素材は確認対象から外す。素材パック設定の除外指定も適用する。",
+  "textureExtensions": [".png", ".jpg", ".jpeg", ".dds", ".bmp", ".tga"],
+  "modelExtensions": [".obj", ".gltf", ".glb", ".fbx"],
+  "shaderExtensions": [".hlsl"],
+  "audioExtensions": [".wav", ".mp3"],
+  "excludePrefixes": ["Resources/music/"]
+}

@@ -372,6 +372,12 @@ struct FlagGraphBinding {
     std::string graphPath; // 起動するグラフJSONのパス
 };
 
+/** @brief 道に沿って進むステージの、道の1点 */
+struct PathPointDesc {
+    Vector3 position = { }; ///< 通る位置
+    float speed = 4.0f; ///< この点での進む速さ（ワールド単位/秒）
+};
+
 // ファイルから読み込んだレベル全体のデータ
 /** @brief レベルJSON1ファイルぶんの内容（配置物・トリガー・チェックポイント・プレイヤー/敵の初期スポーン位置・グラフ紐付け） */
 struct LevelData {
@@ -383,6 +389,8 @@ struct LevelData {
     std::string graphPath; // レベル読込直後から常駐で走るグラフJSONのパス（空なら無し）
     std::vector<FlagGraphBinding> flagGraphs; // フラグの立ち上がりで起動するグラフ一覧
     std::string sky; // 空の画像（正距円筒、Resources/SkyDome/sky_～.png。空なら既定の空）
+    std::string gameMode; // ゲームの型の id（Resources/Config/GameModes。空なら横スクロール）
+    std::vector<PathPointDesc> path; // 道に沿って進む型で使う道（通る順）
     std::string comment; // ファイルの説明書き（_comment。ゲームでは使わず、保存しても消えないように持っておく）
 };
 

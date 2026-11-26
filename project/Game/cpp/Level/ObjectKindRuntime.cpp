@@ -2,6 +2,8 @@
  * @brief 配置物の種類からランタイム実体へアクセスする操作
  */
 #include "ObjectKind.h"
+// 乱数の種を共通の窓口から取得する。
+#include "RandomSeed.h"
 #include "Camera.h"
 #include "EnemyEntity.h"
 #include "EnemyRegistry.h"
@@ -137,7 +139,7 @@ WeaponType ChooseEnemyWeapon(const ObjectDesc& desc) {
             candidates.push_back(ParseWeaponTypeName(name));
         }
     }
-    static std::mt19937 sRng { std::random_device { }() };
+    static std::mt19937 sRng { engine::randomSeed::Next() };
     std::uniform_int_distribution<size_t> pick(0, candidates.size() - 1);
     return candidates[pick(sRng)];
 }

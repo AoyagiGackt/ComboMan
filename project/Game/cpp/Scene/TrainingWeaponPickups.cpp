@@ -3,6 +3,7 @@
  * @brief トレーニングルームに置いた武器の表示と取得判定（TrainingWeaponPickups）の実装
  */
 #include "TrainingWeaponPickups.h"
+#include "EngineContext.h"
 #include "ModelManager.h"
 #include <cmath>
 using namespace engine::graphics;
@@ -35,6 +36,9 @@ void TrainingWeaponPickups::Initialize(ModelCommon* models) {
         { WeaponType::kSpear, "Resources/MedievalWeaponsPack/OBJ/Spear.obj", "Resources/MedievalWeaponsPack/OBJ/SpearPalette.png", 0.13f },
         { WeaponType::kHammer, "Resources/MedievalWeaponsPack/OBJ/Hammer_Small.obj", "Resources/MedievalWeaponsPack/OBJ/Hammer_SmallPalette.png", 0.27f },
         { WeaponType::kDagger, "Resources/MedievalWeaponsPack/OBJ/Dagger.obj", "Resources/MedievalWeaponsPack/OBJ/DaggerPalette.png", 0.42f },
+        { WeaponType::kGreatsword, "Resources/MedievalWeaponsPack/OBJ/Claymore.obj", "Resources/MedievalWeaponsPack/OBJ/ClaymorePalette.png", 0.18f },
+        { WeaponType::kScythe, "Resources/MedievalWeaponsPack/OBJ/Scythe.obj", "Resources/MedievalWeaponsPack/OBJ/ScythePalette.png", 0.21f },
+        { WeaponType::kAxe, "Resources/MedievalWeaponsPack/OBJ/Axe_Double.obj", "Resources/MedievalWeaponsPack/OBJ/Axe_DoublePalette.png", 0.20f },
     };
     static_assert(std::size(kPickupAssets) == kPickupCount, "本編で手に入る武器だけを並べる");
     for (int i = 0; i < static_cast<int>(pickups_.size()); ++i) {
@@ -42,7 +46,7 @@ void TrainingWeaponPickups::Initialize(ModelCommon* models) {
         Pickup& pickup = pickups_[i];
         pickup.type = asset.type;
         pickup.position = { kFirstPickupX + static_cast<float>(i) * kPickupSpacing, kPickupY, 0.0f };
-        pickup.model = ModelManager::GetInstance()->GetOrLoad(modelCommon_, asset.modelPath, asset.texturePath);
+        pickup.model = engine::Services().models->GetOrLoad(modelCommon_, asset.modelPath, asset.texturePath);
         pickup.object = std::make_unique<Object3d>();
         pickup.object->Initialize(modelCommon_);
         pickup.object->SetModel(pickup.model);

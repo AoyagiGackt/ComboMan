@@ -3,6 +3,12 @@
  * @brief メインステージ（GamePlayScene）の初期化と基本更新フローの実装
  */
 #include "GamePlayScene.h"
+#include "EngineContext.h"
+#include "CombatDepth.h"
+#include "GameAudio.h"
+#include "GameActions.h"
+#include "TestCoverage.h"
+#include "BossExecutionTuning.h"
 #include "GameSounds.h"
 #include "FinisherEffects.h"
 #include "SceneVisualTuning.h"
@@ -69,11 +75,30 @@ std::string GamePlayScene::GetEditorLevelPath() const {
 
 /** @brief 共通の依存を受け取り、シーンが使うゲーム実体と描画資源を初期化する */
 void GamePlayScene::Initialize(DirectXCommon* dxCommon, Input* input, Audio* audio) {
+    // ステージの一覧と入場を記録する。
+    if (testCoverage::IsEnabled()) {
+        // 自動テストの網羅のまとめに数える
+        for (const auto& [name, style] : BossExecutionTuningStore::Get().styles) {
+            testCoverage::Declare("execution", name);
+        }
+        const auto& rules = GameRules::GetInstance()->Get();
+        for (const auto& path : rules.levelPaths) {
+            testCoverage::Declare("stage", path);
+        }
+        if (!rules.tutorialLevelPath.empty()) {
+            testCoverage::Declare("stage", rules.tutorialLevelPath);
+        }
+        testCoverage::Declare("stage", FinalBossTuningStore::Get().level);
+        testCoverage::Cover("stage", GetEditorLevelPath());
+    }
     // 外部から受け取る共通依存だけを入口で保持し、所有資源の構築は下請けへ委譲する
     spriteCommon_ = InitializeCommonResources(dxCommon, input, audio, dxCommon_, input_, audio_);
     InitializeCoreSystems();
     InitializeFinalBoss();
     audio_->PlaySceneBGM(bgmKey::kStage);
+    // クリアとやられた時の曲は、ここで読んでおく（初めて鳴らす瞬間に読み込むと、決めの所で画面が止まる）
+    audio_->PreloadSceneBGM(bgmKey::kGameClear);
+    audio_->PreloadSceneBGM(bgmKey::kGameOver);
 }
 
 /** @brief シーンが所有するゲーム実体、描画資源、演出を責務順に初期化する */
@@ -87,7 +112,7 @@ void GamePlayScene::InitializeCoreSystems() {
 
 /** @brief InitializeCoreSystems()の下請け 描画基盤(Common類・シャドウ・カメラ)とスカイドームを初期化する */
 void GamePlayScene::InitializeRenderFoundation() {
-    srvManager_ = SrvManager::GetInstance();
+    srvManager_ = engine::Services().srvManager;
     grayscaleEffect_ = GrayscaleEffect::GetInstance();
     imageFilter_ = ImageFilter::GetInstance();
     hsvFilter_ = HsvFilter::GetInstance();
@@ -122,7 +147,7 @@ void GamePlayScene::InitializeRenderTargetsAndOverlays() {
 void GamePlayScene::InitializeParticlesAndHud() {
     // パーティクルの設定（水場はこのゲームでは使わない。水面の描画はエンジン層の WaterSurfaceEffect に残してある）
     hudReady_ = false;
-    pm_ = ParticleManager::GetInstance();
+    pm_ = engine::Services().particles;
     sceneShared::CreateParticleGroupsFromJson(pm_, "Resources/particles/gameplay.json");
 
     // 文字・開始演出・斬撃線・スタイルランクの表示
@@ -170,6 +195,8 @@ void GamePlayScene::InitializeGhostEditorAndEffects() {
     bladeFlash_.Initialize(dxCommon_);
     comboFeel_.Initialize(dxCommon_, srvManager_);
     spaceWarp_.Initialize(dxCommon_, srvManager_);
+    // 3D の後・UI の前に掛ける画面全体のエフェクト（順番は post_process.json の gameplay）
+    sceneShared::SetupScenePostProcess(postProcess_, "gameplay", srvManager_, spaceWarp_, comboFeel_);
     finisherShatter_.Initialize(dxCommon_, srvManager_);
     finisherShatter_.SetDuration(SceneVisualTuning::Gameplay().finisherShatterSeconds);
 
@@ -181,7 +208,7 @@ void GamePlayScene::InitializeGhostEditorAndEffects() {
         [this](float amount, float seconds) {
             cameraShaker_.Request(amount, seconds);
         });
-    RegisterScriptEffectHandlers();
+    scriptEffects_.Register(input_);
 }
 
 /** @brief 編集中にプレイヤーの表示座標を現在位置へ同期する */
@@ -394,7 +421,17 @@ void GamePlayScene::Update() {
     stageIntro_.Update(input_);
 
     // 自動テストプレイの間だけ、遊んでいる様子からおかしな所を探して記録する（ふだんは何もしない）
-    RunBugChecks();
+    // クリアの演出とやられ演出の間は、止まって当然なので調べない
+    if (!clearTriggered_ && !playerDefeat_.IsActive()) {
+        bugWatcher_.Run({
+            .player = player_.get(),
+            .boss = enemy_,
+            .ally = &ally_,
+            .editor = &GetStageEditor(),
+            .executionActive = bossExecution_.IsActive(),
+            .finalBossMode = IsFinalBossMode(),
+        });
+    }
     // 自動テストプレイの間だけ、F9 でやられ演出、F5 ですぐクリアできる（手順の表がステージを先へ進めるのに使う。ふだんは効かない）
     if (SmokeTestRunner::IsActive() && input_->TriggerKey(DIK_F9)) {
         StartPlayerDefeat();
@@ -428,9 +465,18 @@ void GamePlayScene::Update() {
     const float dt = tm->GetDeltaTime(); // ヒットストップ中 = 0、スロー時は比例値
     floorElapsedSeconds_ += gameConstants::kFrameDeltaTime; // プレイログ用。ヒットストップの影響を受けない実時間換算
 
+    // 奥行きにも動く型なら、前後左右のキーを横スクロールの操作へ置き換えてからプレイヤーを動かす
+    PrepareDepthInput();
     UpdateCombat();
+    ApplyDepthMovement(dt);
     // 吹き飛んだ敵どうしの衝突・跳ね返りの演出・部屋の最後の1体（敵が動いた後のこのフレームの様子で見る）
     UpdateActionFeel();
+    // 道に沿って進む型なら、道の上の位置を進めてプレイヤーをその周りに収める
+    UpdatePathScroll(dt);
+    // ノードがゲームオーバーを頼んでいたら、やられ演出を始める
+    if (UpdateRuleRequests()) {
+        return;
+    }
     // ラスボス戦はプレイヤーの更新と攻撃の判定の後に、ボスの技と闘技場を進める
     if (finalBoss_.IsActive()) {
         finalBoss_.UpdateFight(dt);
@@ -458,13 +504,7 @@ void GamePlayScene::Update() {
         finisherShatter_.Reset();
     }
 
-    // 切断演出が飛散に移ったら、敵本体を再表示する
-    // 撃破済みでもJの武器吸収で本体を消費するまでは戻す（フィニッシャーで倒した場合に
-    // 透明な敵へJを当てる状態にならないように）。吸収完了後はweaponStealTriggered_が立つので戻さない
-    if (enemy_ && !enemy_->IsVisible() && !weaponStealTriggered_
-        && (enemySlice_.IsBursting() || !enemySlice_.IsActive())) {
-        enemy_->SetVisible(true);
-    }
+    RestoreEnemyAfterSlice();
 
     SlashMark::GetInstance()->Update(dt);
 
@@ -511,6 +551,8 @@ void GamePlayScene::StartStageIntro() {
     stageIntro_.Start(setup, { player_.get(), pm_, &cameraShaker_, &rng_ });
     // 決めたステージなら、開始演出が終わった後に操作説明を出す
     stageGuide_.Arm(GetEditorLevelPath());
+    // ゲームの型に操作の表があれば、その型を初めて遊ぶ時に操作説明として出す
+    ArmModeControlsGuide();
     GetStageEditor().SetGameplayHeld(stageIntro_.IsPlaying());
 }
 
@@ -691,13 +733,16 @@ void GamePlayScene::UpdateCombat() {
         SyncCombatEnemies(); // spawn_pointが出した敵をこのフレームから戦闘対象に含める
         UpdateTargetLock();
         std::vector<AABB> activeColliders = GetStageEditor().GetSolidColliders();
-        ApplyScriptControlLock();
+        scriptEffects_.ApplyControlLock();
         // 闘技場では前後左右の入力を、ボスへ向かう線の上の左右の操作と回り込みへ置き換える
         if (finalBoss_.IsActive()) {
             finalBoss_.PrepareInput();
         }
         player_->SetRampageTarget(UpdateRampageEnemy());
         const Vector3 positionBeforeUpdate = player_->GetPosition();
+        if (player_->HasWeaponInFlight() || input_->TriggerAction(GameAction::kThrowWeapon)) {
+            player_->UpdateWeaponThrow(input_, GetStageEditor().GetTerrainColliders());
+        }
         player_->Update(input_, enemy_ ? enemy_->GetPosition() : player_->GetPosition(), enemy_ && !enemy_->IsDefeated() && enemy_->IsVisible(), !activeColliders.empty());
         gameSounds::PlayPlayerActions(*player_);
         // ボスだけでなく道中の敵の手前でも止め、プレイヤーが歩いて敵を押しのけないようにする
@@ -737,7 +782,7 @@ void GamePlayScene::UpdateCombat() {
         UpdateWeaponFinisher();
         UpdateThrownWeapons();
         // 雑魚へのヒットは直前のUpdateWeaponEnemies()、ボスへのヒットは前フレームのUpdateStyleAndUI()で記録済み
-        UpdateWeaponFatigue();
+        weaponFatigue_.Update();
         UpdateExplosiveBarrels();
         // 配置物の更新で集めた扉の開始通知を一度だけ演出へ渡す
         const HitEffectPlayer gateFx(pm_, &cameraShaker_, &rng_);
@@ -767,9 +812,25 @@ void GamePlayScene::UpdateCombat() {
         UpdateComboFeel(false);
     }
 }
+/** @brief 切断演出が飛散に移ったら、隠していた敵本体を再表示する */
+void GamePlayScene::RestoreEnemyAfterSlice() {
+    // 撃破済みでもJの武器吸収で本体を消費するまでは戻す（フィニッシャーで倒した場合に
+    // 透明な敵へJを当てる状態にならないように）。吸収完了後はweaponStealTriggered_が立つので戻さない
+    if (enemy_ && !enemy_->IsVisible() && !weaponStealTriggered_
+        && (enemySlice_.IsBursting() || !enemySlice_.IsActive())) {
+        enemy_->SetVisible(true);
+    }
+}
+
 /** @brief シーン固有の演出資源と登録済みコールバックを破棄する */
 void GamePlayScene::Finalize() {
     motionEditor_.Close(*player_);
+    // 奥行きの当たりの切り替えは、ほかのシーンへ持ち越さない
+    combatDepth::SetBand(0.0f);
+    // このシーンのプレイヤーはこの後消えるので、ほかの所から指したままにしない（消えた後に読まれると落ちる）
+    if (PlayerBridge::GetInstance()->Get() == player_.get()) {
+        PlayerBridge::GetInstance()->SetPlayer(nullptr);
+    }
     // 2P に渡していた機器を 1P の操作へ戻す（次のシーンで 1P の機器が外れたままにならないように）
     LeaveTwoPlayer(nullptr);
     // ラスボス戦で刀だけにした武器と、闘技場の入力の差し替えを元へ戻す
@@ -779,14 +840,8 @@ void GamePlayScene::Finalize() {
     // デバッグパネルとカメラ揺れの受け口から、このシーンの登録を外す
     ImGuiControlPanel::RegisterGlassShatterTrigger(nullptr);
     SceneEffectBridge::GetInstance()->SetCameraShakeHandler({ });
-    SceneEffectBridge::GetInstance()->SetMessageHandler({ });
-    SceneEffectBridge::GetInstance()->SetCameraFocusHandler({ });
-    SceneEffectBridge::GetInstance()->SetControlLockHandler({ });
-    // 操作を止めたままシーンを抜けても、次の画面に上書きを残さない
-    if (scriptControlLocked_) {
-        input_->ClearActionOverrides();
-        scriptControlLocked_ = false;
-    }
+    // ノードグラフの受け口を外す（操作を止めたままなら戻す）
+    scriptEffects_.Unregister();
     // 描画先と演出の資源を片付ける
     renderTexture_->Finalize(srvManager_);
     pm_->ClearAllGroups();

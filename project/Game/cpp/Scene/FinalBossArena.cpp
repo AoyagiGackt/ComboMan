@@ -2,6 +2,7 @@
  * @brief 石床と発光する縁、外周の柱と粒を描く。
  */
 #include "FinalBossArena.h"
+#include "EngineContext.h"
 #include "JsonFieldTable.h"
 #include "ModelManager.h"
 #include "ParticleManager.h"
@@ -110,7 +111,7 @@ void FinalBossArena::Initialize(const Setup& setup) {
     if (!setup.modelCommon) {
         return;
     }
-    auto* model = engine::graphics::ModelManager::GetInstance()->GetOrLoad(setup.modelCommon, kModel, kTexture);
+    auto* model = engine::Services().models->GetOrLoad(setup.modelCommon, kModel, kTexture);
     /** @brief 単位立方体から装飾を追加する。 */
     const auto add = [&](const Vector3& position, const Vector3& scale, float yaw, bool glow) {
         Piece piece;

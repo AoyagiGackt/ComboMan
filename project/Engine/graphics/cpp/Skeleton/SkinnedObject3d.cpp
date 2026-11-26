@@ -4,6 +4,7 @@
  */
 #include "SkinnedObject3d.h"
 #include "FrameUploadAllocator.h"
+#include "FrustumCulling.h"
 #include "PipelineHelper.h"
 #include "EngineConstants.h"
 #include "ResourceAlignment.h"
@@ -26,6 +27,8 @@ namespace {
 
 // アニメーション更新のフレームレート
 constexpr float kAnimationFramesPerSecond = engineConstants::kTargetFps;
+/** @brief 画面外の判定で、構えの姿勢の箱を広げる割合（動きで手足や体が構えの箱から大きくはみ出すので、静止物より広く取る） */
+constexpr float kSkinnedCullingBoundsPadding = 1.0f;
 
 }
 
@@ -201,7 +204,8 @@ void SkinnedObject3d::Update() {
     transformationMatrix_.wvp = Multiply(world, vp);
     transformationMatrix_.world = world;
     transformationMatrix_.worldInverseTranspose = Transpose(Inverse(world));
-    transformationMatrix_.lightVP = sCommonLightVP;
+    // シェーダーはモデル内の座標にそのまま掛けるので、ワールド行列を先に掛けておく
+    transformationMatrix_.lightVP = Multiply(world, sCommonLightVP);
 
     material_.shadingType = LightManager::GetInstance()->GetLightingMode();
 }
@@ -243,6 +247,12 @@ void SkinnedObject3d::BindSharedSlots(ID3D12GraphicsCommandList* cmd) const {
 /** @brief スキニング済み頂点を描画する（CS スキニング可なら CS 結果を、不可なら VS 内ボーン計算にフォールバックする） */
 void SkinnedObject3d::Draw() {
     if (!model_) {
+        return;
+    }
+    // 画面に映る範囲の外に完全に出ている時は、スキニングの計算ごと飛ばす（静止物と同じ切り替えに従う）
+    if (Object3d::IsFrustumCullingEnabled()
+        && IsPaddedBoxOutsideClipSpace(transformationMatrix_.wvp,
+            model_->GetLocalBoundsMin(), model_->GetLocalBoundsMax(), kSkinnedCullingBoundsPadding)) {
         return;
     }
 

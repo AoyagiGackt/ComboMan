@@ -4,6 +4,8 @@
  * @note 段階は FinalBossPhases.cpp、ボスの技は FinalBossMoves.cpp に置く
  */
 #include "FinalBossBattle.h"
+#include "EngineContext.h"
+#include "GameActions.h"
 #include "Camera.h"
 #include "CharacterVisuals.h"
 #include "EnemyEntity.h"
@@ -81,7 +83,7 @@ std::unique_ptr<Object3d> CreateWeaponObject(ModelCommon* modelCommon, WeaponTyp
     const HeldWeaponVisual& visual = FindHeldVisual(type);
     auto object = std::make_unique<Object3d>();
     object->Initialize(modelCommon);
-    object->SetModel(ModelManager::GetInstance()->GetOrLoad(modelCommon, visual.modelPath, visual.texturePath));
+    object->SetModel(engine::Services().models->GetOrLoad(modelCommon, visual.modelPath, visual.texturePath));
     object->SetScale({ scale, scale, scale });
     return object;
 }
@@ -164,18 +166,18 @@ void FinalBossBattle::PrepareInput() {
     Input* input = links_.input;
     Player* player = links_.player;
     // 差し替えた操作は闘技場の操作の読み取りに影響しないので、先に読む
-    const float forward = (input->PushAction(Input::Action::kArenaForward) ? 1.0f : 0.0f)
-        - (input->PushAction(Input::Action::kArenaBack) ? 1.0f : 0.0f);
-    const float side = (input->PushAction(Input::Action::kArenaRight) ? 1.0f : 0.0f)
-        - (input->PushAction(Input::Action::kArenaLeft) ? 1.0f : 0.0f);
+    const float forward = (input->PushAction(GameAction::kArenaForward) ? 1.0f : 0.0f)
+        - (input->PushAction(GameAction::kArenaBack) ? 1.0f : 0.0f);
+    const float side = (input->PushAction(GameAction::kArenaRight) ? 1.0f : 0.0f)
+        - (input->PushAction(GameAction::kArenaLeft) ? 1.0f : 0.0f);
     const float playerX = player->GetPosition().x;
     const float toBoss = bossX_ >= playerX ? 1.0f : -1.0f;
 
     // 前後はボスへ近づく/離れる左右の移動、ジャンプは専用のキー、下は後ろへの入力
-    input->SetActionOverride(Input::Action::kMoveRight, forward * toBoss > 0.0f);
-    input->SetActionOverride(Input::Action::kMoveLeft, forward * toBoss < 0.0f);
-    input->SetActionOverride(Input::Action::kJump, input->PushAction(Input::Action::kArenaJump));
-    input->SetActionOverride(Input::Action::kDown, forward < 0.0f);
+    input->SetActionOverride(GameAction::kMoveRight, forward * toBoss > 0.0f);
+    input->SetActionOverride(GameAction::kMoveLeft, forward * toBoss < 0.0f);
+    input->SetActionOverride(GameAction::kJump, input->PushAction(GameAction::kArenaJump));
+    input->SetActionOverride(GameAction::kDown, forward < 0.0f);
     overridesActive_ = true;
 
     // 横の入力はボスの周りを回り込む（闘技場を逆へ回して見せる）。技の最中は回らない

@@ -5,6 +5,7 @@
 #pragma once
 #include "BlendMode.h"
 #include "DirectXCommon.h"
+#include <atomic>
 #include <wrl/client.h>
 namespace engine::graphics {
 
@@ -23,6 +24,15 @@ public:
      * @param blendMode 使用するブレンドモード
      */
     void CommonDrawSettings(BlendMode blendMode = BlendMode::kAlpha);
+
+    /**
+     * @brief まとめ描き用のパイプラインに切り替える（直前の CommonDrawSettings と同じブレンドモード）
+     * @note ルートシグネチャは同じなので、設定済みのライト・マテリアルなどのルート引数はそのまま残る
+     */
+    void BeginInstancedDraw();
+
+    /** @brief まとめ描きの後、通常のパイプラインに戻す */
+    void EndInstancedDraw();
 
     /**
      * @brief シャドウパス開始（シャドウ用 PSO + Root Signature をセット）
@@ -45,6 +55,10 @@ private:
     // 通常描画用
     Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> graphicsPipelineStates_[static_cast<size_t>(BlendMode::kCount)];
+    /** @brief まとめ描き用 PSO（ブレンドモード別。1体ごとの行列を頂点バッファの2本目から読む） */
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> instancedPipelineStates_[static_cast<size_t>(BlendMode::kCount)];
+    /** @brief 直前の CommonDrawSettings で選んだブレンドモード（バンドルを別のスレッドで記録するので atomic） */
+    std::atomic<BlendMode> currentBlendMode_ = BlendMode::kAlpha;
 
     // シャドウパス用
     /** @brief シャドウパス専用ルートシグネチャ（CBV 1つ TransformationMatrix） */

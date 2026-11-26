@@ -9,6 +9,8 @@
 #include "AudioBridge.h"
 #include "EnemyTuning.h"
 #include "GamePlayScene.h"
+#include "TestCoverage.h"
+
 #include "GameRules.h"
 #include "SceneShared.h"
 #include "LevelLoader.h"
@@ -16,6 +18,7 @@
 #include "PlayerBridge.h"
 #include "RunData.h"
 #include "StageEditor.h"
+#include "StageEditorPlaytest.h"
 #include <algorithm>
 #include <cmath>
 #include <iterator>
@@ -66,6 +69,12 @@ void GamePlayScene::ApplyStageSky() {
 
 /** @brief StageEditorへ配置済みの敵（武器持ち雑魚・ボス）をenemy_/weaponEnemies_へ結び付ける */
 void GamePlayScene::OnEditorLevelLoaded() {
+    // 自動テストの網羅のまとめに数える
+    if (testCoverage::IsEnabled()) {
+        for (const auto& watch : GetStageEditor().CollectEnemyGroupWatches()) {
+            testCoverage::Declare("room_clear", watch.conditionName);
+        }
+    }
     enemy_ = nullptr;
     weaponEnemies_.clear();
     enemyBullets_.clear();
@@ -75,12 +84,11 @@ void GamePlayScene::OnEditorLevelLoaded() {
     weaponFinisherPending_ = false;
     bossSlamWarningActive_ = false;
     floorElapsedSeconds_ = 0.0f;
-    acquireBannerTimer_ = 0.0f;
+    banner_.Reset();
     hasSafeGround_ = false;
     ResetAlly();
     ApplyStageSky();
-    bugWatch_.playerTrail.clear();
-    bugWatch_.enemyLastPositions.clear();
+    bugWatcher_.ResetForLevel();
     roomClearWatches_.clear();
     flyerHits_.clear();
     flyerChain_.clear();
@@ -166,6 +174,11 @@ void GamePlayScene::BindEditorBoss() {
 
 /** @brief エディタが配置物の実体を作り直していたら、ボスとロック対象を含む参照を取得し直す */
 void GamePlayScene::SynchronizeEditorReferences() {
+#ifdef USE_IMGUI
+    if (player_) {
+        stagePlaytest::ObservePlayer(GetStageEditor(), player_->GetPosition(), playerDefeat_.IsActive());
+    }
+#endif
     // 古い参照を参照解除せず、現存する実体の番号と照合する
     const auto refs = GetStageEditor().GetCombatEnemies();
     const bool lockIsAlive = lockedEnemy_ == nullptr

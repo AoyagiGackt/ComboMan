@@ -3,6 +3,8 @@
  * @brief ステージボス戦の進行（ひるみ値・第2段階・武器ごとの技）
  */
 #include "BossBattleDirector.h"
+#include "TestCoverage.h"
+
 #include "EnemyEntity.h"
 #include "EnemyTuning.h"
 #include "JsonFieldTable.h"
@@ -184,6 +186,17 @@ void BossBattleDirector::Bind(EnemyEntity* boss, const std::string& weaponName) 
     currentAttack_.clear();
     stageSeconds_ = 0.0f;
     const BossBattleTuning& tuning = BossBattleTuningStore::Get();
+    // 自動テストの網羅のまとめに数える
+    if (testCoverage::IsEnabled()) {
+        for (const auto& [name, profile] : tuning.profiles) {
+            for (const auto& attack : profile.attacks) {
+                testCoverage::Declare("boss_move", attack);
+            }
+            for (const auto& attack : profile.rageAttacks) {
+                testCoverage::Declare("boss_move", attack);
+            }
+        }
+    }
     const auto found = tuning.profiles.find(weaponName);
     profile_ = found != tuning.profiles.end() ? found->second : BossProfile {};
     phase_ = Phase::kWaiting;
@@ -348,6 +361,8 @@ void BossBattleDirector::StartNextAttack(const BossFrameInput& input, BossFrameO
     }
     // 技の一覧を順に回す
     const std::string& attack = attacks[attackIndex_ % attacks.size()];
+    // 自動テストの網羅のまとめに数える
+    testCoverage::Cover("boss_move", attack);
     ++attackIndex_;
     strikeLanded_ = false;
     currentAttack_ = attack;

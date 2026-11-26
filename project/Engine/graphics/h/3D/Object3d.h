@@ -8,6 +8,8 @@
 #include "MakeAffine.h"
 #include "Model.h"
 #include "ObjectMaterialLayout.h"
+#include <atomic>
+#include <cstdint>
 #include <string>
 #include <wrl/client.h>
 namespace engine::graphics {
@@ -65,6 +67,22 @@ public:
      */
     static void SetLightViewProjection(const Matrix4x4& lvp);
 
+    /** @brief 画面外の物を描かなかった数と描いた数（1フレームぶん） */
+    struct CullingStats {
+        uint32_t drawn = 0; ///< 描いた数
+        uint32_t culled = 0; ///< 画面外なので描かなかった数
+    };
+    /** @brief 画面外の物を描かない判定を使うかを設定する（比べる時に切る） */
+    static void SetFrustumCullingEnabled(bool enabled) {
+        sFrustumCullingEnabled = enabled;
+    }
+    /** @brief 画面外の物を描かない判定を使うかを返す */
+    static bool IsFrustumCullingEnabled() {
+        return sFrustumCullingEnabled;
+    }
+    /** @brief 数えた描画の数を取り出して 0 に戻す（フレームの描き始めに1回呼ぶ） */
+    static CullingStats TakeCullingStats();
+
     /**
      * @brief オブジェクトを初期化し、変換行列とマテリアルを既定値にする
      * @note GPU へは描画のたびに FrameUploadAllocator 経由で写すので、ここでは定数バッファを作らない
@@ -82,6 +100,35 @@ public:
      * @note 事前に ModelCommon::CommonDrawSettings() が呼ばれている必要あり
      */
     void Draw() override;
+
+    /**
+     * @brief 並べ替えた順に続けて描く時の描画（Object3dRenderQueue から呼ぶ）
+     * @param boundModel 直前に頂点とテクスチャを設定したモデル。同じなら設定し直さず、描いた後は自分のモデルになる
+     * @return 描いたら true（モデル無し・画面外で飛ばしたら false）
+     * @note ライトとシャドウマップの設定は、呼び出し側が並びの最初に1回だけ行う
+     */
+    bool DrawBatched(const Model*& boundModel);
+
+    /**
+     * @brief まとめて1回で描いてよい組の見分け（モデルの共通設定・マテリアルの中身・法線マップから作る）
+     * @note 同じモデルで、この値も同じ物どうしなら、変換行列だけを変えて同じ命令で描ける
+     */
+    uint64_t ComputeBatchKey() const;
+
+    /**
+     * @brief 同じモデル・同じ見分けの物を、1回の描画の命令でまとめて描く（Object3dRenderQueue から呼ぶ）
+     * @param objects 描く物の並び（どれも同じモデル・同じ ComputeBatchKey であること）
+     * @param count 並びの数
+     * @param boundModel 直前に頂点とテクスチャを設定したモデル（描いた後は組のモデルになる）
+     * @return 画面外で飛ばした物を除いて描いた数
+     * @note ライトとシャドウマップの設定は、呼び出し側が先に1回だけ行う
+     */
+    static uint32_t DrawInstancedGroup(Object3d* const* objects, size_t count, const Model*& boundModel);
+
+    /** @brief 半透明として、不透明な物の後に奥から描くべきか（色の不透明度が 1 未満） */
+    bool IsTranslucent() const {
+        return material_.color.w < 1.0f;
+    }
 
     /**
      * @brief シャドウパス用の描画（テクスチャなし・深度のみ）
@@ -312,6 +359,25 @@ private:
 
     /** @brief 全オブジェクトで共通して使うライト空間行列 */
     static Matrix4x4 sCommonLightVP;
+
+    /** @brief 画面外の物を描かない判定を使うか */
+    static bool sFrustumCullingEnabled;
+    /** @brief このフレームに描いた数と、画面外なので描かなかった数（並列の記録からも数えるので atomic） */
+    static std::atomic<uint32_t> sDrawnCount;
+    static std::atomic<uint32_t> sCulledCount;
+
+    /** @brief 今の変換行列で、モデルを囲む箱が画面に映る範囲の外に完全に出ているか */
+    bool IsOutsideView() const;
+    /** @brief 今の変換行列で、モデルを囲む箱がシャドウマップに映る範囲の外に完全に出ているか */
+    bool IsOutsideShadowView() const;
+    /** @brief 画面外の判定をして数を数え、描くべきなら true を返す（Draw と DrawBatched で共通） */
+    bool PassesViewCulling();
+    /** @brief マテリアル・座標変換・法線マップを設定する（Draw と DrawBatched で共通） */
+    void BindObjectConstants(ID3D12GraphicsCommandList* commandList);
+    /** @brief 法線マップを設定する（未設定ならモデルのテクスチャで代わりにする） */
+    void BindNormalMap(ID3D12GraphicsCommandList* commandList) const;
+    /** @brief 画面外の判定を済ませた後に、定数を設定して1体描く（DrawBatched とまとめ描きの1体だけの時で共通） */
+    void DrawPrepared(ID3D12GraphicsCommandList* commandList, const Model*& boundModel);
 
     /** @brief RebindCommonLighting() で使う共通ライト/シャドウマネージャー */
     static Object3dCommon* sCommonObjectCommon;

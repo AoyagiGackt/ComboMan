@@ -1,0 +1,38 @@
+{
+  "comments": {
+    "c0": {
+      "text": "勝ち: 道の終わりに着いたらクリア",
+      "x": 0,
+      "y": -200,
+      "w": 460,
+      "h": 72
+    },
+    "c1": {
+      "text": "強制スクロールなど道に沿って進む型で使います。道の終わりに着くと立つ path_end のフラグを待ってクリアにします。",
+      "x": 0,
+      "y": -115,
+      "w": 1050,
+      "h": 72
+    }
+  },
+  "start": "wait",
+  "nodes": {
+    "wait": {
+      "type": "WaitForFlag",
+      "params": {
+        "flag": "path_end",
+        "value": true
+      },
+      "next": "clear",
+      "editorX": 0,
+      "editorY": 0
+    },
+    "clear": {
+      "type": "RequestStageClear",
+      "params": {},
+      "next": "",
+      "editorX": 300,
+      "editorY": 0
+    }
+  }
+}

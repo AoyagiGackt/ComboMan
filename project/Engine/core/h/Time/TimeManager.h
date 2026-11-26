@@ -4,10 +4,48 @@
  */
 #pragma once
 #include "EngineConstants.h"
+#include <array>
 namespace engine {
-/** @brief ゲーム全体の時間倍率とヒットストップ残量を一元管理する */
+
+/**
+ * @brief 止める・遅くするの残りを持つ時間の流れ1本（ゲーム全体と、時間の通り道ごとに1本ずつ持つ）
+ * @note 止めたフレームを数え切ってから遅さを消化する（止め→ゆっくり→元の速さの順になる）
+ */
+class TimeFlow {
+public:
+    /** @brief 1フレーム進める（止めの残りを減らし、遅さの間はこのフレームを進めるかを決める） */
+    void Step(float realDeltaSeconds);
+    /** @brief 指定フレーム数止める（今の残りより長い時だけ延ばす） */
+    void RequestStop(int frames);
+    /** @brief 止めが明けた後に、指定した実時間だけ scale の割合で進める */
+    void RequestSlow(float seconds, float scale);
+    /** @brief このフレームは止まっているか（止めの間と、遅さで間引いたフレーム） */
+    bool IsStopped() const {
+        return stopFrames_ > 0 || skipFrame_;
+    }
+    /** @brief 遅さの残りがあるか */
+    bool IsSlow() const {
+        return slowSeconds_ > 0.0f;
+    }
+
+private:
+    int stopFrames_ = 0; ///< 止めの残りフレーム
+    float slowSeconds_ = 0.0f; ///< 遅さの残りの実時間
+    float slowScale_ = 1.0f; ///< 遅さの間に進める割合
+    float slowAccumulator_ = 0.0f; ///< 進めたフレームの端数（1を超えたらそのフレームを進める）
+    bool skipFrame_ = false; ///< このフレームは遅さで間引かれたか
+};
+
+/**
+ * @brief ゲーム全体の時間倍率とヒットストップ残量を一元管理する
+ * @note ゲーム全体の流れのほかに、番号で分けた時間の通り道を持てる。通り道が何を表すか（敵だけ・演出だけなど）はゲームが決め、
+ *       その物の更新で IsChannelStopped を見る。通り道の止めと遅さは、全体のヒットストップが明けてから進む
+ */
 class TimeManager {
 public:
+    /** @brief 時間の通り道の数 */
+    static constexpr int kMaxChannels = 8;
+
     /** @brief 共有時間管理を返す @return 時間管理のポインタ */
     static TimeManager* GetInstance();
 
@@ -25,7 +63,7 @@ public:
      * @note スロー中に間引かれたフレームも停止扱いになる（固定dtで動く処理をまとめて遅くするため）
      */
     bool IsHitStopped() const {
-        return hitStopFrames_ > 0 || slowSkipFrame_;
+        return global_.IsStopped();
     }
 
     /** @brief ゲーム更新へ適用する時間倍率を設定する @param scale 0で停止、1で通常速度となる倍率 */
@@ -43,20 +81,32 @@ public:
     void RequestSlowMotion(float seconds, float scale);
     /** @brief スロー中か返す @return スローの残り時間がある場合はtrue */
     bool IsSlowMotion() const {
-        return slowSeconds_ > 0.0f;
+        return global_.IsSlow();
     }
+
+    /**
+     * @brief 時間の通り道を指定フレーム数止める（全体のヒットストップが明けてから数える）
+     * @param channel 通り道の番号（0〜kMaxChannels-1。範囲の外は何もしない）
+     */
+    void RequestChannelStop(int channel, int frames);
+    /** @brief 時間の通り道を、止めが明けた後に指定した実時間だけ遅くする（scale はゲームを進める割合） */
+    void RequestChannelSlow(int channel, float seconds, float scale);
+    /** @brief その通り道の物をこのフレーム止めるか（全体が止まっている時も true） */
+    bool IsChannelStopped(int channel) const;
 
     static constexpr float kBaseDeltaTime = engineConstants::kFrameDeltaTime;
 
 private:
     /** @brief 時間倍率と停止要求を既定状態にする */
     TimeManager() = default;
+    /** @brief 番号が通り道の範囲の中か */
+    static bool IsValidChannel(int channel) {
+        return channel >= 0 && channel < kMaxChannels;
+    }
+
     float timeScale_ = 1.0f;
-    int hitStopFrames_ = 0;
-    float slowSeconds_ = 0.0f; ///< スローの残り実時間
-    float slowScale_ = 1.0f; ///< スロー中にゲームを進める割合
-    float slowAccumulator_ = 0.0f; ///< 進めたフレームの端数（1を超えたらそのフレームを進める）
-    bool slowSkipFrame_ = false; ///< このフレームはスローで間引かれたか
+    TimeFlow global_; ///< ゲーム全体の流れ
+    std::array<TimeFlow, kMaxChannels> channels_ { }; ///< 番号で分けた時間の通り道
 };
 
 } // namespace engine

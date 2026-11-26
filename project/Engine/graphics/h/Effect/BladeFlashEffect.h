@@ -4,6 +4,8 @@
  */
 #pragma once
 #include "DirectXCommon.h"
+// 乱数の種を共通の窓口から取得する。
+#include "RandomSeed.h"
 #include "MakeAffine.h"
 #include <random>
 #include <vector>
@@ -93,7 +95,7 @@ private:
     SceneCB sceneCB_ { }; ///< ビュー射影行列
 
     std::vector<Blade> blades_;
-    std::mt19937 rng_ { std::random_device { }() };
+    std::mt19937 rng_ { engine::randomSeed::Next() };
 };
 
 } // namespace engine::graphics

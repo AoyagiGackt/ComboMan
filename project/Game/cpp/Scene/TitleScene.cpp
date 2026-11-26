@@ -3,6 +3,8 @@
  * @brief タイトル画面のメニュー表示と入力待ち・シーン遷移（TitleScene）の実装
  */
 #include "TitleScene.h"
+#include "EngineContext.h"
+#include "GameAudio.h"
 #include "GameConstants.h"
 #include "GameSettings.h"
 #include "HitEffectLibrary.h"
@@ -259,7 +261,7 @@ void TitleScene::Draw() {
     GetStageEditor().DrawUIText(fontRenderer_);
     fontRenderer_.Draw();
     if (menuPage_ == &CommandListMenu()) {
-        commandList_.DrawPreview({ dxCommon_, modelCommon_.get(), objectCommon_.get(), shadowManager_.get(), SrvManager::GetInstance(),
+        commandList_.DrawPreview({ dxCommon_, modelCommon_.get(), objectCommon_.get(), shadowManager_.get(), engine::Services().srvManager,
             dxCommon_->GetCurrentBackBufferHandle() });
         spriteCommon_->CommonDrawSettings();
     }
@@ -293,7 +295,7 @@ void TitleScene::DrawDemoWorld() {
 
     modelCommon_->CommonDrawSettings();
     objectCommon_->SetDefaultLight(commandList);
-    shadowManager_->SetShadowMap(commandList, SrvManager::GetInstance());
+    shadowManager_->SetShadowMap(commandList, engine::Services().srvManager);
     skydome_->Draw();
     for (auto& dummy : demoDummies_) {
         if (!dummy.defeated) {

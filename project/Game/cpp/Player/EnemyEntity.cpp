@@ -3,7 +3,9 @@
  * @brief 武器を持つ敵（EnemyEntity）の性格・攻撃の状態・被弾・描画の実装
  */
 #include "EnemyEntity.h"
+#include "EngineContext.h"
 #include "BossExecutionTuning.h"
+#include "CharacterVisuals.h"
 #include "GameConstants.h"
 #include "GravityBody.h"
 #include "GroundSupport.h"
@@ -159,12 +161,12 @@ void EnemyEntity::Initialize(ModelCommon* modelCommon, const Vector3& startPos, 
     attackTimer_ = 0.0f;
     justFiredAttack_ = false;
 
-    model_ = ModelManager::GetInstance()->GetOrLoad(modelCommon,
+    model_ = engine::Services().models->GetOrLoad(modelCommon,
         "Resources/Knight/OBJ/KnightCharacter.obj",
         "Resources/Knight/OBJ/KnightCharacterPalette.png");
 
     skinCommon_ = SkinnedObject3d::CreateSharedCommon(modelCommon);
-    animatedModel_ = ModelManager::GetInstance()->GetOrLoadSkinned(
+    animatedModel_ = engine::Services().models->GetOrLoadSkinned(
         modelCommon->GetDxCommon(), kAnimatedKnightPath, kKnightTexture);
     object_ = std::make_unique<SkinnedObject3d>();
     object_->Initialize(skinCommon_.get());
@@ -187,36 +189,27 @@ void EnemyEntity::Initialize(ModelCommon* modelCommon, const Vector3& startPos, 
     object_->SetPosition(VisualPosition());
     object_->Update();
 
-    // WeaponType の並び順に、手に持たせる武器の見た目
-    struct HeldWeaponVisual {
-        const char* model;
-        const char* texture;
-        Vector3 scale;
-    };
-    static constexpr HeldWeaponVisual kSword = { "Resources/Knight/OBJ/Sword.obj", "Resources/Knight/OBJ/SwordPalette.png", kDefaultWeaponScale };
-    static constexpr HeldWeaponVisual kKatana = { "Resources/Knight/OBJ/Katana.obj", "Resources/Knight/OBJ/KatanaPalette.png", kSpearWeaponScale };
-    static constexpr HeldWeaponVisual kClub = { "Resources/Knight/OBJ/Club.obj", "Resources/Knight/OBJ/KnightCharacterPalette.png", kHeavyWeaponScale };
-    static constexpr HeldWeaponVisual kHeldWeapons[] = {
-        kSword, // Sword
-        kKatana, // Spear
-        kClub, // Hammer
-        kSword, // Dagger
-        kSword, // Ball
-        kSword, // Greatsword
-        kSword, // Scythe
-        kClub, // Axe
-    };
-    const size_t weaponIndex = static_cast<size_t>(weaponType);
-    const HeldWeaponVisual& visual = weaponIndex < std::size(kHeldWeapons) ? kHeldWeapons[weaponIndex] : kSword;
-    weaponScale_ = visual.scale;
-    weaponModel_ = ModelManager::GetInstance()->GetOrLoad(modelCommon, visual.model, visual.texture);
+    // 手に持たせる武器の見た目は、プレイヤーが手に入れた時と同じモデルにする（落とした物と手に入る物の見た目をそろえる）
+    // 表に無い種類は表の先頭（剣）を使う
+    const HeldWeaponVisual* visual = &kHeldWeaponVisuals[0];
+    for (const HeldWeaponVisual& candidate : kHeldWeaponVisuals) {
+        if (candidate.type == weaponType) {
+            visual = &candidate;
+            break;
+        }
+    }
+    // 大きさはプレイヤーの手に持つ大きさに比率を掛け、向きの補正もプレイヤーと同じにする
+    weaponScale_ = { visual->gripScale.x * kEnemyWeaponScaleRatio, visual->gripScale.y * kEnemyWeaponScaleRatio,
+        visual->gripScale.z * kEnemyWeaponScaleRatio };
+    weaponBaseYaw_ = visual->gripRotate.y;
+    weaponModel_ = engine::Services().models->GetOrLoad(modelCommon, visual->modelPath, visual->texturePath);
     weaponObject_ = std::make_unique<Object3d>();
     weaponObject_->Initialize(modelCommon);
     weaponObject_->SetModel(weaponModel_);
     weaponObject_->SetEnableLighting(true);
     weaponObject_->SetScale(weaponScale_);
     weaponObject_->SetPosition({ pos_.x + facingSign_ * kWeaponOffsetX, pos_.y + kWeaponOffsetY, pos_.z + kWeaponOffsetZ });
-    weaponObject_->SetRotation({ 0.0f, facingSign_ >= 0.0f ? gameConstants::kHalfPi : -gameConstants::kHalfPi, kWeaponRestTilt });
+    weaponObject_->SetRotation({ 0.0f, (facingSign_ >= 0.0f ? gameConstants::kHalfPi : -gameConstants::kHalfPi) + weaponBaseYaw_, kWeaponRestTilt });
     weaponObject_->Update();
 }
 
@@ -225,7 +218,8 @@ void EnemyEntity::Update(float playerX) {
     // 吹き飛んで壁を突き抜けたかを ResolveBlownAway で調べるため、動く前の横位置を残す
     previousX_ = pos_.x;
     // ヒットストップ中はプレイヤーと同じく世界ごと止める（止めないと吹き飛びだけが先に進んで手応えが薄れる）
-    if (TimeManager::GetInstance()->IsHitStopped()) {
+    // 敵の時間の通り道だけが止まっている間（斬った後の間）も、同じように止まった見た目にする
+    if (TimeManager::GetInstance()->IsChannelStopped(timeChannel::kEnemies)) {
         UpdateDuringHitStop();
         return;
     }
@@ -354,9 +348,9 @@ void EnemyEntity::Update(float playerX) {
     const float facingYaw = facingSign_ >= 0.0f ? gameConstants::kHalfPi : -gameConstants::kHalfPi;
     object_->SetRotation({ 0.0f, facingYaw, bodyLean });
     if (weaponDropped_) {
-        weaponObject_->SetRotation({ 0.0f, facingYaw + droppedWeaponSpin_, kDroppedWeaponLieTilt });
+        weaponObject_->SetRotation({ 0.0f, facingYaw + droppedWeaponSpin_ + weaponBaseYaw_, kDroppedWeaponLieTilt });
     } else {
-        weaponObject_->SetRotation({ 0.0f, facingYaw, weaponSwing });
+        weaponObject_->SetRotation({ 0.0f, facingYaw + weaponBaseYaw_, weaponSwing });
     }
 
     // 被弾フラッシュ: 基準色→白へ寄せ、本体を一瞬膨らませてから戻す
@@ -521,7 +515,7 @@ void EnemyEntity::SetMonsterVisual(ModelCommon* modelCommon, const std::string& 
     }
     monsterObject_ = std::make_unique<Object3d>();
     monsterObject_->Initialize(modelCommon);
-    monsterObject_->SetModel(ModelManager::GetInstance()->GetOrLoad(modelCommon, def->model, def->texture));
+    monsterObject_->SetModel(engine::Services().models->GetOrLoad(modelCommon, def->model, def->texture));
     monsterObject_->SetEnableLighting(true);
     monsterScale_ = def->scale;
     monsterBodyHalfWidth_ = def->bodyHalfWidth;
@@ -713,7 +707,7 @@ void EnemyEntity::FaceTowardX(float targetX) {
     object_->SetRotation(bodyRotation);
     if (weaponObject_ && !weaponDropped_) {
         Vector3 weaponRotation = weaponObject_->GetTransform().rotate;
-        weaponRotation.y = facingYaw;
+        weaponRotation.y = facingYaw + weaponBaseYaw_;
         weaponObject_->SetRotation(weaponRotation);
     }
 }

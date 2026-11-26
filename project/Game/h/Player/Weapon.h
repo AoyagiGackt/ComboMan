@@ -116,6 +116,18 @@ enum class GunType { kPistol,
     kShotgun,
     kRailgun };
 
+// 銃の種類を設定名へ変換する
+inline const char* GunTypeName(GunType type) {
+    switch (type) {
+    case GunType::kPistol: return "Pistol";
+    case GunType::kMagnum: return "Magnum";
+    case GunType::kSMG: return "SMG";
+    case GunType::kShotgun: return "Shotgun";
+    case GunType::kRailgun: return "Railgun";
+    }
+    return "Pistol";
+}
+
 /** @brief GunType の要素数（銃種ごとの表はこの長さで GunType の並び順に持つ） */
 inline constexpr std::size_t kGunTypeCount = static_cast<std::size_t>(GunType::kRailgun) + 1;
 

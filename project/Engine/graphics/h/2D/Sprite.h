@@ -6,6 +6,7 @@
 #include "MakeAffine.h"
 #include "SpriteCommon.h"
 #include <string>
+#include "DeferredReleaseQueue.h"
 namespace engine::graphics {
 /**
  * @brief スプライトを描画するための1頂点のデータ
@@ -171,7 +172,7 @@ private:
     SpriteCommon* spriteCommon_ = nullptr;
 
     // GPUリソース関連
-    Microsoft::WRL::ComPtr<ID3D12Resource> vertexResource_;
+    DeferredComPtr<ID3D12Resource> vertexResource_;
     D3D12_VERTEX_BUFFER_VIEW vertexBufferView_ { };
 
     /** @brief CPU上で編集するスプライトの質感 */

@@ -1,0 +1,7 @@
+{
+  "_comment": "nearDistance は減衰が始まる距離、farDistance は無音になる距離。panStrength は左右への振り分けの強さを 0 から 1 で指定。streamSceneBgm が true ならシーンの曲を少しずつ読む。",
+  "nearDistance": 1.0,
+  "farDistance": 30.0,
+  "panStrength": 1.0,
+  "streamSceneBgm": false
+}

@@ -25,11 +25,15 @@ class SpriteCommon;
 class ModelCommon;
 class Model;
 class Object3d;
+class PostProcessStack;
+class SpaceDistortionEffect;
+class SrvManager;
 }
 
 namespace engine::game {
 class FontRenderer;
 class StageEditor;
+class ComboFeelDirector;
 class Player;
 class UILayout;
 class BulletPool;
@@ -261,6 +265,21 @@ namespace sceneShared {
 
     /** @brief ゲーム画面のクリックを受けてよいか（デバッグUIがマウスを使っている間は false） */
     bool IsMouseFreeForGame();
+
+    /** @brief post_process.json の order に書く、ゲームが登録するエフェクトの名前 */
+    inline constexpr const char* kSpaceWarpPostName = "spaceWarp";
+    inline constexpr const char* kComboFeelPostName = "comboFeel";
+
+    /**
+     * @brief 3D の後・UI の前に掛ける画面全体のエフェクトを、場面の列に登録する（順番は post_process.json）
+     * @param stack 登録先の列
+     * @param stackName post_process.json の stacks の下の名前
+     * @param srvManager ブルームが使うデスクリプタの管理
+     * @param spaceWarp 空間のゆがみ
+     * @param comboFeel 締めの放射ブラーを持つ、近接コンボの手応え演出
+     */
+    void SetupScenePostProcess(engine::graphics::PostProcessStack& stack, const std::string& stackName,
+        engine::graphics::SrvManager* srvManager, engine::graphics::SpaceDistortionEffect& spaceWarp, ComboFeelDirector& comboFeel);
 
 } // namespace sceneShared
 } // namespace engine::game

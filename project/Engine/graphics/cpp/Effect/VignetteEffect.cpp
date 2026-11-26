@@ -53,7 +53,7 @@ void VignetteEffect::Apply() {
     pipelineHelper::BindBackBufferTarget(dxCommon_, cmdList);
 
     cmdList->SetGraphicsRootSignature(rootSignature_.Get());
-    cmdList->SetPipelineState(pipelineState_.Get());
+    cmdList->SetPipelineState(PipelineCache::Resolve(pipelineState_.Get()));
     cmdList->SetGraphicsRootConstantBufferView(pipelineHelper::fullscreenRootSlot::kConstants, cbResource_->GetGPUVirtualAddress());
     cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     pipelineHelper::DrawFullscreenTriangle(cmdList);

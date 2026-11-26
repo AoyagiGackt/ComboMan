@@ -5,20 +5,28 @@
 #include "Framework.h"
 #include "GamepadRumble.h"
 #include "AssetPack.h"
+#include "AssetReferenceScanner.h"
+#include "BloomEffect.h"
 #include "CrashBreadcrumbs.h"
+#include "EngineContext.h"
 #include "FrameProfiler.h"
 #include "GrayscaleEffect.h"
 #include "HsvFilter.h"
 #include "ImageFilter.h"
+#include "LightManager.h"
 #include "LightingMode.h"
 #include "Logger.h"
 #include "MaterialManager.h"
 #include "MeshManager.h"
+#include "ModelCommon.h"
 #include "ModelManager.h"
 #include "OutlineEffect.h"
 #include "ParticleManager.h"
+#include "PipelineCache.h"
 #include "SrvManager.h"
 #include "TextureManager.h"
+#include "TimeManager.h"
+#include "ToneMapEffect.h"
 #include "VignetteEffect.h"
 using namespace engine::graphics;
 
@@ -30,6 +38,7 @@ void Framework::Run() {
     const bool prepareAssets = commandLine.find(L"--prepare-assets") != std::wstring::npos;
     auto* assetPack = AssetPack::GetInstance();
     assetPack->Initialize(forceCook, prepareAssets);
+    AssetReferenceScanner::CheckDisk();
     // 変更がなければ、ビルド後の素材準備はウィンドウやGPUを作らず終了する。
     if (prepareAssets && !assetPack->IsCooking()) {
         assetPack->Finalize();
@@ -81,6 +90,8 @@ void Framework::Initialize() {
     ImageFilter::GetInstance()->Initialize(dxCommon_.get(), SrvManager::GetInstance());
     VignetteEffect::GetInstance()->Initialize(dxCommon_.get());
     HsvFilter::GetInstance()->Initialize(dxCommon_.get(), SrvManager::GetInstance());
+    BloomEffect::GetInstance()->Initialize(dxCommon_.get(), SrvManager::GetInstance());
+    ToneMapEffect::GetInstance()->Initialize(dxCommon_.get(), SrvManager::GetInstance());
     OutlineEffect::GetInstance()->Initialize(dxCommon_.get());
     TextureManager::GetInstance()->Initialize(dxCommon_.get());
     ParticleManager::GetInstance()->Initialize(dxCommon_.get());
@@ -93,6 +104,20 @@ void Framework::Initialize() {
 
     imguiManager_ = std::make_unique<ImGuiManager>();
     imguiManager_->Initialize(winApp_.get(), dxCommon_.get());
+
+    // ゲームが GetInstance を直接呼ばずに取り出せるよう、主な仕組みを入口へ登録する
+    EngineServices services;
+    services.dxCommon = dxCommon_.get();
+    services.input = input_.get();
+    services.audio = audio_.get();
+    services.time = TimeManager::GetInstance();
+    services.assetPack = AssetPack::GetInstance();
+    services.srvManager = SrvManager::GetInstance();
+    services.textures = TextureManager::GetInstance();
+    services.models = ModelManager::GetInstance();
+    services.particles = ParticleManager::GetInstance();
+    services.lights = LightManager::GetInstance();
+    EngineContext::Set(services);
 }
 
 /** @brief システムの更新処理 */
@@ -107,6 +132,9 @@ void Framework::Update() {
     if (input_->TriggerKey(DIK_F11)) {
         winApp_->ToggleFullscreen();
     }
+
+    // シェーダーのファイルが書き換わっていたらパイプラインを作り直す（描く前に入れ替えておく）
+    PipelineCache::GetInstance()->CheckHotReload();
 
     // F10 でVSyncのON/OFF切り替え
     if (input_->TriggerKey(DIK_F10)) {
@@ -127,7 +155,13 @@ void Framework::Finalize() {
         videoPlayer_->Finalize();
     }
 
+    // シーンの収集後、素材を追加できる間に最終確認と書き出しを行う。
+    ModelCommon cookModelCommon;
+    AssetPack::GetInstance()->Finalize(dxCommon_.get(), &cookModelCommon);
+
     // 各種マネージャーのGPUリソースを解放する
+    BloomEffect::GetInstance()->Finalize();
+    ToneMapEffect::GetInstance()->Finalize();
     HsvFilter::GetInstance()->Finalize();
     VignetteEffect::GetInstance()->Finalize();
     ImageFilter::GetInstance()->Finalize();
@@ -149,13 +183,13 @@ void Framework::Finalize() {
     audio_.reset();
     input_.reset();
 
+    // 消した物を入口から取り出せないよう、空の組に戻す
+    EngineContext::Set({});
+
     // 最後にデバイスとウィンドウを削除（Finalizeでまずフルスクリーン解除とGPU完了待ち）
     dxCommon_->Finalize();
     dxCommon_.reset();
     winApp_.reset();
-
-    // cookモードなら、このプレイ中に読み込んだ素材を変換済みの形でpakへ書き出す
-    AssetPack::GetInstance()->Finalize();
 }
 
 } // namespace engine

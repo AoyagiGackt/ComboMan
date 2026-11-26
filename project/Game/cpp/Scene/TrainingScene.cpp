@@ -3,6 +3,10 @@
  * @brief アクション操作練習用シーン（TrainingScene）の初期化と基本更新フローの実装
  */
 #include "TrainingScene.h"
+#include "EngineContext.h"
+#include "GameAudio.h"
+// 乱数の種を共通の窓口から取得する。
+#include "RandomSeed.h"
 #include "GameSounds.h"
 #include "SceneVisualTuning.h"
 #include "HitEffectLibrary.h"
@@ -77,7 +81,7 @@ void TrainingScene::Initialize(DirectXCommon* dxCommon, Input* input, Audio* aud
 
 /** @brief Initialize()の下請け マネージャ取得・各種Common初期化・カメラ生成を行う */
 void TrainingScene::InitializeCoreSystems() {
-    srvManager_ = SrvManager::GetInstance();
+    srvManager_ = engine::Services().srvManager;
     weaponManager_ = WeaponManager::GetInstance();
 
     BuildRenderFoundation(dxCommon_, srvManager_, "training", { modelCommon_, objectCommon_, shadowManager_, camera_ });
@@ -89,7 +93,7 @@ void TrainingScene::InitializeCoreSystems() {
 
 /** @brief Initialize()の下請け 境界ブロック・ワープポータルを初期化する（背景のビルはtraining.jsonに置く） */
 void TrainingScene::InitializeStageModels() {
-    modelBlock_ = ModelManager::GetInstance()->GetOrLoad(modelCommon_.get(),
+    modelBlock_ = engine::Services().models->GetOrLoad(modelCommon_.get(),
         "Resources/block/block.obj",
         "Resources/block/block.png");
 
@@ -228,6 +232,7 @@ void TrainingScene::UpdatePlayerAndBullets() {
     {
         const Vector3& pp = player_->GetPosition();
         const auto stageColliders = GetStageEditor().GetSolidColliders();
+        player_->UpdateWeaponThrow(input_, stageColliders);
         player_->Update(input_, { pp.x + player_->GetLastDirX() * CombatTune().trainingFacingTargetDistance, pp.y, 0.0f }, false, !stageColliders.empty());
         gameSounds::PlayPlayerActions(*player_);
         player_->ResolveBlockCollision(stageColliders);
@@ -246,7 +251,7 @@ void TrainingScene::UpdatePlayerAndBullets() {
         TimeManager::GetInstance()->RequestHitStop(HitEffectLibrary::GetInstance()->SceneParticles().hitStopFinisherSlash);
         ScreenFlash::GetInstance()->Request(SceneVisualTuning::Training().finisherFlashColor, HitEffectLibrary::GetInstance()->SceneParticles().shakeFinisherSlashDur);
 
-        static std::mt19937 sRng { std::random_device { }() };
+        static std::mt19937 sRng { engine::randomSeed::Next() };
         std::uniform_real_distribution<float> angleDist(0.0f, gameConstants::kTwoPi);
         std::uniform_real_distribution<float> offXDist(-gameConstants::kCameraHalfW, gameConstants::kCameraHalfW);
         std::uniform_real_distribution<float> offYDist(-gameConstants::kCameraHalfH, gameConstants::kCameraHalfH);

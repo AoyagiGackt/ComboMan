@@ -3,6 +3,7 @@
  * @brief ステージボス戦（ひるみ値・第2段階・突進やダッシュ・画面上の体力バー）をシーンへつなぐ
  */
 #include "GamePlayScene.h"
+#include "CombatDepth.h"
 #include "EnemyTuning.h"
 #include "HitEffectLibrary.h"
 #include "ParticleFieldLibrary.h"
@@ -245,8 +246,10 @@ void GamePlayScene::UpdateBossWaves(float dt) {
         // 走る先端で土煙を押し上げる（このフレームだけの場を毎フレーム置き直して、衝撃波についていかせる）
         ParticleFieldLibrary::Emit(pm_, "boss_wave", position, wave.dirX);
         // 足元から決めた高さまでに当たる（ジャンプで跳び越えればかわせる）
-        const AABB box = { { wave.x - tuning.waveHalfWidth, wave.y, -kStageHalfDepth },
+        AABB box = { { wave.x - tuning.waveHalfWidth, wave.y, -kStageHalfDepth },
             { wave.x + tuning.waveHalfWidth, wave.y + tuning.waveHeight, kStageHalfDepth } };
+        // 波はボスの奥行きの前後を走る
+        combatDepth::Apply(box, enemy_ != nullptr ? enemy_->GetPosition().z : position.z);
         if (!wave.struck && StrikePlayerFromBoss(box, position, tuning.waveDamage)) {
             wave.struck = true;
         }
@@ -267,8 +270,9 @@ void GamePlayScene::LandBossLeap(const Vector3& position) {
     fx.Ring("boss_slam_outer", position, { .speed = tuning.leapRadius });
     fx.Sparks("boss_slam", position);
     ParticleFieldLibrary::Emit(pm_, "boss_leap", position);
-    const AABB area = { { position.x - tuning.leapRadius, position.y - kLeapHitHalfHeight, -kStageHalfDepth },
+    AABB area = { { position.x - tuning.leapRadius, position.y - kLeapHitHalfHeight, -kStageHalfDepth },
         { position.x + tuning.leapRadius, position.y + kLeapHitHalfHeight, kStageHalfDepth } };
+    combatDepth::Apply(area, position.z);
     StrikePlayerFromBoss(area, position, tuning.leapDamage);
 }
 
@@ -319,8 +323,9 @@ void GamePlayScene::BurstBossVortex(const Vector3& bossPosition) {
     fx.Ring("boss_slam_outer", center, { .speed = tuning.vortexBurstRadius });
     fx.Sparks("boss_slam", center);
     ParticleFieldLibrary::Emit(pm_, "boss_vortex_burst", bossPosition);
-    const AABB area = { { center.x - tuning.vortexBurstRadius, center.y - kVortexBurstHalfHeight, -kStageHalfDepth },
+    AABB area = { { center.x - tuning.vortexBurstRadius, center.y - kVortexBurstHalfHeight, -kStageHalfDepth },
         { center.x + tuning.vortexBurstRadius, center.y + kVortexBurstHalfHeight, kStageHalfDepth } };
+    combatDepth::Apply(area, center.z);
     StrikePlayerFromBoss(area, center, tuning.vortexDamage);
 }
 

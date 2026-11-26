@@ -3,6 +3,10 @@
  * @brief BattleTestScene/TrainingScene/GamePlayScene間で共通の武器切替・カメラ追従・HUD描画処理（SceneShared名前空間）の実装
  */
 #include "SceneShared.h"
+#include "CombatDepth.h"
+#include "GameActions.h"
+// 乱数の種を共通の窓口から取得する。
+#include "RandomSeed.h"
 #include "GameRules.h"
 #include "PlayerBridge.h"
 #include "AudioBridge.h"
@@ -26,6 +30,9 @@
 #include "Object3d.h"
 #include "ParticleManager.h"
 #include "Player.h"
+#include "PostProcessStack.h"
+#include "SpaceDistortionEffect.h"
+#include "ComboFeelDirector.h"
 #include "PostEffectRenderTarget.h"
 #include "ScreenFlash.h"
 #include "SceneFlow.h"
@@ -108,13 +115,16 @@ namespace {
     engine::AABB MakeFacingBox(const Vector3& playerPos, float dirX, float frontRange, float backRange, float halfHeight) {
         const float left = (dirX >= 0.0f) ? backRange : frontRange;
         const float right = (dirX >= 0.0f) ? frontRange : backRange;
-        return { { playerPos.x - left, playerPos.y - halfHeight, -kRangeHalfDepth },
+        engine::AABB box = { { playerPos.x - left, playerPos.y - halfHeight, -kRangeHalfDepth },
             { playerPos.x + right, playerPos.y + halfHeight, kRangeHalfDepth } };
+        // 奥行きにも動く型では、プレイヤーの奥行きの前後だけに届く
+        combatDepth::Apply(box, playerPos.z);
+        return box;
     }
 
     /** @brief 締めの演出の配置に使う乱数生成器を返す */
     std::mt19937& FinisherRng() {
-        static std::mt19937 sRng { std::random_device { }() };
+        static std::mt19937 sRng { engine::randomSeed::Next() };
         return sRng;
     }
 } // namespace
@@ -321,7 +331,7 @@ bool UpdatePortalTransition(Input* input, const Vector3& playerPos,
     float portalX, float proximity, const char* sceneName, const char* outcome,
     const char* fallbackScene, Audio* audio) {
     bool isNear = std::abs(playerPos.x - portalX) < proximity;
-    if (isNear && input->TriggerAction(Input::Action::kInteract)) {
+    if (isNear && input->TriggerAction(GameAction::kInteract)) {
         if (audio) {
             audio->PlayMenuSelect();
         }
@@ -488,6 +498,7 @@ void DrawControlsHud(FontRenderer& fontRenderer, const Vector2& anchor, const wc
     row(L"{Skill}", L": 武器固有技");
     row(L"{Steal}", L": 倒した敵の武器を奪う");
     row(L"{LockOn}", L": ロックオン");
+    row(L"{ThrowWeapon}", L": 武器を投げて壊す（2本以上）");
     row(L"{Slot}", L": 武器スロット選択");
     row(L"{Interact}", portalActionLabel);
     row(L"{Awaken}", L": 覚醒発動");
@@ -748,6 +759,29 @@ bool IsMouseFreeForGame() {
 #else
     return true;
 #endif
+}
+
+/** @brief エンジンのブルーム・トーンマップと、ゲームの空間のゆがみ・締めの放射ブラーを列に登録する */
+void SetupScenePostProcess(PostProcessStack& stack, const std::string& stackName,
+    SrvManager* srvManager, SpaceDistortionEffect& spaceWarp, ComboFeelDirector& comboFeel) {
+    // 先に順番を読み、順番に無い物を登録した時に知らせられるようにする
+    stack.Initialize(stackName);
+    stack.RegisterBuiltins(srvManager);
+    // エディタに出す名前
+    PostProcessStack::SetDisplayName(kSpaceWarpPostName, "空間のゆがみ");
+    PostProcessStack::SetDisplayName(kComboFeelPostName, "締めの放射ブラー");
+    // 敵やプレイヤーを中心にした空間のゆがみ
+    stack.Register(kSpaceWarpPostName, [&spaceWarp] {
+        return spaceWarp.IsActive();
+    }, [&spaceWarp] {
+        spaceWarp.CaptureAndApply();
+    });
+    // コンボの締めの放射ブラー
+    stack.Register(kComboFeelPostName, [&comboFeel] {
+        return comboFeel.HasScreenEffects();
+    }, [&comboFeel] {
+        comboFeel.ApplyScreenEffects();
+    });
 }
 
 } // namespace engine::game::SceneShared

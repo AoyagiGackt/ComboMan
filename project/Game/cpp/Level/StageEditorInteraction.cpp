@@ -167,7 +167,7 @@ void StageEditor::DrawGizmos() {
     }
 
     // マウス直下の対象を明るい十字で示す（クリックしたら何が選ばれるかを先に見せる）
-    if (!viewportDragging_ && hoverKind_ != SelKind::kNone) {
+    if (!viewDrag_.viewportDragging && hoverKind_ != SelKind::kNone) {
         const ISelectionKind& hovered = SelectionKindOf(hoverKind_);
         Vector3 hoverWorld;
         if (!hovered.IsScreenAnchor(*this, hoverIndex_) && hovered.WorldPosition(*this, hoverIndex_, hoverWorld)) {
@@ -182,11 +182,11 @@ void StageEditor::DrawGizmos() {
     DrawUILayoutHandles();
 
     // 範囲選択中の矩形
-    if (boxSelecting_) {
+    if (viewDrag_.boxSelecting) {
         const ImVec2 mouse = ImGui::GetIO().MousePos;
         ImDrawList* dl = diagnosticsDraw::GetDrawList();
-        const ImVec2 a = { (std::min)(boxStartX_, mouse.x), (std::min)(boxStartY_, mouse.y) };
-        const ImVec2 b = { (std::max)(boxStartX_, mouse.x), (std::max)(boxStartY_, mouse.y) };
+        const ImVec2 a = { (std::min)(viewDrag_.boxStartX, mouse.x), (std::min)(viewDrag_.boxStartY, mouse.y) };
+        const ImVec2 b = { (std::max)(viewDrag_.boxStartX, mouse.x), (std::max)(viewDrag_.boxStartY, mouse.y) };
         dl->AddRectFilled(a, b, kBoxSelectFill);
         dl->AddRect(a, b, kBoxSelectBorder);
     }
@@ -205,10 +205,14 @@ void StageEditor::UpdateViewportInteraction() {
 
     // 掴んだ後はビューの外やパネルの上でも追従を続け、どこで離しても確定する
     if (ImGui::IsMousePosValid()) {
-        dragLastMouseX_ = io.MousePos.x;
-        dragLastMouseY_ = io.MousePos.y;
+        viewDrag_.dragLastMouseX = io.MousePos.x;
+        viewDrag_.dragLastMouseY = io.MousePos.y;
     }
-    if (UpdateActiveViewportDrag(dragLastMouseX_, dragLastMouseY_)) {
+    if (UpdateActiveViewportDrag(viewDrag_.dragLastMouseX, viewDrag_.dragLastMouseY)) {
+        return;
+    }
+    // 道の点を掴んでいる間は、点を動かすだけにする
+    if (UpdatePathPointDrag()) {
         return;
     }
 
@@ -225,7 +229,8 @@ void StageEditor::UpdateViewportInteraction() {
     viewport_.ZoomAtCursor(io.MouseWheel, m.x, m.y);
 
     // 左クリック  ハンドル → 画面UIの印 → オブジェクト → 何も無ければ範囲選択、の順に判定する
-    if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+    // 道の点の近くなら、まずその点を掴む
+    if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !BeginPathPointDrag(m.x, m.y)) {
         HandleViewportClick(m.x, m.y);
     }
 
@@ -254,15 +259,15 @@ void StageEditor::UpdateViewportHover(float mouseX, float mouseY) {
 
     // ハンドルと印の判定は軽いので毎フレーム行う（カーソルの形は毎フレーム指定しないと矢印へ戻る）
     bool handleUniform = false;
-    hoverHandleActive_ = !linkingParent && PickTransformHandle(mouseX, mouseY, hoverAxis_, handleUniform);
-    uiHoverLayout_ = nullptr;
-    if (!hoverHandleActive_ && !linkingParent) {
-        PickUILayoutHandle(mouseX, mouseY, uiHoverLayout_, uiHoverIndex_);
+    viewDrag_.hoverHandleActive = !linkingParent && PickTransformHandle(mouseX, mouseY, viewDrag_.hoverAxis, handleUniform);
+    viewDrag_.uiHoverLayout = nullptr;
+    if (!viewDrag_.hoverHandleActive && !linkingParent) {
+        PickUILayoutHandle(mouseX, mouseY, viewDrag_.uiHoverLayout, viewDrag_.uiHoverIndex);
     }
-    if (hoverHandleActive_ || uiHoverLayout_) {
+    if (viewDrag_.hoverHandleActive || viewDrag_.uiHoverLayout) {
         hoverKind_ = SelKind::kNone;
         hoverIndex_ = -1;
-        hoverNeedsRefresh_ = true;
+        viewDrag_.hoverNeedsRefresh = true;
         ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeAll);
         return;
     }
@@ -271,11 +276,11 @@ void StageEditor::UpdateViewportHover(float mouseX, float mouseY) {
     const bool mouseMoved = io.MouseDelta.x != 0.0f || io.MouseDelta.y != 0.0f;
     const bool cameraMoving = io.MouseWheel != 0.0f || ImGui::IsMouseDown(ImGuiMouseButton_Right)
         || ImGui::IsMouseDown(ImGuiMouseButton_Middle);
-    if (mouseMoved || cameraMoving || hoverNeedsRefresh_) {
+    if (mouseMoved || cameraMoving || viewDrag_.hoverNeedsRefresh) {
         hoverKind_ = SelKind::kNone;
         hoverIndex_ = -1;
         PickViewportTarget(mouseX, mouseY, hoverKind_, hoverIndex_);
-        hoverNeedsRefresh_ = false;
+        viewDrag_.hoverNeedsRefresh = false;
     }
     if (hoverKind_ != SelKind::kNone) {
         ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
@@ -286,10 +291,10 @@ void StageEditor::UpdateViewportHover(float mouseX, float mouseY) {
 void StageEditor::ClearViewportHover() {
     hoverKind_ = SelKind::kNone;
     hoverIndex_ = -1;
-    hoverHandleActive_ = false;
-    hoverAxis_ = 0;
-    uiHoverLayout_ = nullptr;
-    hoverNeedsRefresh_ = true;
+    viewDrag_.hoverHandleActive = false;
+    viewDrag_.hoverAxis = 0;
+    viewDrag_.uiHoverLayout = nullptr;
+    viewDrag_.hoverNeedsRefresh = true;
 }
 
 namespace {
@@ -454,7 +459,7 @@ void StageEditor::DrawTransformHandles() {
     // 回転ツールは配置物にだけ輪を描く（マウスが乗っている時と回している時は太くする）
     if (transformTool_ == TransformTool::kRotate) {
         if (selKind_ == SelKind::kObject) {
-            const bool ringActive = hoverHandleActive_ || rotateDragging_;
+            const bool ringActive = viewDrag_.hoverHandleActive || viewDrag_.rotateDragging;
             dl->AddCircle(origin, kRotateRingPx, ringActive ? kHandleColorHover : kHandleColorRing, kRotateRingSegments,
                 ringActive ? kHandleHoverThicknessPx : kHandleThicknessPx);
             dl->AddCircleFilled(origin, kHandleCenterPx * 0.5f, kHandleColorCenter);
@@ -464,11 +469,11 @@ void StageEditor::DrawTransformHandles() {
 
     // 各軸の線を描き、先端は拡縮なら四角、移動なら矢印にする
     // 掴んでいる軸は白、マウスが乗っている軸は黄色で太くし、ドラッグ中の他の軸は薄くする
-    const bool axisDragging = viewportDragging_ && activeDragAxis_ != 0;
-    const bool centerHovered = hoverHandleActive_ && hoverAxis_ == 0;
+    const bool axisDragging = viewDrag_.viewportDragging && viewDrag_.activeDragAxis != 0;
+    const bool centerHovered = viewDrag_.hoverHandleActive && viewDrag_.hoverAxis == 0;
     for (int i = 0; i < kGizmoAxisCount; ++i) {
-        const bool active = activeDragAxis_ == i + 1;
-        const bool hovered = hoverHandleActive_ && hoverAxis_ == i + 1;
+        const bool active = viewDrag_.activeDragAxis == i + 1;
+        const bool hovered = viewDrag_.hoverHandleActive && viewDrag_.hoverAxis == i + 1;
         const bool emphasized = active || hovered;
         const ImU32 color = active ? kHandleColorCenter
             : hovered              ? kHandleColorHover
@@ -500,11 +505,11 @@ void StageEditor::DrawTransformHandles() {
 /** @brief 範囲選択の矩形を確定し、内側の配置物を選択する（小さすぎる矩形はクリック扱いで選択解除） */
 void StageEditor::FinishBoxSelect(float mouseX, float mouseY) {
     // ドラッグの始点と終点から範囲の矩形を作る（Ctrl中は今の選択に足す）
-    boxSelecting_ = false;
-    const float minX = (std::min)(boxStartX_, mouseX);
-    const float maxX = (std::max)(boxStartX_, mouseX);
-    const float minY = (std::min)(boxStartY_, mouseY);
-    const float maxY = (std::max)(boxStartY_, mouseY);
+    viewDrag_.boxSelecting = false;
+    const float minX = (std::min)(viewDrag_.boxStartX, mouseX);
+    const float maxX = (std::max)(viewDrag_.boxStartX, mouseX);
+    const float minY = (std::min)(viewDrag_.boxStartY, mouseY);
+    const float maxY = (std::max)(viewDrag_.boxStartY, mouseY);
     const bool additive = ImGui::GetIO().KeyCtrl;
     if (maxX - minX < kBoxSelectMinPx && maxY - minY < kBoxSelectMinPx) {
         // 何も無い場所のクリック: Unityと同じく選択解除（Ctrl中は維持）

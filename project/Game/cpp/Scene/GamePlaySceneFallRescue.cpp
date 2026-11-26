@@ -30,7 +30,7 @@ void GamePlayScene::UpdateFallRescue() {
         return;
     }
     // 自動テストプレイなら、原因を追えるよう直前の様子と一緒に知らせてから戻す
-    ReportPlayerFall(position);
+    bugWatcher_.ReportPlayerFall(position, lastSafeGround_);
     player_->PlaceAfterFallRescue({ lastSafeGround_.x, lastSafeGround_.y + kFallRescueLift, lastSafeGround_.z });
     player_->RefreshVisualTransforms();
     // 戻ったことが分かるよう、着地の土煙を出す

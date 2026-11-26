@@ -10,6 +10,8 @@ struct ParticleForGPU
 };
 
 StructuredBuffer<ParticleForGPU> gParticleData : register(t0);
+// 生きている粒の番号の一覧（描くのはこの一覧の数だけ）
+StructuredBuffer<uint> gDrawList : register(t3);
 
 struct VertexShaderInput
 {
@@ -22,14 +24,14 @@ VertexShaderOutput main(VertexShaderInput input, uint instanceId : SV_InstanceID
 {
     VertexShaderOutput output;
 	
-	// インスタンスデータ（行列と色）を取得
-    ParticleForGPU particle = gParticleData[instanceId];
+	// インスタンスの番号から生きている粒の番号を引き、その粒の行列と色を取得
+    ParticleForGPU particle = gParticleData[gDrawList[instanceId]];
 
 	// 座標変換
     output.position = mul(input.position, particle.WVP);
     // 透視投影の w はカメラから見た奥行きそのもの
     output.viewDepth = output.position.w;
-    // 死んでいる枠（透明）は画面の外へ追い出して、ピクセルシェーダーを走らせずに捨てる
+    // 生きていても透明な時（点滅で消えている間など）は画面の外へ追い出して、ピクセルシェーダーを走らせずに捨てる
     if (particle.color.a <= 0.0f)
     {
         output.position = float4(2.0f, 2.0f, 2.0f, 1.0f);

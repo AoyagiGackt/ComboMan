@@ -4,6 +4,8 @@
  */
 #pragma once
 #include <cstdint>
+// 乱数の種を共通の窓口から取得する。
+#include "RandomSeed.h"
 #include "HudLayer.h"
 
 // 標準ライブラリ
@@ -20,6 +22,8 @@
 #include "Audio.h"
 #include "BaseScene.h"
 #include "Camera.h"
+#include "CameraRig.h"
+#include "PathTrack.h"
 #include "DirectXCommon.h"
 #include "ImGuiManager.h"
 #include "Input.h"
@@ -46,6 +50,12 @@
 #include "ImageFilter.h"
 #include "BossBattleDirector.h"
 #include "FinalBossHud.h"
+#include "GamePlayBugWatcher.h"
+#include "GamePlaySceneTypes.h"
+#include "HitEscalation.h"
+#include "ScreenBanner.h"
+#include "ScriptEffectReceiver.h"
+#include "WeaponFatigueTracker.h"
 #include "FinisherEffects.h"
 #include "KickedBombPool.h"
 #include "ThrownWeaponPool.h"
@@ -58,6 +68,7 @@
 #include "SceneShared.h"
 #include "Skydome.h"
 #include "SpaceDistortionEffect.h"
+#include "PostProcessStack.h"
 #include "BossExecution.h"
 #include "ClearFinish.h"
 #include "FinalBossBattle.h"
@@ -67,6 +78,7 @@
 #include "ResultBackdrop.h"
 #include "StyleMeter.h"
 #include "TimeManager.h"
+#include "StageEditorTypes.h"
 #include "ComboMotionEditor.h"
 #include "PauseMenu.h"
 #include "UIMenu.h"
@@ -78,8 +90,6 @@ class ParticleManager;
 
 namespace engine::game {
 
-class BreakableRef;
-struct BreakableSettings;
 struct WeaponFinisherData;
 struct MonsterTraitData;
 using engine::AABB;
@@ -105,6 +115,7 @@ using engine::graphics::RenderTexture;
 using engine::graphics::ShadowManager;
 using engine::graphics::Skydome;
 using engine::graphics::SpaceDistortionEffect;
+using engine::graphics::PostProcessStack;
 using engine::graphics::Sprite;
 using engine::graphics::SpriteCommon;
 using engine::graphics::SrvManager;
@@ -209,6 +220,21 @@ private:
     static constexpr const char* kLayoutName = "gameplay"; ///< 画面UIの配置を引く名前（F2のエディタで動かした値は Resources/Config/UI/gameplay.json に保存される）
     static constexpr float kCenterFactor = 0.5f; ///< 文字を左右の中央にそろえる時に、幅へ掛ける割合
 
+    // シーンの中で使う状態の構造体（定義は GamePlaySceneTypes.h）
+    using FinisherTarget = gamePlayScene::FinisherTarget;
+    using StageBounds = gamePlayScene::StageBounds;
+    using AllyDevice = gamePlayScene::AllyDevice;
+    using StealTarget = gamePlayScene::StealTarget;
+    using MonsterTraitState = gamePlayScene::MonsterTraitState;
+    using WeaponEnemyEntry = gamePlayScene::WeaponEnemyEntry;
+    using WeaponEnemyHit = gamePlayScene::WeaponEnemyHit;
+    using EnemyBullet = gamePlayScene::EnemyBullet;
+    using EnemyVolleyShot = gamePlayScene::EnemyVolleyShot;
+    using BossWave = gamePlayScene::BossWave;
+    using GhostEntry = gamePlayScene::GhostEntry;
+    using RoomClearWatch = gamePlayScene::RoomClearWatch;
+
+
     /** @brief シーンが所有するゲーム実体、描画資源、演出を責務順に初期化する */
     void InitializeCoreSystems();
     /** @brief InitializeCoreSystems()の下請け 描画基盤(Common類・シャドウ・カメラ)とスカイドームを初期化する */
@@ -253,14 +279,6 @@ private:
     bool BombTouchesEnemy(const Vector3& position, float radius) const;
     /** @brief 飛んでいる爆弾を進め、ぶつかった爆弾を爆発させる */
     void UpdateKickedBombs();
-    /** @brief 自動テストプレイの間だけ、遊んでいる様子からおかしな所を探して SmokeTestRunner へ知らせる */
-    void RunBugChecks();
-    /** @brief RunBugChecks の下請け プレイヤーの位置・体力・先へ進めるかを調べる */
-    void CheckPlayerForBugs(const AABB& stageBounds, bool hasBounds, const std::vector<AABB>& terrain, float elapsed);
-    /** @brief RunBugChecks の下請け 生きている敵が届かない所にいないか・生き返っていないかを調べる */
-    void CheckEnemiesForBugs(const AABB& stageBounds, bool hasBounds, const std::vector<AABB>& terrain, float elapsed);
-    /** @brief RunBugChecks の下請け 敵グループの全滅を待つ条件（扉など）が、倒し切ったのに成立しない所を探す */
-    void CheckEnemyGroupConditionsForBugs(const AABB& stageBounds, bool hasBounds, const std::vector<AABB>& terrain, float elapsed);
     /** @brief プレイヤーから見て対象の向こう側の向き（真上や真下で決まらない時は向いている方） */
     float AwayFromPlayerDirX(const Vector3& position) const;
     /** @brief 壊した壁をプレイヤーの反対側へ吹き飛ばす（飛ばす枠が無い時は false） */
@@ -283,11 +301,6 @@ private:
     bool BossReactsToHits() const;
 
     // ── 武器ごとの締めの動作（GamePlaySceneFinishers.cpp） ──
-    /** @brief 締めの動作で狙う敵1体（ボスかどうかで吹き飛ばしてよいかが変わる） */
-    struct FinisherTarget {
-        EnemyEntity* enemy = nullptr;
-        bool isBoss = false;
-    };
     /** @brief 締めの動作で狙える生きた敵を集める（ボスと道中の敵） */
     std::vector<FinisherTarget> CollectFinisherTargets() const;
     /** @brief 締めの動作のダメージを与え、吹き飛ばしてよいかを返す（ボスはひるんでいる間だけ true） */
@@ -332,12 +345,6 @@ private:
     bool IsSolidAt(const Vector3& position) const;
     /** @brief 左上にステージ名の見出しを描画する */
     void DrawWeaponListPanel();
-    /** @brief ノードグラフの ShowMessage で出した文字を画面中央に描画し、残り時間を減らす */
-    void DrawScriptMessage();
-    /** @brief ノードグラフのメッセージ・カメラ・操作停止の受け口を登録する */
-    void RegisterScriptEffectHandlers();
-    /** @brief ノードグラフで操作を止めている間は、ポーズ以外の操作を押していない扱いにする */
-    void ApplyScriptControlLock();
     /** @brief ボス・道中の武器敵の頭上HPバーの位置と色を更新する（BattleTestSceneのダミーHPバーと同じ体裁） */
     void UpdateEnemyHpBars();
     /** @brief 左下のプレイヤーHPゲージの位置と色を更新する */
@@ -361,14 +368,6 @@ private:
     bool UpdateClearState();
     // 戦闘ロジック全体の更新
     void UpdateCombat();
-    /** @brief 当たり判定ブロック全体を囲むステージの範囲 */
-    struct StageBounds {
-        float left;
-        float right;
-        float bottom;
-        float top;
-        bool fromLevel; ///< レベルのブロックから求めたか（false ならブロックが無く既定の広さ）
-    };
     StageBounds GetStageBounds();
     /** @brief ステージ開始演出を始める（最初にレベルを読み込んだ時に1回） */
     void StartStageIntro();
@@ -432,6 +431,28 @@ private:
     void UpdateTargetLock();
     // カメラ追従・シェイクの更新
     void UpdateCamera();
+    /** @brief カメラの揺れ・寄り・影の範囲を、決まったカメラの位置に合わせる（どのカメラの付き方でも最後に呼ぶ） */
+    void FinishCameraUpdate();
+    /**
+     * @brief ゲームの型が横スクロール以外のカメラを使うなら、その部品でカメラを置く（GamePlaySceneGameMode.cpp）
+     * @return 型のカメラで置いたら true（false なら今までの横スクロールのカメラを使う）
+     */
+    bool UpdateModeCamera();
+    /** @brief 道に沿って進む型なら、道の上の今の位置を進め、プレイヤーをその周りに収める（GamePlaySceneGameMode.cpp） */
+    void UpdatePathScroll(float dt);
+    /**
+     * @brief ノードからのゲームオーバーの頼みを受け取り、やられ演出を始める（GamePlaySceneGameMode.cpp）
+     * @return 始めたら true（このフレームの残りの更新は飛ばす）
+     */
+    bool UpdateRuleRequests();
+    /** @brief ゲームの型に操作の表があれば、その型を初めて遊ぶ時に操作説明の板で出す準備をする（GamePlaySceneGameMode.cpp） */
+    void ArmModeControlsGuide();
+    /** @brief 奥行きにも動く型なら、前後左右のキーを横スクロールの操作へ置き換える（プレイヤーの更新の前に呼ぶ） */
+    void PrepareDepthInput();
+    /** @brief 奥行きにも動く型なら、左右のキーの分だけ奥行きへ動かし、敵を同じ奥行きへ寄せる（プレイヤーの更新の後に呼ぶ） */
+    void ApplyDepthMovement(float dt);
+    /** @brief レベルの道が変わっていたら作り直す（変わっていなければ何もしない） */
+    void RebuildPathIfChanged(const std::vector<PathPointDesc>& points);
     // スタイルメーターとUI状態の更新
     void UpdateStyleAndUI(float dt);
     /** @brief UpdateStyleAndUI()の下請け 敵の当たり判定AABBを現在位置から算出する */
@@ -488,18 +509,6 @@ private:
      * @param attack ヒットした段（nullptrなら既定値）
      */
     float MeleeHitstunSeconds(const MeleeAttackDef* attack) const;
-    /** @brief 銃の疲労の添字（近接武器の後ろ） */
-    int GunFatigueIndex() const;
-    /** @brief 手に持っている近接武器の疲労の添字（素手なら-1） */
-    int HeldMeleeFatigueIndex() const;
-    /** @brief 指定した武器の疲労から、今のダメージ倍率を返す（1.0=万全〜weaponFatigueMinDamageMult） */
-    float WeaponFatigueDamageMult(int fatigueIndex) const;
-    /** @brief このフレームに当てた武器を記録する（疲労の加算はUpdateWeaponFatigue()でまとめて1回だけ行う） */
-    void RegisterFatigueHit(int fatigueIndex, float amount);
-    /** @brief 当てた武器へ疲労を足し、それ以外の武器の疲労を抜く（ヒット判定の後に毎フレーム呼ぶ） */
-    void UpdateWeaponFatigue();
-    /** @brief 疲労で効きが落ちた命中の弾けを、威力に合わせて小さく灰色に寄せる */
-    void ApplyFatigueToHitEffect(float damageMult, Vector4& color, float& strength) const;
     /** @brief 同じ武器で当て続けて効きが落ちている時に、持ち替えを促す警告を出す */
     void DrawWeaponFatigueWarning();
     /** @brief レベルに置いた案内文を出すか（1面だけ。エディタのテストプレイでは出す） */
@@ -518,13 +527,6 @@ private:
     void ApplyStageSky();
 
     // ── 味方のボスと 2人目（GamePlaySceneAlly.cpp） ──
-    /** @brief 2P が操作に使っている機器（kNone なら味方のボスは自動で戦う） */
-    enum class AllyDevice {
-        kNone,
-        kFirstPad, ///< 1台目のパッド（1P がキーボードの時だけ）
-        kSecondPad, ///< 2台目のパッド
-        kKeyboard, ///< キーボード（1P がパッドの時だけ）
-    };
     /** @brief 2P の機器の画面に出す名前 */
     static const wchar_t* AllyDeviceName(AllyDevice device);
     /** @brief 味方のボスを呼べるか（ボスの武器どうしを合体させていて、倒れた後の待ちが明けている）。呼べない時は理由を返す */
@@ -561,7 +563,6 @@ private:
     void UpdateAllyHud();
     /** @brief 味方の頭上の体力バーを描く */
     void DrawAllyHpBar();
-    /** @brief 2P が操作している時だけ、画面の右下に 2P の操作の案内を出す */
     /** @brief 味方のボスの頭上に、敵と見分ける印を出す（ふだんは 味方、2P が操作している間は 2P） */
     void DrawAllyMark();
     /** @brief 味方の体力バーを作る（シーンの初期化で1回。ゲーム中に作ったり消したりしない） */
@@ -578,31 +579,8 @@ private:
     std::unique_ptr<Sprite> allyHpBarBg_; ///< 味方の頭上の体力バーの下地
     std::unique_ptr<Sprite> allyHpBarFg_; ///< 味方の頭上の体力バーの残り
     bool allyHpBarPlaced_ = false; ///< 味方の体力バーの位置をこのフレームに決めたか
-    /**
-     * @brief 自動テストプレイの時だけ、床抜けを直前の様子と一緒に知らせる
-     * @param position 落ちていた位置
-     */
-    void ReportPlayerFall(const Vector3& position);
-    /** @brief 自動テストプレイの見張りで、プレイヤーの今の様子を直前の記録に足す */
-    void RecordPlayerTrail(const Vector3& position);
-    /**
-     * @brief 自動テストプレイの見張りで、武器の持ち方におかしな所が無いか調べる（選ぶ画面が出たまま・合体の番号が範囲の外など）
-     * @param elapsed 前に調べてから過ぎた秒数
-     */
-    void CheckWeaponsForBugs(float elapsed);
-    /**
-     * @brief 自動テストプレイの見張りで、味方のボスにおかしな所が無いか調べる（離れすぎたまま・落ちたまま・体力が範囲の外）
-     * @param elapsed 前に調べてから過ぎた秒数
-     */
-    void CheckAllyForBugs(float elapsed);
     Vector3 lastSafeGround_ {}; ///< プレイヤーが最後に床に立っていた位置（床抜けの救済で戻す先）
     bool hasSafeGround_ = false; ///< lastSafeGround_ が入っているか
-    /** @brief 倒れて武器を奪える敵1体ぶん（武器の位置と、奪える距離） */
-    struct StealTarget {
-        const EnemyEntity* owner = nullptr;
-        Vector3 position;
-        float range = 0.0f;
-    };
     /** @brief 今奪える武器を全部集める（ボスと道中の敵） */
     std::vector<StealTarget> CollectStealTargets() const;
     /** @brief 届く距離の中で一番近いものの番号を返す（無ければ targets.size()） */
@@ -613,12 +591,6 @@ private:
     bool IsSelectedStealTarget(const EnemyEntity* owner) const {
         return owner != nullptr && owner == selectedStealOwner_;
     }
-    /**
-     * @brief 近接ヒットのヒットストップとカメラ揺れを要求する（途中の段は控えめ、締めだけ大きく）
-     * @param attack        ヒットした段（nullptrなら既定値）
-     * @param finisher      コンボの締めか
-     * @param defaultFrames 段定義がない時のヒットストップフレーム数
-     */
     /** @brief コンボの締めが当たった瞬間に、床を這う衝撃と武器の色の残り火を出す */
     void EmitComboFinisherAccent(const Vector3& position);
     /**
@@ -627,6 +599,12 @@ private:
      * @param finisher 締めの一撃か
      */
     void EmitWeaponStyleHit(const Vector3& position, bool finisher);
+    /**
+     * @brief 近接ヒットのヒットストップとカメラ揺れを要求する（途中の段は控えめ、締めだけ大きく）
+     * @param attack        ヒットした段（nullptrなら既定値）
+     * @param finisher      コンボの締めか
+     * @param defaultFrames 段定義がない時のヒットストップフレーム数
+     */
     void RequestMeleeHitStopAndShake(const MeleeAttackDef* attack, bool finisher, int defaultFrames);
     /** @brief 叩きつけ系固有技が習得済みボス技で強化されているか */
     bool HasBossSlamTechnique() const;
@@ -683,8 +661,6 @@ private:
      */
     void EmitEnemyHitEffect(const Vector3& enemyPos, const Vector4& color, float strength,
         int extraBurstCount = 0, float ringRadius = 0.0f);
-    /** @brief 連続ヒット数に応じた命中演出の盛り度合い（0.0=初撃〜1.0=上限） */
-    float HitEscalationRatio() const;
     /** @brief 武器属性ごとに形・運動の異なる追加命中演出を出す */
     void EmitElementalHitEffect(const WeaponData& weapon, const Vector3& enemyPos, int comboStep);
     /**
@@ -749,8 +725,6 @@ private:
     void UpdateBossMainChoice();
     /** @brief 合体の主軸を選ぶ画面を描く */
     void DrawBossMainChoice();
-    /** @brief ボスの枠の武器の効きの落ちの添字（銃の次） */
-    int BossFatigueIndex() const;
     bool bossChoiceKeepCurrent_ = true; ///< 主軸を選ぶ画面で、今の主軸のままを選んでいるか
     /**
      * @brief 武器が合体した瞬間の演出（2本の色の輪・閃光・両方の属性の粒・合体した名前）
@@ -771,23 +745,15 @@ private:
      * @param weapon 砕けた武器
      * @param partner 合体していた相棒の武器
      */
-    void PlayWeaponFusionBreakEffect(const WeaponData& weapon, const WeaponData& partner);
-    /**
-     * @brief 画面の中央上に名前を一瞬出す（武器を合体させた時に使う）
-     * @param text  出す名前
-     * @param color 武器の演出色（読みやすいように白を混ぜて出す）
-     */
-    void ShowWeaponBanner(const std::wstring& text, const Vector4& color);
-    /** @brief 武器名の表示の残り時間を進める */
-    void UpdateWeaponAcquireBanner(float dt);
-    /** @brief 手に入れた武器の名前を画面の中央上に出す（出てすぐ大きく弾け、最後に薄く消える） */
-    void DrawWeaponAcquireBanner();
+    void PlayWeaponFusionBreakEffect(const WeaponData& weapon, const WeaponData& partner, bool baseRemains);
     /** @brief 刃の軌跡・締め演出・F6調整パネルを更新する @param gameAdvanced このフレームにプレイヤーが動いたか */
     void UpdateComboFeel(bool gameAdvanced);
     /** @brief 撃ったフレームに、ボス・道中の敵・壊せる物から銃口に一番近い1体を射撃の的に選ぶ */
     void BuildGunShotTarget();
     // フィニッシャースラッシュ演出（斬撃線を1本ずつ表示→本命ヒット）の更新
     void UpdateFinisherSlash(float dt);
+    /** @brief 切断演出が飛散に移ったら、隠していた敵本体を再表示する（ラスボスの演出の間も呼ぶ） */
+    void RestoreEnemyAfterSlice();
     /** @brief フィニッシャーのどれかの段階の最中か（溜め・斬撃線・解放の画面の割れ・敵の破片）。とどめやクリアはこれが終わってから始める */
     bool IsFinisherBusy() const;
     // 敵撃破などのクリア条件判定
@@ -842,36 +808,6 @@ private:
     std::unique_ptr<Sprite> playerHpBarBg_;
     std::unique_ptr<Sprite> playerHpBarFg_;
 
-    /** @brief 道中に配置された武器持ち敵1体分の状態（撃破後、Jキーで吸収して武器を奪取する） */
-    /** @brief モンスター1体の個性の動きの途中の状態（GamePlaySceneMonsters.cpp） */
-    struct MonsterTraitState {
-        /** @brief 動きの段階 */
-        enum class Phase { kIdle, kTelegraph, kSwoopDown, kSwoopUp };
-        Phase phase = Phase::kIdle;
-        float timer = 0.0f; ///< 待つ間は次の動きまで、身構える間は残りの秒数
-        float pulse = 0.0f; ///< 身構えの輪を次に出すまでの秒数
-        float elapsed = 0.0f; ///< 急降下の今の段階の経過秒数
-        Vector3 from {}; ///< 急降下を始めた位置（戻る先）
-        Vector3 to {}; ///< 急降下で狙う位置
-        bool struck = false; ///< この急降下でもう当たったか
-    };
-    /** @brief 道中の武器を持った敵1体ぶんの登録内容 */
-    struct WeaponEnemyEntry {
-        /** @brief 登録時の敵の識別番号 */
-        uint64_t instanceId = 0;
-        EnemyEntity* enemy = nullptr; // 非所有。StageEditorの配置物が実体を所有する
-        WeaponType weaponType = WeaponType::kSword;
-        bool hasWeapon = true; ///< falseなら武器を持たないモンスター（倒すと消えて覚醒ゲージになる）
-        float vanishTimer = 0.0f; ///< モンスターが倒れてから消えるまでの残り秒数
-        bool weaponAcquired = false; ///< 武器を奪い終えた（モンスターは消え終えた）
-        bool absorbing = false;
-        bool defeatEffectEmitted = false;
-        float absorbTimer = 0.0f;
-        std::unique_ptr<Sprite> hpBarBg; // OnEditorLevelLoaded()で生成（レベル再読込のたびに作り直す）
-        std::unique_ptr<Sprite> hpBarFg;
-        bool hpBarPlaced = false; ///< HPバーの位置を一度でも決めたか（決める前に描くと画面の右上に白い四角が映る）
-        MonsterTraitState trait; ///< モンスターの個性の動きの状態
-    };
     std::vector<WeaponEnemyEntry> weaponEnemies_;
     /** @brief 道中のモンスターの個性の動きを1フレーム進める（毎フレーム呼ぶ） */
     void UpdateMonsterTraits(float dt);
@@ -882,19 +818,6 @@ private:
     /** @brief 急降下と戻りを進める */
     void UpdateMonsterSwoop(WeaponEnemyEntry& entry, const MonsterTraitData& data, float dt);
 
-    /** @brief 道中の武器敵1体への命中1回ぶんの内訳（何で当てたかと、そこから決まる反応・演出の強さ） */
-    struct WeaponEnemyHit {
-        bool hit = false; ///< 何かが当たった
-        bool melee = false; ///< 近接コンボで当てた
-        bool gun = false; ///< 銃（スピン連射を含む）で当てた
-        bool skill = false; ///< 武器固有技で当てた
-        bool fired = false; ///< このフレームに撃った弾で当てた
-        bool extraHit = false; ///< 覚醒中の多段ヒットの2発目以降
-        bool comboFinisher = false; ///< コンボの締めの段
-        bool blowAway = false; ///< 大きく吹き飛ばす
-        const MeleeAttackDef* attack = nullptr; ///< 当てた近接の段（無ければ nullptr）
-        float fatigueMult = 1.0f; ///< 武器の疲労によるダメージ倍率
-    };
     /**
      * @brief 道中の武器敵に、このフレームの近接・射撃・固有技のどれが当たったかを調べる
      * @param entry 調べる武器敵
@@ -947,45 +870,33 @@ private:
     std::deque<Vector3> cameraRotHistory_;
     int cameraSmoothFrames_ = 1;
 
+    // ゲームの型（横スクロール以外のカメラと、道に沿った自動の進み方）
+    PathTrack pathTrack_; ///< レベルの道をなめらかにした物
+    std::vector<PathPointDesc> builtPath_; ///< pathTrack_ を作った時の道（変わったかを見る）
+    float pathDistance_ = 0.0f; ///< 道の上の今の位置（始まりからの道のり）
+    bool pathEndRaised_ = false; ///< 道の終わりのフラグを立てたか
+    bool lastPlayTest_ = false; ///< 前のフレームにエディタのテスト中だったか（テストを始めたら道の位置を合わせ直す）
+    std::string pathLevel_; ///< 道の位置を合わせたレベル（レベルが変わったら合わせ直す）
+    std::unique_ptr<engine::graphics::CameraRig> cameraRig_; ///< 型のカメラの部品
+    std::string cameraRigType_; ///< cameraRig_ を作った時の種類
+    bool modeCameraActive_ = false; ///< 前のフレームに型のカメラを使ったか
+    Vector3 savedCameraRot_ = { }; ///< 型のカメラを使う前のカメラの向き（横スクロールへ戻る時に戻す）
+    bool depthOverrideActive_ = false; ///< このフレームに操作を置き換えたか（置き換えたら必ず戻す）
+    float depthSide_ = 0.0f; ///< このフレームの左右の入力（右が +1）
+    float depthForward_ = 0.0f; ///< このフレームの前後の入力（前が +1）
+
     SceneEditor sceneEditor_;
 
     float hitCooldown_ = 0.0f;
-    std::mt19937 rng_ { std::random_device { }() };
+    std::mt19937 rng_ { engine::randomSeed::Next() };
 
 
     // 敵の遠隔攻撃弾ボスと道中の武器持ち敵が共用する（発射時にプレイヤーが射程内にいる敵だけ撃つ）
     // 弾速・寿命・射程はResources/Config/enemy_params.jsonのbullet節（EnemyTuning::Bullet()）で持つ
 
-    /** @brief 敵の遠隔攻撃弾1発分の状態 */
-    struct EnemyBullet {
-        Vector3 pos = { };
-        Vector3 vel = { };
-        float timer = 0.0f;
-        int damage = 0;
-        float gravity = 0.0f; ///< 下向きの加速度（山なりに飛ぶ骨など。0ならまっすぐ）
-    };
     std::vector<EnemyBullet> enemyBullets_;
-    /** @brief 敵がまとめて撃つ弾の中身（モンスターの火の玉・骨と、ボスの投げで共通） */
-    struct EnemyVolleyShot {
-        int count = 1; ///< 一度に出す数
-        float spreadDegrees = 0.0f; ///< 扇状に広げる角度（隣どうしの差）
-        float speed = 6.0f; ///< 速さ（山なりの時は横の速さ）
-        float riseSpeed = 0.0f; ///< 山なりの時の上向きの速さ
-        float gravity = 0.0f; ///< 落ちる加速度（0ならまっすぐ狙う）
-        float lifetime = 2.0f; ///< 飛んでいる秒数
-        int damage = 1; ///< 当たった時のダメージ
-    };
     /** @brief origin から target へ向けて弾をまとめて出す（gravity が 0 なら扇状に狙い、そうでなければ山なりに投げる） */
     void SpawnEnemyVolley(const Vector3& origin, const Vector3& target, const EnemyVolleyShot& shot);
-    /** @brief ボスが地面を叩いて出した、床沿いに走る衝撃波1つ */
-    struct BossWave {
-        float x = 0.0f; ///< 今の横の位置
-        float y = 0.0f; ///< 走っている床の高さ（ボスの足元）
-        float dirX = 1.0f; ///< 走る向き
-        float traveled = 0.0f; ///< 走った距離
-        float sparkTimer = 0.0f; ///< 次に土煙を出すまでの秒数
-        bool struck = false; ///< もうプレイヤーに当たったか
-    };
     std::vector<BossWave> bossWaves_; ///< 走っている衝撃波
     /** @brief 衝撃波を進め、プレイヤーに当たったらダメージ（毎フレーム呼ぶ） */
     void UpdateBossWaves(float dt);
@@ -1006,46 +917,10 @@ private:
     // 着弾地点に出す予告円（円形グロー画像を着弾範囲の見かけ半径まで拡大し、赤く点滅させる）
     std::unique_ptr<Sprite> bossSlamWarningSprite_;
 
-    /** @brief 覚醒中の残像トレイル1コマ分の位置と経過秒数（設定された寿命を超えたら消える） */
-    struct GhostEntry {
-        Vector3 pos; ///< 本体の見た目と同じ置き場所（足元合わせ済み）
-        float scale; ///< 本体の見た目と同じ倍率
-        float yaw; ///< 残した時の向き
-        float age;
-    };
     std::deque<GhostEntry> ghostTrail_;
     std::unique_ptr<Object3d> ghostObject_;
     KickedBombPool kickedBombs_; ///< 攻撃で吹き飛ばした爆弾（見た目は初期化で作って使い回す）
-    /** @brief 自動テストプレイの見張りが、フレームをまたいで覚えておく様子 */
-    struct BugWatchState {
-        int framesUntilCheck = 0; ///< 次に調べるまでのフレーム数（毎フレームは重いので間を空ける）
-        bool wasExpectingProgress = false; ///< 前に調べた時、先へ進む操作をしていたか
-        float bestX = 0.0f; ///< 先へ進む操作を始めてから一番右まで行った位置
-        float stallSeconds = 0.0f; ///< 一番右の位置が伸びないまま過ぎた秒数
-        Vector3 lastGroundedPosition {}; ///< プレイヤーが最後に床に立っていた位置（床抜けの報告に添える）
-        Vector3 lastPlayerPosition {}; ///< 前に調べた時のプレイヤーの位置（高い壁や閉じた扉をすり抜けていないか調べる）
-        bool hasLastPlayerPosition = false; ///< lastPlayerPosition が入っているか
-        uint32_t teleportCount = 0; ///< 前に調べた時の、手順がプレイヤーを移した回数（増えていたら前の位置と比べない）
-        std::vector<std::string> playerTrail; ///< 直前のプレイヤーの様子（古い順。床抜けの報告に添える）
-        std::vector<std::pair<const EnemyEntity*, uint64_t>> defeatedSeen; ///< 倒されたのを見た敵（生き返りを見つける）
-        /** @brief 敵1体の、前に調べた時の様子（理由の分からない大きな移動を見つける） */
-        struct EnemyLastSeen {
-            Vector3 position {}; ///< 位置
-            bool fastMoveExpected = false; ///< 速く動いて当然の状態だったか（ボス・吹き飛び中・台本で動いている）
-        };
-        std::map<uint64_t, EnemyLastSeen> enemyLastPositions; ///< 敵の番号 → 前に調べた時の様子
-        std::vector<std::pair<std::string, float>> suspectSeconds; ///< おかしな様子が続いている秒数（一瞬だけのものは数えない）
-    };
-    BugWatchState bugWatch_; ///< 自動テストプレイの見張りの様子
-    /** @brief 敵グループの全滅を待つ条件1つの、前のフレームまでの様子（部屋の最後の1体を見つける） */
-    struct RoomClearWatch {
-        bool initialized = false; ///< 一度でも様子を見たか（最初に見た時は演出を出さない）
-        bool met = false; ///< 前に見た時に条件が成立していたか
-        std::map<std::string, bool> defeated; ///< 敵の名前 → 前に見た時に倒れていたか
-        bool hasLastDefeated = false; ///< 最後に倒れた敵を覚えているか
-        std::string lastDefeatedName; ///< 最後に倒れた敵の名前
-        Vector3 lastDefeatedPosition {}; ///< 最後に倒れた敵が倒れた位置
-    };
+    GamePlayBugWatcher bugWatcher_; ///< 自動テストプレイの見張り（ふだんは何もしない）
     std::map<std::string, RoomClearWatch> roomClearWatches_; ///< 条件の名前 → 様子
     std::map<const EnemyEntity*, std::vector<const EnemyEntity*>> flyerHits_; ///< 吹き飛んでいる敵 → もう当てた敵（同じ相手に2回当てない）
     std::map<const EnemyEntity*, int> flyerChain_; ///< 吹き飛んでいる敵 → 何段目の連鎖で飛ばされたか
@@ -1068,9 +943,7 @@ private:
     float floorElapsedSeconds_ = 0.0f; ///< このフロアに入ってからの経過秒数（OnEditorLevelLoaded()でリセット、プレイログ用）
     /** @brief 右上のスタイリッシュランクHUD（採点はstyleMeter_側で行い、表示だけこれに委ねる） */
     StyleMeter styleRankHud_;
-    std::wstring acquireBannerText_; ///< 手に入れた武器の名前（炎の剣 など）
-    Vector4 acquireBannerColor_ = { 1.0f, 1.0f, 1.0f, 1.0f }; ///< 武器名の色（武器の演出色）
-    float acquireBannerTimer_ = 0.0f; ///< 武器名を出している残り秒数（0なら出さない）
+    ScreenBanner banner_; ///< 画面の中央上に出す知らせ（合体した武器の名前・味方の知らせ）
     StageIntro stageIntro_; ///< ステージ開始演出（Resources/Config/stage_intro.json）
     StageControlsGuide stageGuide_; ///< 1面の最初に一度だけ出す操作説明（Resources/Config/controls_guide.json）
     bool stageIntroStarted_ = false; ///< エディタでレベルを読み直しても演出をやり直さないための印
@@ -1079,15 +952,8 @@ private:
     FinalBossBattle finalBoss_; ///< ラスボス戦の進行役（Resources/Config/final_boss.json）
     int lastTechniqueId_ = -1;
     int repeatedTechniqueCount_ = 0;
-    /** @brief 武器ごとの疲労（0〜1）。添字は近接武器のWeaponManager::GetList()順、末尾が銃 */
-    std::vector<float> weaponFatigue_;
-    int lastFatigueIndex_ = -1; ///< 最後に当てた武器の添字（この武器だけは疲労が抜けない）
-    int pendingFatigueIndex_ = -1; ///< このフレームに当てた武器の添字（複数の敵に同時に当てても1回ぶんにする）
-    float pendingFatigueAmount_ = 0.0f;
-    float fatigueIdleTimer_ = 0.0f; ///< 最後に何かへ当ててからの経過秒数
-    /** @brief 途切れずに当て続けたヒット数（雑魚・ボス・銃・近接を問わない。命中演出を段々派手にする） */
-    int hitEscalationCount_ = 0;
-    float hitEscalationTimer_ = 0.0f; ///< 連続ヒットが途切れるまでの残り秒数
+    WeaponFatigueTracker weaponFatigue_; ///< 同じ武器で当て続けると効きが落ちる仕組み
+    HitEscalation hitEscalation_; ///< 途切れずに当て続けたヒット数（命中演出を段々派手にする）
 
     // フィニッシャースラッシュ演出の進行状態
     bool finisherActive_ = false;
@@ -1110,17 +976,15 @@ private:
 
     /** @brief 敵中心の空間歪み（レンズ歪み+色収差） */
     SpaceDistortionEffect spaceWarp_;
+    /** @brief 3D の後・UI の前に画面全体へ掛けるエフェクトの列（順番は post_process.json） */
+    PostProcessStack postProcess_;
 
     bool showResult_ = false; ///< フロアクリアの結果（スコア・セーブ）を反映し終えたか
     int lastScore_ = 0; ///< 直近のフロアクリアで加算したスコア（結果表示用）
     int lastPickupBonus_ = 0; ///< 直近のクリアで加えたエネルギーコア全回収のボーナス（結果表示用。無ければ0）
     int lastPickupCollected_ = 0; ///< 直近のクリアまでに集めたエネルギーコアの数（結果表示用）
     int lastPickupTotal_ = 0; ///< 直近のクリアしたステージに置かれたエネルギーコアの数（0なら結果に出さない）
-    std::wstring scriptMessage_; ///< ShowMessage ノードが出した文字
-    float scriptMessageSeconds_ = 0.0f; ///< その文字を出しておく残り秒数
-    Vector3 scriptCameraFocus_ = {}; ///< FocusCamera ノードが向けた先
-    float scriptCameraFocusSeconds_ = 0.0f; ///< カメラを向けておく残り秒数（0ならプレイヤーを追う）
-    bool scriptControlLocked_ = false; ///< LockPlayerControl ノードで操作を止めているか
+    ScriptEffectReceiver scriptEffects_; ///< ノードグラフの ShowMessage・FocusCamera・LockPlayerControl の受け口
 
     FontRenderer fontRenderer_;
     CameraShaker cameraShaker_;

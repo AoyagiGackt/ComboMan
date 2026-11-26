@@ -3,6 +3,7 @@
  * @brief ステージ配置の実体管理と実行時編集ワークフローを実装するファイル
  */
 #include "StageEditor.h"
+#include "StageEditorPlaytest.h"
 #include "Camera.h"
 #include "DiagnosticsDraw.h"
 #include "DirectXCommon.h"
@@ -33,6 +34,7 @@
 #include <set>
 #include <unordered_set>
 #ifdef USE_IMGUI
+#include "EditorHub.h"
 #include "EditorUI.h"
 #include "UILayout.h"
 #include <commdlg.h>
@@ -62,6 +64,10 @@ StageEditor::StageEditor() = default;
 /** @brief レベルJSONを読み込み、配置物とトリガーを生成する */
 void StageEditor::Open(const std::string& levelPath, ModelCommon* modelCommon, Camera* camera) {
     // 再読み込み前に旧レベルのGPU参照を完了させ、実体からモデルの順で破棄する
+#ifdef USE_IMGUI
+    // テスト中に別のレベルへ移る時は、それまでの記録を元のレベルに保存する
+    stagePlaytest::End(*this);
+#endif
     ReleaseLevelResources(false);
 
     levelPath_ = levelPath;
@@ -73,6 +79,9 @@ void StageEditor::Open(const std::string& levelPath, ModelCommon* modelCommon, C
     playerSpawn_ = data.playerSpawn;
     enemySpawn_ = data.enemySpawn;
     SetSky(data.sky);
+    gameMode_ = data.gameMode;
+    path_ = data.path;
+    selectedPathPoint_ = -1;
     comment_ = data.comment;
     graphPath_ = data.graphPath;
     flagGraphs_ = data.flagGraphs;
@@ -168,6 +177,9 @@ void StageEditor::Finalize() {
     if (visible_) {
         TimeManager::GetInstance()->SetTimeScale(savedTimeScale_);
     }
+#ifdef USE_IMGUI
+    stagePlaytest::End(*this);
+#endif
     visible_ = false;
     playTestMode_ = false;
     ReleaseLevelResources(true);
@@ -298,12 +310,6 @@ bool StageEditor::StartPlayTestAt(const Vector3& worldPosition) {
     return false;
 }
 
-/** @brief 編集停止とゲーム動作テストを切り替えて時間倍率を同期する */
-void StageEditor::SetPlayTestMode(bool enabled) {
-    playTestMode_ = enabled;
-    TimeManager::GetInstance()->SetTimeScale(enabled ? savedTimeScale_ : 0.0f);
-}
-
 /** @brief 画面中央のz=0平面上のワールド座標を返す（テンプレート生成の基準位置） */
 Vector3 StageEditor::ViewCenterOnGround() const {
     Vector3 center = playerSpawn_;
@@ -357,6 +363,8 @@ bool StageEditor::SaveToPath(const std::string& path) const {
     data.playerSpawn = playerSpawn_;
     data.enemySpawn = enemySpawn_;
     data.sky = sky_;
+    data.gameMode = gameMode_;
+    data.path = path_;
     data.comment = comment_;
     for (const auto& entry : objects_) {
         data.objects.push_back(entry.desc);
@@ -372,6 +380,8 @@ bool StageEditor::SaveToPath(const std::string& path) const {
 
 /** @brief 毎フレーム呼ぶF2でパネルの表示/非表示を切り替える */
 void StageEditor::Update(Input* input, const Vector3& playerPos) {
+    // 型の操作の表をキーの名前で出すため、入力を覚えておく
+    input_ = input;
     // トリガー判定はエディタの表示状態に関係なく常に行う（普段のプレイ中でも成立させるため）
     for (auto& trg : triggers_) {
         const bool justFired = trg.Update(playerPos);
@@ -424,6 +434,10 @@ void StageEditor::Update(Input* input, const Vector3& playerPos) {
     if (!playTestMode_) {
         DrawGridOverlay();
         DrawGizmos();
+        if (camera_ && viewport_.IsImageMode()) {
+            stagePlaytest::Draw(*this, viewport_.IsImageHovered());
+            DrawPathOverlay();
+        }
     }
     overlay->PopClipRect();
 #else
@@ -435,7 +449,10 @@ void StageEditor::Update(Input* input, const Vector3& playerPos) {
 /** @brief F2による編集セッションの開始と終了を処理する */
 void StageEditor::UpdateEditorVisibility(Input* input) {
     const bool wasVisible = visible_;
-    if (input && input->TriggerKey(DIK_F2)) {
+    // F2 か、F8 のエディタ一覧のボタンで開閉する
+    const bool hubToggle = engine::editor::EditorHub::GetInstance()->Offer("stage", "ステージエディタ", "F2",
+        "敵やギミック、足場を置いてステージを作り、置いた場所からすぐ遊んで確かめます", visible_);
+    if ((input && input->TriggerKey(DIK_F2)) || hubToggle) {
         visible_ = !visible_;
     }
     if (visible_ == wasVisible) {
@@ -446,6 +463,7 @@ void StageEditor::UpdateEditorVisibility(Input* input) {
         TimeManager::GetInstance()->SetTimeScale(0.0f);
         return;
     }
+    stagePlaytest::End(*this);
     playTestMode_ = false;
     TimeManager::GetInstance()->SetTimeScale(savedTimeScale_);
 }
@@ -474,6 +492,8 @@ void StageEditor::HandleEditorShortcuts() {
         { ImGuiKey_D, true, &StageEditor::DuplicateSelected, false },
         { ImGuiKey_C, true, &StageEditor::CopySelected, false },
         { ImGuiKey_V, true, &StageEditor::PasteClipboard, false },
+        { ImGuiKey_Enter, true, &StageEditor::PlayFromHere, false },
+        { ImGuiKey_End, false, &StageEditor::DropSelectionToFloor, false },
         { ImGuiKey_Delete, false, &StageEditor::DeleteSelected, false },
         { ImGuiKey_F, false, &StageEditor::FocusCameraOnSelection, false },
         { ImGuiKey_U, false, &StageEditor::ToggleUILayoutEditing, false },
@@ -521,7 +541,7 @@ void StageEditor::HandleEditorShortcuts() {
         { ImGuiKey_UpArrow, { 0.0f, 1.0f, 0.0f }, { 0.0f, 0.0f, 1.0f } },
         { ImGuiKey_DownArrow, { 0.0f, -1.0f, 0.0f }, { 0.0f, 0.0f, -1.0f } },
     };
-    const float step = snapEnabled_ && snapStep_ > 0.0f ? snapStep_ : kNudgeStep;
+    const float step = snap_.Enabled() && snap_.Step() > 0.0f ? snap_.Step() : kNudgeStep;
     for (const NudgeKey& nudge : kNudgeKeys) {
         if (ImGui::IsKeyPressed(nudge.key)) {
             // 配置物を選んでおらず画面UIの印を選んでいる時は、印を動かす
@@ -542,7 +562,7 @@ void StageEditor::NudgeSelection(float dx, float dy, float dz) {
 
 /** @brief スナップONの間、z=0平面にスナップ間隔のグリッド線を描く */
 void StageEditor::DrawGridOverlay() {
-    if (!snapEnabled_ || !showGrid_ || snapStep_ <= 0.0f || !camera_) {
+    if (!snap_.Enabled() || !showGrid_ || snap_.Step() <= 0.0f || !camera_) {
         return;
     }
     constexpr float kGridHalfWidth = 14.0f; // カメラ中心から左右に描く範囲
@@ -553,7 +573,7 @@ void StageEditor::DrawGridOverlay() {
     constexpr ImU32 kGridAxisColor = IM_COL32(255, 255, 255, 110);
 
     const Vector3& cameraPosition = camera_->GetTranslate();
-    const float step = snapStep_;
+    const float step = snap_.Step();
     if ((kGridHalfWidth * 2.0f) / step > static_cast<float>(kMaxLinesPerAxis)) {
         return;
     }
@@ -667,6 +687,8 @@ StageEditor::LevelSnapshot StageEditor::MakeSnapshot() const {
     snap.enemySpawn = enemySpawn_;
     snap.graphPath = graphPath_;
     snap.sky = sky_;
+    snap.gameMode = gameMode_;
+    snap.path = path_;
     snap.comment = comment_;
     snap.flagGraphs = flagGraphs_;
     for (const UILayout::PositionHandle& handle : UILayout::CollectPositionHandles()) {

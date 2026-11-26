@@ -3,6 +3,7 @@
  * @brief 爆弾（爆発する樽）を攻撃で吹き飛ばし、ぶつかった所で爆発させる処理
  */
 #include "GamePlayScene.h"
+#include "StageEditorPlaytest.h"
 #include "GameConstants.h"
 #include "GameFlags.h"
 #include "HitEffectLibrary.h"
@@ -53,6 +54,9 @@ void GamePlayScene::ApplyBombBlast(const Vector3& position, const BombPayload& p
     if (DistanceSquaredXY(player_->GetPosition(), position) <= radiusSq && !TryJustDodge(position) && !player_->IsInvincible()) {
         RunData::GetInstance()->TakeDamage(payload.playerDamage);
         player_->OnHit();
+#ifdef USE_IMGUI
+        stagePlaytest::Hit(GetStageEditor(), player_->GetPosition());
+#endif
     }
     if (enemy_ && !enemy_->IsDefeated() && DistanceSquaredXY(enemy_->GetPosition(), position) <= radiusSq) {
         enemy_->TakeDamage(payload.enemyDamage);

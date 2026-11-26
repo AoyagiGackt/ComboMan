@@ -5,6 +5,7 @@
 #ifdef USE_IMGUI
 #include "GraphEditorServices.h"
 #include "TextBufferCapacity.h"
+#include "EditorHub.h"
 #include "EditorUI.h"
 #include "GraphEditor.h"
 #include "GraphRuntime.h"
@@ -43,6 +44,33 @@ GraphWidgetEdit DrawValueWidget(const char* label, std::string& value) {
         value = buffer;
     }
     return { changed, false };
+}
+
+/** @brief ノードの分類と見出しの色の組 */
+struct CategoryColor {
+    const char* name;
+    ImU32 color;
+};
+constexpr CategoryColor kCategoryColors[] = {
+    { "よく使う", IM_COL32(46, 89, 132, 255) },
+    { "配置物", IM_COL32(42, 100, 78, 255) },
+    { "進行", IM_COL32(107, 82, 43, 255) },
+    { "演出・音声", IM_COL32(107, 64, 113, 255) },
+    { "敵", IM_COL32(133, 57, 54, 255) },
+    { "プレイヤー", IM_COL32(44, 99, 107, 255) },
+    { "変数・フラグ", IM_COL32(86, 75, 133, 255) },
+    { "数値・論理", IM_COL32(85, 96, 49, 255) },
+};
+constexpr ImU32 kWarningBorderColor = IM_COL32(255, 139, 56, 255);
+
+/** @brief 未登録の分類には標準のボタン色を使う */
+ImU32 TitleColor(const NodeTypeSpec* spec) {
+    for (const auto& category : kCategoryColors) {
+        if (spec && spec->category == category.name) {
+            return category.color;
+        }
+    }
+    return ImGui::GetColorU32(ImGuiCol_Button);
 }
 
 constexpr const char* kNodeLabelsPath = "Resources/Config/UI/node_labels.json";
@@ -88,6 +116,49 @@ std::string GraphNodeLabels::ParamName(const std::string& type, const std::strin
     return name != params->end() && name->is_string() ? name->get<std::string>() : param;
 }
 
+/** @brief ノードの流れの文の型を返す（_summary。無ければ空） */
+std::string GraphNodeLabels::SummaryTemplate(const std::string& type) {
+    const nlohmann::json& table = NodeLabelTable();
+    if (!table.is_object()) {
+        return {};
+    }
+    const auto summary = table.find("_summary");
+    if (summary == table.end() || !summary->is_object()) {
+        return {};
+    }
+    const auto found = summary->find(type);
+    return found != summary->end() && found->is_string() ? found->get<std::string>() : std::string();
+}
+
+/** @brief パラメーターの説明を返す（種類ごとの表、共通の表の順に探し、無ければ汎用の説明） */
+std::string GraphNodeLabels::ParamHelp(const std::string& type, const std::string& param) {
+    const nlohmann::json& table = NodeLabelTable();
+    // 表の中の文字列を1つ引く（無ければ空）
+    const auto lookup = [](const nlohmann::json& section, const std::string& key) -> std::string {
+        if (!section.is_object()) {
+            return {};
+        }
+        const auto found = section.find(key);
+        return found != section.end() && found->is_string() ? found->get<std::string>() : std::string();
+    };
+    if (table.is_object()) {
+        // 同じ名前でも種類によって意味が違うパラメーターは、種類ごとの表を先に見る
+        if (const auto byType = table.find("_paramHelpByType"); byType != table.end() && byType->is_object()) {
+            if (const auto typeTable = byType->find(type); typeTable != byType->end()) {
+                if (std::string help = lookup(*typeTable, param); !help.empty()) {
+                    return help;
+                }
+            }
+        }
+        if (const auto common = table.find("_paramHelp"); common != table.end()) {
+            if (std::string help = lookup(*common, param); !help.empty()) {
+                return help;
+            }
+        }
+    }
+    return "ノードが処理に使用する入力値";
+}
+
 /** @brief 表を読み直す */
 void GraphNodeLabels::Reload() {
     NodeLabelTable() = JsonHelper::Load(kNodeLabelsPath);
@@ -123,11 +194,16 @@ ImU32 GraphEditorDrawingStyle::ColorForType(GraphValueType type) {
 bool GraphEditorInteraction::PrepareFrame(GraphEditor& editor, engine::Input* input, float& realDeltaTime) {
 
     bool wasVisible = editor.visible_;
-    if (input && input->TriggerKey(DIK_F1)) {
+    // F1 か、F8 のエディタ一覧のボタンで開閉する
+    const bool hubToggle = engine::editor::EditorHub::GetInstance()->Offer("graph", "ノードグラフ", "F1",
+        "敵を全部倒したら扉が開く、のような仕掛けを、ノードを線でつないで作ります", editor.visible_);
+    if ((input && input->TriggerKey(DIK_F1)) || hubToggle) {
         editor.visible_ = !editor.visible_;
     }
     if (editor.visible_ != wasVisible) {
         if (editor.visible_) {
+            // 今のレベルが変わっていたら、そのレベルのグラフを開く（毎回ファイルを選ばなくてよいように）
+            editor.AutoOpenLevelGraph();
             // 開くたびに日本語の表示名を読み直す（node_labels.json の書き換えを再起動せずに見られる）
             GraphNodeLabels::Reload();
             // 開いている間は背後のゲームを止める（TimeManager のタイムスケールを流用する）
@@ -198,9 +274,44 @@ bool GraphEditorInteraction::PrepareFrame(GraphEditor& editor, engine::Input* in
 
 /** @brief 操作の案内を出す */
 void GraphEditorInteraction::DrawGuidance(GraphEditor& editor) {
+    // 作った後にどうすればよいかと、つないだ結果どう動くかを一番上に出す
+    editor.DrawLevelLink();
+    editor.DrawFlowSummary();
+    // ノードを選んでいる時は、その種類の説明とパラメーターごとの意味を出す
+    if (editor.selectedNodeIds_.size() == 1) {
+        // 選択中の id のノードが消えていたり、種類が未登録なら説明は出さない
+        const GraphNode* selected = editor.graph_.FindNode(editor.selectedNodeId_);
+        const NodeTypeSpec* selectedSpec = selected
+            ? NodeRegistry::GetInstance()->FindSpec(selected->type)
+            : nullptr;
+        if (selected && selectedSpec && ImGui::CollapsingHeader("選択中ノードの説明", ImGuiTreeNodeFlags_DefaultOpen)) {
+            // 種類名と分類、ノード全体の説明
+            ImGui::TextWrapped("%s (%s)  %s", GraphNodeLabels::TypeName(selected->type).c_str(), selected->type.c_str(),
+                selectedSpec->category.c_str());
+            ImGui::TextWrapped("%s", selectedSpec->description.c_str());
+            // パラメーター名から説明文を引く（表は node_labels.json の _paramHelp）
+            auto parameterHelp = [selected](const std::string& key) {
+                return GraphNodeLabels::ParamHelp(selected->type, key);
+            };
+            // 表に無いパラメーター名は汎用の説明を出す
+            for (const NodeParamSpec& param : selectedSpec->params) {
+                graphics::editorUI::BulletWrapped("%s (%s)  %s", GraphNodeLabels::ParamName(selected->type, param.key).c_str(),
+                    param.key.c_str(), parameterHelp(param.key).c_str());
+            }
+            // 値を出力するノードかどうかで、次のノードへの渡し方の案内を変える
+            graphics::editorUI::BulletWrapped("左上の入力で前のノードから実行の順番を受け取ります。開始ノードはここから動きます。");
+            graphics::editorUI::BulletWrapped("%s", selectedSpec->branches
+                    ? "右の緑の出口は条件を満たす時、赤の出口はそれ以外の時に進む先です。"
+                    : "右上の黄色の出口は次に実行するノードにつなぎます。");
+            if (selectedSpec->hasOutput) {
+                graphics::editorUI::BulletWrapped("右下の色付きピンから処理結果を別のノードの入力へ渡せます。");
+            }
+        }
+    }
     // 折りたためる使い方一覧
     if (ImGui::CollapsingHeader("使い方")) {
         // ノードの追加と探し方
+        graphics::editorUI::BulletWrapped("何もない所を右クリックし、お手本から追加を選ぶと、つなぎ方の例を置けます");
         graphics::editorUI::BulletWrapped("何もない所を右クリック → ノードやコメント枠を追加（よく使う物は直接、他はジャンル別サブメニューに分類）");
         graphics::editorUI::BulletWrapped("追加メニュー上部の検索欄に入力すると、名前・ジャンル・説明で絞り込める");
         graphics::editorUI::BulletWrapped("ノードにマウスを乗せると、何ができるノードか説明がツールチップで出る");
@@ -228,80 +339,13 @@ void GraphEditorInteraction::DrawGuidance(GraphEditor& editor) {
     // 初めて使う人向けに、イベントを1本作る手順を番号付きで出す
     if (ImGui::CollapsingHeader("はじめてのイベント作成", ImGuiTreeNodeFlags_DefaultOpen)) {
         ImGui::TextWrapped("例として、ステージのトリガーがONになったら1秒待ち、効果音を鳴らす流れを作ります。");
-        graphics::editorUI::BulletWrapped("1  空白を右クリックし、GetFlag、Wait、PlaySEを追加する");
-        graphics::editorUI::BulletWrapped("2  GetFlagのflagへステージエディタで設定したフラグ名を入力する");
-        graphics::editorUI::BulletWrapped("3  ノード上部の実行ピンを GetFlag から Wait、PlaySE の順につなぐ");
-        graphics::editorUI::BulletWrapped("4  Waitのsecondsへ1、PlaySEのpathへ音声ファイルを指定する");
-        graphics::editorUI::BulletWrapped("5  最初のGetFlagを選択し、開始ノードに設定する");
+        graphics::editorUI::BulletWrapped("1  空白を右クリックし、フラグを待つ、待つ、効果音を鳴らすの3つを追加する");
+        graphics::editorUI::BulletWrapped("2  フラグを待つのフラグ名へ、ステージエディタで設定したフラグ名を入力する");
+        graphics::editorUI::BulletWrapped("3  黄色の実行ピンを、フラグを待つ、待つ、効果音を鳴らすの順につなぐ");
+        graphics::editorUI::BulletWrapped("4  待つの秒数へ1、効果音を鳴らすのファイルへ音声ファイルを指定する");
+        graphics::editorUI::BulletWrapped("5  フラグを待つを選択し、開始ノードに設定する");
         graphics::editorUI::BulletWrapped("6  実行で黄色い枠が順に進むことを確認して保存する");
         graphics::editorUI::TextDisabledWrapped("値ピンは計算結果を渡す時に使います。固定値だけなら入力欄へ直接入力できます。");
-    }
-    // ノードを選んでいる時は、その種類の説明とパラメーターごとの意味を出す
-    if (!editor.selectedNodeId_.empty()) {
-        // 選択中の id のノードが消えていたり、種類が未登録なら説明は出さない
-        const GraphNode* selected = editor.graph_.FindNode(editor.selectedNodeId_);
-        const NodeTypeSpec* selectedSpec = selected
-            ? NodeRegistry::GetInstance()->FindSpec(selected->type)
-            : nullptr;
-        if (selected && selectedSpec && ImGui::CollapsingHeader("選択中ノードの説明", ImGuiTreeNodeFlags_DefaultOpen)) {
-            // 種類名と分類、ノード全体の説明
-            ImGui::TextWrapped("%s (%s)  %s", GraphNodeLabels::TypeName(selected->type).c_str(), selected->type.c_str(),
-                selectedSpec->category.c_str());
-            ImGui::TextWrapped("%s", selectedSpec->description.c_str());
-            /** @brief ノードのパラメーター名と編集時に表示する説明の対応 */
-            struct ParamHelp {
-                const char* key;
-                const char* text;
-            };
-            static constexpr ParamHelp kParamHelps[] = {
-                { "flag", "ステージエディタのトリガーと共有するフラグ名" },
-                { "name", "グラフ内で値を識別するための変数名" },
-                { "var", "グラフ内で値を識別するための変数名" },
-                { "into", "グラフ内で値を識別するための変数名" },
-                { "value", "保存、比較、または設定する値" },
-                { "seconds", "処理を待つ時間  単位は秒" },
-                { "duration", "処理を待つ時間  単位は秒" },
-                { "frames", "処理を止める時間  単位はフレーム" },
-                { "path", "読み込むグラフ、音声などのファイルパス" },
-                { "target", "ステージに配置した敵などの名前" },
-                { "amount", "ダメージ量または回復量" },
-                { "op", "計算または比較に使う記号" },
-                { "x", "移動先または位置のワールド座標" },
-                { "y", "移動先または位置のワールド座標" },
-                { "z", "移動先または位置のワールド座標" },
-                { "a", "計算や比較へ渡す入力値" },
-                { "b", "計算や比較へ渡す入力値" },
-                { "loop", "ONなら停止するまで繰り返し再生する" },
-                { "visible", "ONなら表示し、OFFなら非表示にする" },
-                { "text", "画面に出す文字" },
-                { "scale", "ゲームを進める速さの倍率  1で通常" },
-                { "count", "くり返す回数  0ならずっと" },
-                { "interval", "次の回までの間隔  単位は秒" },
-                { "weapon", "武器の種類名  Sword Spear Hammer Dagger Ball Greatsword Scythe Axe" },
-                { "locked", "ONなら操作を止め、OFFなら戻す" },
-                { "width", "範囲の横幅  ワールド座標の単位" },
-                { "height", "範囲の高さ  ワールド座標の単位" },
-                { "condition", "真偽を決める入力  CompareやAndの出力をつなぐ" },
-            };
-            // パラメーター名から説明文を引く
-            auto parameterHelp = [](const std::string& key) -> const char* {
-                for (const ParamHelp& help : kParamHelps) {
-                    if (key == help.key) {
-                        return help.text;
-                    }
-                }
-                return "ノードが処理に使用する入力値";
-            };
-            // 表に無いパラメーター名は汎用の説明を出す
-            for (const NodeParamSpec& param : selectedSpec->params) {
-                graphics::editorUI::BulletWrapped("%s (%s)  %s", GraphNodeLabels::ParamName(selected->type, param.key).c_str(),
-                    param.key.c_str(), parameterHelp(param.key));
-            }
-            // 値を出力するノードかどうかで、次のノードへの渡し方の案内を変える
-            graphics::editorUI::TextDisabledWrapped(selectedSpec->hasOutput
-                    ? "右下の色付きピンから処理結果を別ノードへ渡せます"
-                    : "このノードは値を出力せず、上部の実行線だけで次へ進みます");
-        }
     }
 }
 
@@ -452,6 +496,9 @@ void GraphEditorInteraction::Update(GraphEditor& editor, engine::Input* input) {
 
     // 説明の開閉でキャンバスが上下に動かないよう、説明は右側のパネルへ分ける
     DrawToolbar(editor);
+    editor.UpdateWarnings();
+    editor.DrawInspection();
+    ImGui::SameLine();
     graphics::editorUI::TextDisabledWrapped("F1: 表示/非表示    右クリック: 追加/メニュー/配線解除    ホイール: ズーム    中ドラッグ: パン    左ドラッグ: 範囲選択    F: 全体表示");
     ImGui::Separator();
     editor.DrawCanvas();
@@ -488,13 +535,14 @@ void GraphNodeRenderer::Draw(GraphEditor& editor, ImDrawList* dl, const ImVec2& 
     // タイトル（このボタン自体がドラッグハンドル兼用）
     // 表示は日本語名、マウスを乗せるとグラフJSONに書く type 名と説明を出す
     const std::string title = GraphNodeLabels::TypeName(node.type) + "##title";
+    ImGui::PushStyleColor(ImGuiCol_Button, TitleColor(spec));
     ImGui::Button(title.c_str(), ImVec2(nodeW, 0));
+    ImGui::PopStyleColor();
     if (ImGui::IsItemHovered()) {
         ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeAll);
-        if (spec && !spec->description.empty()) {
-            graphics::editorUI::TooltipWrapped("%s\n%s", node.type.c_str(), spec->description.c_str());
-        } else {
-            graphics::editorUI::TooltipWrapped("%s", node.type.c_str());
+        // 点検対象では枠の判定で説明と理由をまとめて出す
+        if (!editor.warnings_.contains(id)) {
+            graphics::editorUI::TooltipWrapped("%s\n%s", node.type.c_str(), spec ? spec->description.c_str() : "");
         }
     }
     // タイトルを掴んだら選択して移動の準備をする（移動は全ノードを描いた後に UpdateNodeDrag で進める）
@@ -531,6 +579,9 @@ void GraphNodeRenderer::Draw(GraphEditor& editor, ImDrawList* dl, const ImVec2& 
     ImU32 bg = editor.IsNodeSelected(id) ? GraphEditorDrawingStyle::kSelectedBackgroundColor : GraphEditorDrawingStyle::kBackgroundColor;
     dl->AddRectFilled(interactionMin, interactionMax, bg, GraphEditorDrawingStyle::kNodeCornerRadius * editor.zoom_);
     ImU32 border = (id == editor.graph_.startNodeId) ? GraphEditorDrawingStyle::kStartColor : GraphEditorDrawingStyle::kBorderColor;
+    if (editor.warnings_.contains(id)) {
+        border = kWarningBorderColor;
+    }
     float borderThickness = GraphEditorDrawingStyle::kNodeBorderThickness * editor.zoom_;
     if (state.viewingActiveGraph && id == state.activeRunNodeId) {
         border = GraphEditorDrawingStyle::kRunningColor;

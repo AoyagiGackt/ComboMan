@@ -3,6 +3,7 @@
  * @brief 弾を使い回して撃つ弾のプール（BulletPool）の実装
  */
 #include "BulletPool.h"
+#include "PoolOverflowCounter.h"
 using namespace engine::graphics;
 
 namespace engine::game {
@@ -45,6 +46,8 @@ void BulletPool::Spawn(const Vector3& pos, const Vector3& vel) {
             return;
         }
     }
+    // 空きがない発射依頼を数える。
+    engine::poolOverflowCounter::Count("bullet_pool");
 }
 
 /** @brief Update に対応する状態を更新する */

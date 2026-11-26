@@ -56,6 +56,13 @@ void ModelCommon::Initialize(DirectXCommon* dxCommon) {
 
     ph::CreateBlendPipelines(device, psoDesc, L"ModelCommon.Object3dPS.Blend", graphicsPipelineStates_);
 
+    // まとめ描き用 PSO（頂点シェーダーと頂点レイアウトだけ違い、ほかは通常描画と同じ）
+    Microsoft::WRL::ComPtr<IDxcBlob> instancedVsBlob = dxCommon_->CompileShader(L"Resources/shaders/object3d/Object3dInstancedVS.hlsl", L"vs_6_0");
+    D3D12_GRAPHICS_PIPELINE_STATE_DESC instancedPsoDesc = psoDesc;
+    instancedPsoDesc.InputLayout = { ph::kInstancedInputLayout, _countof(ph::kInstancedInputLayout) };
+    instancedPsoDesc.VS = { instancedVsBlob->GetBufferPointer(), instancedVsBlob->GetBufferSize() };
+    ph::CreateBlendPipelines(device, instancedPsoDesc, L"ModelCommon.Object3dInstanced.Blend", instancedPipelineStates_);
+
     // シャドウパス用 Root Signature（CBV 1つ  TransformationMatrix）
 
     D3D12_ROOT_PARAMETER shadowParam[1] = {
@@ -90,6 +97,22 @@ void ModelCommon::Initialize(DirectXCommon* dxCommon) {
 void ModelCommon::CommonDrawSettings(BlendMode blendMode) {
     ID3D12GraphicsCommandList* commandList = dxCommon_->GetCommandList();
     pipelineHelper::SetTrianglePipeline(commandList, rootSignature_.Get(), graphicsPipelineStates_[static_cast<size_t>(blendMode)].Get());
+    currentBlendMode_ = blendMode;
+}
+
+/** @brief ルートシグネチャはそのままで、まとめ描き用の PSO に差し替える */
+void ModelCommon::BeginInstancedDraw() {
+    ID3D12GraphicsCommandList* commandList = dxCommon_->GetCommandList();
+    const size_t index = static_cast<size_t>(currentBlendMode_.load());
+    // シェーダーを書き換えて作り直した後なら、そちらを使う
+    commandList->SetPipelineState(PipelineCache::Resolve(instancedPipelineStates_[index].Get()));
+}
+
+/** @brief 通常描画の PSO に戻す（ルートシグネチャは変えていないので PSO だけ戻せばよい） */
+void ModelCommon::EndInstancedDraw() {
+    ID3D12GraphicsCommandList* commandList = dxCommon_->GetCommandList();
+    const size_t index = static_cast<size_t>(currentBlendMode_.load());
+    commandList->SetPipelineState(PipelineCache::Resolve(graphicsPipelineStates_[index].Get()));
 }
 
 /** @brief シャドウパス開始（シャドウ用 PSO + Root Signature をセット） */

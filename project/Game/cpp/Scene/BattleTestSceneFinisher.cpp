@@ -3,6 +3,8 @@
  * @brief バトルテストのフィニッシャー演出と判定
  */
 #include "BattleTestScene.h"
+// 乱数の種を共通の窓口から取得する。
+#include "RandomSeed.h"
 #include "GameSounds.h"
 #include "SceneVisualTuning.h"
 #include "HitEffectLibrary.h"
@@ -85,7 +87,7 @@ bool BattleTestScene::UpdateFinisherSlash() {
 void BattleTestScene::UpdateFinisherSlashLine() {
     auto* tm = TimeManager::GetInstance();
     // カメラ視界全体にランダムな位置を高速で斬り刻む
-    static std::mt19937 sRng { std::random_device { }() };
+    static std::mt19937 sRng { engine::randomSeed::Next() };
     const finisherEffects::BeatSlash slash = finisherEffects::SpawnBeatSlash(sRng, camera_->GetTranslate(), finisherLineIdx_);
     finisherSlashes_.push_back(slash);
     const Vector3 slashCenter = { slash.center.x, slash.center.y, 0.0f };
@@ -132,7 +134,7 @@ void BattleTestScene::PlayFinisherReleaseEffects() {
     const Vector3& pp = player_->GetPosition();
 
     // 溜めた斬撃線を一斉に白く光らせてから消し、太く短い閃光の斬撃線を重ねる
-    static std::mt19937 sRngRelease { std::random_device { }() };
+    static std::mt19937 sRngRelease { engine::randomSeed::Next() };
     finisherEffects::SpawnReleaseSlashes(sRngRelease, pp, camera_->GetTranslate(), &finisherSlashes_);
     gameSounds::Play(SoundCue::kFinisherRelease);
 
@@ -155,7 +157,7 @@ void BattleTestScene::PlayFinisherReleaseEffects() {
         }
     }
     if (nearest != nullptr) {
-        static std::mt19937 sRngSlice { std::random_device { }() };
+        static std::mt19937 sRngSlice { engine::randomSeed::Next() };
         const Vector3 slicePos = { nearest->pos.x, nearest->pos.y + kDummyModelFootOffsetY, nearest->pos.z };
         dummySlice_.Start(modelDummy_, slicePos, { kDummyModelScale, kDummyModelScale, kDummyModelScale }, sRngSlice());
         nearest->sliced = true;

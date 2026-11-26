@@ -248,7 +248,7 @@ void SSAOEffect::Initialize(DirectXCommon* dxCommon, SrvManager* srvManager) {
     // Apply PSO (multiply blend → AO を乗算でシーンに合成)
     applyRS_ = CreateApplyRS(device);
     applyPSO_ = CreateFullscreenPSO(device, applyRS_.Get(), fsVS.Get(), applyPS.Get(),
-        DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, /*multiplyBlend=*/true);
+        DirectXCommon::kSceneColorFormat, /*multiplyBlend=*/true);
 }
 
 /** @brief SSAOの描画資源を解放する */

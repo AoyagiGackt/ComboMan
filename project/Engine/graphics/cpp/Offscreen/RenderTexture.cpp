@@ -12,15 +12,17 @@ namespace {
 constexpr float kClearColor[4] = { 1.0f, 0.0f, 0.0f, 1.0f };
 } // namespace
 
-/** @brief 指定サイズの RTV/SRV 兼用テクスチャ（RGBA8_UNORM）を確保する */
+/** @brief 指定サイズの RTV/SRV 兼用テクスチャ（シーンの色バッファと同じ形式）を確保する */
 void RenderTexture::Initialize(DirectXCommon* dxCommon, SrvManager* srvManager, uint32_t width, uint32_t height) {
     dxCommon_ = dxCommon;
     width_ = width;
     height_ = height;
 
-    // 本体・RTV・SRV とも RGBA8_UNORM で作る
-    constexpr DXGI_FORMAT kFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
-    pipelineHelper::CreateRenderTarget(dxCommon_->GetDevice(), srvManager, width, height, { kFormat, kFormat, kFormat },
+    // 作り直す時に前の物をその場で手放さないよう、先に預けておく（作る関数は ComPtr として受け取って上書きするため）
+    resource_ = nullptr;
+    rtvHeap_ = nullptr;
+    // 本体・RTV・SRV とも、描画先の PSO と同じシーンの色バッファの形式で作る
+    pipelineHelper::CreateRenderTarget(dxCommon_->GetDevice(), srvManager, width, height, pipelineHelper::kSceneColorTargetFormats,
         kClearColor, { resource_, rtvHeap_, rtvHandle_, srvIndex_ });
 }
 

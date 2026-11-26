@@ -3,6 +3,7 @@
  * @brief 武器の種類ごとの近接コンボの表と、近接コンボの進行（MeleeComboController）の実装
  */
 #include "MeleeCombo.h"
+#include "TestCoverage.h"
 #include "Easing.h"
 #include "GameConstants.h"
 #include "JsonFieldTable.h"
@@ -491,6 +492,10 @@ bool MeleeComboController::StartNextStep(bool launcherInput, bool airborne) {
 
 /** @brief 指定した段を新しい攻撃としてセットアップし、進行タイマー・段番号・各種状態フラグをリセットする */
 void MeleeComboController::StartStep(const MeleeAttackDef* def, int tableIdx, bool airMode, bool isLauncher) {
+    // 開始した段を記録する。
+    if (testCoverage::IsEnabled() && def != nullptr) {
+        testCoverage::Cover("melee_step", def->id);
+    }
     active_ = def;
     stepIdx_ = tableIdx;
     stepDisplay_ = isLauncher ? 0 : tableIdx + 1;

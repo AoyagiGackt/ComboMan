@@ -45,14 +45,6 @@ using namespace engine::graphics;
 
 namespace engine::game {
 namespace {
-// ノードグラフの ShowMessage で出す文字（画面の下寄り中央。最後の時間で薄く消える）
-constexpr float kScriptMessageY = 560.0f;
-constexpr float kScriptMessageScale = 1.6f;
-constexpr Vector4 kScriptMessageColor = { 1.0f, 1.0f, 1.0f, 1.0f };
-constexpr Vector4 kScriptMessageShadowColor = { 0.0f, 0.0f, 0.0f, 0.85f };
-constexpr float kScriptMessageShadowOffset = 2.0f;
-constexpr float kScriptMessageFadeSeconds = 0.3f;
-
 // 武器の疲労警告はデバッグボタンの下に配置する
 constexpr Vector2 kFatigueWarningPosition = { gameConstants::kScreenCenterX, 40.0f }; // 画面の上の中央
 constexpr float kFatigueWarningBossBarY = 90.0f; // ボスの体力バー（上の中央、高さ 24〜75）が出ている間は、そのすぐ下に出す
@@ -87,6 +79,7 @@ constexpr ShortControl kShortControls[] = {
     { L"[{Dodge}]", L"回避" },
     { L"[{Skill}]", L"固有技" },
     { L"[{Shoot}]", L"射撃" },
+    { L"[{ThrowWeapon}]", L"武器を投げて壊す（2本以上）" },
     { L"[{Pause}]", L"ポーズ・操作説明" },
 };
 
@@ -373,7 +366,7 @@ void GamePlayScene::DrawWeaponFatigueWarning() {
     const Vector4 fatigueMildColor = layout.Color("fatigue.mild_color", kFatigueMildColor);
     const Vector4 fatigueSevereColor = layout.Color("fatigue.severe_color", kFatigueSevereColor);
     // 今の武器の疲労で威力が落ちていなければ出さない
-    const float mult = WeaponFatigueDamageMult(lastFatigueIndex_);
+    const float mult = weaponFatigue_.DamageMult(weaponFatigue_.LastIndex());
     if (mult >= 1.0f) {
         return;
     }
@@ -387,18 +380,18 @@ void GamePlayScene::DrawWeaponFatigueWarning() {
     float bestFatigue = 1.0f;
     for (int slot = 0; slot < WeaponManager::kSlotCount; ++slot) {
         const int weaponIndex = wm->GetSlotWeaponIndex(slot);
-        if (weaponIndex < 0 || weaponIndex == lastFatigueIndex_ || weaponIndex >= static_cast<int>(weaponFatigue_.size())) {
+        if (weaponIndex < 0 || weaponIndex == weaponFatigue_.LastIndex() || weaponIndex >= weaponFatigue_.Count()) {
             continue;
         }
-        if (weaponFatigue_[weaponIndex] < bestFatigue) {
-            bestFatigue = weaponFatigue_[weaponIndex];
+        if (weaponFatigue_.At(weaponIndex) < bestFatigue) {
+            bestFatigue = weaponFatigue_.At(weaponIndex);
             bestSlot = slot;
         }
     }
     // 銃のほうが休めていれば射撃を勧める
-    const int gunIndex = GunFatigueIndex();
-    const bool suggestGun = gunIndex != lastFatigueIndex_ && gunIndex < static_cast<int>(weaponFatigue_.size())
-        && (bestSlot < 0 || weaponFatigue_[gunIndex] < bestFatigue);
+    const int gunIndex = WeaponFatigueTracker::GunIndex();
+    const bool suggestGun = gunIndex != weaponFatigue_.LastIndex() && gunIndex < weaponFatigue_.Count()
+        && (bestSlot < 0 || weaponFatigue_.At(gunIndex) < bestFatigue);
     // 押す入力は最後に使った機器の表記にし、持ち替え先の武器の名前も添える
     const std::wstring suggestion = (!suggestGun && bestSlot >= 0)
         ? input_->ExpandPrompts(L"[{Slot" + std::to_wstring(bestSlot + 1) + L"}] ")
@@ -432,26 +425,5 @@ void GamePlayScene::DrawWeaponListPanel() {
     UILayout& layout = UILayout::Get(kLayoutName);
     const Vector2 weaponHudAnchor = layout.Pos("weapon_list.pos", kDefaultHudWeaponAnchor);
     sceneShared::DrawHudHeader(fontRenderer_, L"メインステージ", weaponHudAnchor);
-}
-/** @brief ノードグラフの ShowMessage で出した文字を画面中央に描画し、残り時間を減らす */
-void GamePlayScene::DrawScriptMessage() {
-    if (scriptMessageSeconds_ <= 0.0f || scriptMessage_.empty()) {
-        return;
-    }
-    scriptMessageSeconds_ -= gameConstants::kFrameDeltaTime;
-    UILayout& layout = UILayout::Get(kLayoutName);
-    const float y = layout.Float("script_message.y", kScriptMessageY);
-    const float scale = layout.Float("script_message.scale", kScriptMessageScale);
-    // 最後の少しの間で薄くして消す
-    const float alpha = std::clamp(scriptMessageSeconds_ / kScriptMessageFadeSeconds, 0.0f, 1.0f);
-    Vector4 shadow = kScriptMessageShadowColor;
-    shadow.w *= alpha;
-    Vector4 color = layout.Color("script_message.color", kScriptMessageColor);
-    color.w *= alpha;
-    // 影は少し右下にずらすため、中央揃えの位置を同じだけずらした文字で描く
-    const float width = FontRenderer::MeasureStringW(scriptMessage_, scale).x;
-    const float x = gameConstants::kScreenCenterX - width * kCenterFactor;
-    fontRenderer_.DrawStringW(scriptMessage_, x + kScriptMessageShadowOffset, y + kScriptMessageShadowOffset, scale, shadow);
-    fontRenderer_.DrawStringW(scriptMessage_, x, y, scale, color);
 }
 } // namespace engine::game

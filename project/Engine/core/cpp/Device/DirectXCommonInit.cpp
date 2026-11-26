@@ -72,6 +72,7 @@ void DirectXCommon::InitializeDevice() {
     }
 
     ENGINE_ASSERT(useAdapter != nullptr);
+    adapter_ = useAdapter;
 
     D3D_FEATURE_LEVEL featureLevels[] = { D3D_FEATURE_LEVEL_12_2, D3D_FEATURE_LEVEL_12_1, D3D_FEATURE_LEVEL_12_0 };
     const char* featureLevelStrings[] = { "12.2", "12.1", "12.0" };
@@ -92,6 +93,20 @@ void DirectXCommon::InitializeDevice() {
     if (SUCCEEDED(device_->QueryInterface(IID_PPV_ARGS(&infoQueue_)))) {
         infoQueue_->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_CORRUPTION, TRUE);
         infoQueue_->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, TRUE);
+        // 保存したパイプラインを探して無かった時・ドライバが変わって読めない時の知らせは、想定どおりの動きなので受け取らない
+        // （PipelineCache はその時に作り直して保存するだけで、エラーではない）
+        D3D12_MESSAGE_ID expectedPipelineLibraryMessages[] = {
+            D3D12_MESSAGE_ID_LOADPIPELINE_NAMENOTFOUND,
+            D3D12_MESSAGE_ID_LOADPIPELINE_INVALIDDESC,
+            D3D12_MESSAGE_ID_STOREPIPELINE_DUPLICATENAME,
+            D3D12_MESSAGE_ID_CREATEPIPELINELIBRARY_DRIVERVERSIONMISMATCH,
+            D3D12_MESSAGE_ID_CREATEPIPELINELIBRARY_ADAPTERVERSIONMISMATCH,
+            D3D12_MESSAGE_ID_CREATEPIPELINELIBRARY_UNSUPPORTED,
+        };
+        D3D12_INFO_QUEUE_FILTER pipelineLibraryFilter = { };
+        pipelineLibraryFilter.DenyList.NumIDs = _countof(expectedPipelineLibraryMessages);
+        pipelineLibraryFilter.DenyList.pIDList = expectedPipelineLibraryMessages;
+        infoQueue_->PushStorageFilter(&pipelineLibraryFilter);
         infoQueue_->RegisterMessageCallback(
             &DirectXCommon::DiagnosticsMessageCallback,
             D3D12_MESSAGE_CALLBACK_FLAG_NONE, this, &diagnosticsCallbackCookie_);
@@ -109,11 +124,15 @@ void CALLBACK DirectXCommon::DiagnosticsMessageCallback(
         "D3D12 message id={} context={} detail={}", static_cast<int>(id),
         self ? self->diagnosticContext_ : "unknown", description ? description : "no description");
 
-    if (severity == D3D12_MESSAGE_SEVERITY_ERROR
-        || severity == D3D12_MESSAGE_SEVERITY_CORRUPTION) {
+    const bool isError = severity == D3D12_MESSAGE_SEVERITY_ERROR || severity == D3D12_MESSAGE_SEVERITY_CORRUPTION;
+    if (isError) {
         Logger::LogError(message);
     } else if (severity == D3D12_MESSAGE_SEVERITY_WARNING) {
         Logger::LogWarning(message);
+    }
+    // 受け取る関数が登録されていれば、警告とエラーを渡す（自動テストが記録する）
+    if (self != nullptr && self->debugMessageHandler_ && (isError || severity == D3D12_MESSAGE_SEVERITY_WARNING)) {
+        self->debugMessageHandler_(isError, static_cast<int>(id), description != nullptr ? description : "");
     }
 }
 #endif
@@ -249,8 +268,9 @@ void DirectXCommon::CreateRTV() {
     hr = swapChain_->GetBuffer(1, IID_PPV_ARGS(&swapChainResources_[1]));
     ENGINE_ASSERT(SUCCEEDED(hr));
 
+    // スワップチェーンへ描くのは、フレームの最後に色バッファを写す時だけ
     D3D12_RENDER_TARGET_VIEW_DESC rtvDesc = { };
-    rtvDesc.Format = GetBackBufferFormat();
+    rtvDesc.Format = kSwapChainRtvFormat;
     rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
 
     D3D12_CPU_DESCRIPTOR_HANDLE rtvStartHandle = rtvDescriptorHeap_->GetCPUDescriptorHandleForHeapStart();

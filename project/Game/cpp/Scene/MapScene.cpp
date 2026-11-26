@@ -3,6 +3,8 @@
  * @brief ローグライトのフロア選択マップ（MapScene）の表示とノード選択・遷移処理の実装
  */
 #include "MapScene.h"
+#include "EngineContext.h"
+#include "GameAudio.h"
 #include "MapNodeInfo.h"
 #include "JsonFieldTable.h"
 #include "JsonHelper.h"
@@ -173,7 +175,7 @@ void MapScene::InitializeUiSprites() {
 
 /** @brief Initialize()の下請け 描画基盤(Common類・シャドウ・カメラ)とプレイヤーを初期化する */
 void MapScene::InitializeRenderFoundationAndPlayer() {
-    BuildRenderFoundation(dxCommon_, SrvManager::GetInstance(),
+    BuildRenderFoundation(dxCommon_, engine::Services().srvManager,
         { modelCommon_, objectCommon_, shadowManager_, camera_ });
 
     camera_->SetTranslate({ kInitialCameraX, kCameraY, gameConstants::kCameraDistanceZ });
@@ -190,7 +192,7 @@ void MapScene::InitializeRenderFoundationAndPlayer() {
 void MapScene::InitializeStageObjects() {
     // 床と背景のビルはレベルJSON（Resources/Levels/map.json）に置き、F2のステージエディタで編集する
     // 入口ポータルはステージ数に追従させるためコード側で並べる
-    blockModel_ = ModelManager::GetInstance()->GetOrLoad(modelCommon_.get(),
+    blockModel_ = engine::Services().models->GetOrLoad(modelCommon_.get(),
         "Resources/block/block.obj",
         "Resources/DowntownCityMegaKit[Standard]/Textures/T_Concrete_BaseColor.png");
 
@@ -618,7 +620,7 @@ void MapScene::DrawWorld() {
 
     modelCommon_->CommonDrawSettings();
     objectCommon_->SetDefaultLight(commandList);
-    shadowManager_->SetShadowMap(commandList, SrvManager::GetInstance());
+    shadowManager_->SetShadowMap(commandList, engine::Services().srvManager);
 
     const int floor = RunData::GetInstance()->GetFloor();
     if (floor < static_cast<int>(floors_.size())) {

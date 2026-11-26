@@ -3,6 +3,11 @@
  * @brief 訓練用バトルシーン（BattleTestScene）の初期化と基本更新フローの実装
  */
 #include "BattleTestScene.h"
+#include "EngineContext.h"
+#include "GameAudio.h"
+#include "GameActions.h"
+// 乱数の種を共通の窓口から取得する。
+#include "RandomSeed.h"
 #include "GameSounds.h"
 #include "FinisherEffects.h"
 #include "BattleTestTuning.h"
@@ -78,9 +83,9 @@ void BattleTestScene::Initialize(DirectXCommon* dxCommon, Input* input, Audio* a
 
 /** @brief Initialize()の下請け マネージャ取得・各種Common初期化・カメラ生成を行う */
 void BattleTestScene::InitializeCoreSystems() {
-    srvManager_ = SrvManager::GetInstance();
+    srvManager_ = engine::Services().srvManager;
     weaponManager_ = WeaponManager::GetInstance();
-    pm_ = ParticleManager::GetInstance();
+    pm_ = engine::Services().particles;
 
     // テストシーンでは全武器のコンボを試せるように最初から全解放する
     weaponManager_->UnlockAll();
@@ -98,7 +103,7 @@ void BattleTestScene::InitializeCoreSystems() {
 
 /** @brief Initialize()の下請け 境界ブロック・ワープポータル・ダミー用モデル・パーティクル群を初期化する */
 void BattleTestScene::InitializeStageModels() {
-    modelBlock_ = ModelManager::GetInstance()->GetOrLoad(modelCommon_.get(),
+    modelBlock_ = engine::Services().models->GetOrLoad(modelCommon_.get(),
         "Resources/block/block.obj",
         "Resources/block/block.png");
 
@@ -112,7 +117,7 @@ void BattleTestScene::InitializeStageModels() {
         { BattleTestTune().warpReturnX, BattleTestTune().dummyGroundY, 0.0f }, SceneVisualTuning::Battle().warpPortalBlockCount,
         SceneVisualTuning::Battle().warpPortalBlockSpacing, SceneVisualTuning::Battle().warpPortalColor, warpPortalBlocks_);
 
-    modelDummy_ = ModelManager::GetInstance()->GetOrLoad(modelCommon_.get(),
+    modelDummy_ = engine::Services().models->GetOrLoad(modelCommon_.get(),
         "Resources/AnimatedMonsterPackby@Quaternius/OBJ/Slime.obj",
         "Resources/AnimatedMonsterPackby@Quaternius/OBJ/SlimePalette.png");
 
@@ -185,6 +190,8 @@ void BattleTestScene::InitializeEffects() {
     bladeFlash_.Initialize(dxCommon_);
     comboFeel_.Initialize(dxCommon_, srvManager_);
     spaceWarp_.Initialize(dxCommon_, srvManager_);
+    // 3D の後・UI の前に掛ける画面全体のエフェクト（順番は post_process.json の training）
+    sceneShared::SetupScenePostProcess(postProcess_, "training", srvManager_, spaceWarp_, comboFeel_);
     dummySlice_.Initialize(dxCommon_);
     finisherShatter_.Initialize(dxCommon_, srvManager_);
     finisherShatter_.SetDuration(SceneVisualTuning::Battle().finisherShatterSeconds);
@@ -200,7 +207,7 @@ void BattleTestScene::InitializeEffects() {
 /** @brief 指定座標にヒットエフェクト（パーティクル）を生成する */
 void BattleTestScene::SpawnHitEffect(const Vector3& pos) {
     pm_->EmitRing("bt_hit_ring", pos, SceneVisualTuning::Battle().hitRingSpeed, SceneVisualTuning::Battle().hitRingColor, SceneVisualTuning::Battle().hitRingCount, SceneVisualTuning::Battle().hitRingLifetime, SceneVisualTuning::Battle().hitRingSize);
-    static std::mt19937 sRng { std::random_device { }() };
+    static std::mt19937 sRng { engine::randomSeed::Next() };
     std::uniform_real_distribution<float> vx(-SceneVisualTuning::Battle().hitSparkSpreadX, SceneVisualTuning::Battle().hitSparkSpreadX);
     std::uniform_real_distribution<float> vy(SceneVisualTuning::Battle().hitSparkRiseMin, SceneVisualTuning::Battle().hitSparkRiseMax);
     for (int i = 0; i < SceneVisualTuning::Battle().hitSparkCount; ++i) {
@@ -212,7 +219,7 @@ void BattleTestScene::SpawnHitEffect(const Vector3& pos) {
 
 /** @brief 指定座標に水しぶきエフェクト（パーティクル）を生成する StageEditorのトリガー(spawnsWaterSplash)から呼ばれる */
 void BattleTestScene::SpawnWaterSplashEffect(const Vector3& pos) {
-    static std::mt19937 sRng { std::random_device { }() };
+    static std::mt19937 sRng { engine::randomSeed::Next() };
     WaterPool::EmitSplashParticles(pm_, "bt_water_splash", pos, sRng);
 }
 
@@ -385,6 +392,18 @@ void BattleTestScene::UpdatePlayerAndCamera() {
         }
         // コンボ練習の間は自分の入力で出せたかを見るので、オートコンボを設定に関係なく止める
         player_->SetAutoComboSuppressed(comboTrial_.IsActive());
+        player_->UpdateWeaponThrow(input_, stageColliders);
+        if (player_->HasWeaponInFlight()) {
+            for (auto& dummy : dummies_) {
+                if (dummy.hp > 0.0f && player_->ConsumeWeaponThrowHit(DummyBounds(dummy)) > 0.0f) {
+                    dummy.hitFlash = BattleTestTune().bulletHitFlash;
+                    dummy.hpDisplay = 0.0f;
+                    dummy.returnTimer = BattleTestTune().dummyReturnDelay;
+                    SpawnHitEffect(DummyHitEffectPosition(dummy));
+                    break;
+                }
+            }
+        }
         player_->Update(input_, rampTarget, targetSolid, !stageColliders.empty());
         gameSounds::PlayPlayerActions(*player_);
         comboTrial_.Observe(*player_);
@@ -421,7 +440,7 @@ void BattleTestScene::UpdateEnvironment() {
 void BattleTestScene::UpdateTargetLock() {
     // Shiftを押している間だけロックオンし、その間は常に一番近いダミーを対象にし続ける
     // （押した瞬間の対象に固定するのではなく、離れたら別の敵が近くなるような場面でも自然に切り替わる）
-    if (!input_->PushAction(Input::Action::kLockOn)) {
+    if (!input_->PushAction(GameAction::kLockOn)) {
         lockedDummyIndex_.reset();
         return;
     }

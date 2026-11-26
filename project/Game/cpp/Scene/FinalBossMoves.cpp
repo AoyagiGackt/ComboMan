@@ -4,6 +4,8 @@
  * @note 技は IMove の派生クラスで、技の中の手順はメンバ関数へのポインタを次の手順に差し替えて進める
  */
 #include "FinalBossBattle.h"
+#include "TestCoverage.h"
+
 #include "EnemyEntity.h"
 #include "FinalBossTuning.h"
 #include "GameConstants.h"
@@ -12,11 +14,14 @@
 #include "Player.h"
 #include <algorithm>
 #include <cmath>
+#include <iterator>
 
 using namespace engine::graphics;
 
 namespace engine::game {
 namespace {
+/** @brief 網羅のまとめに出すラスボスの技の名前（BuildMoves で moves_ に積む順番と同じ並び） */
+constexpr const char* kMoveCoverageNames[] = { "Measure", "Rush", "Iai", "Phantom", "SpaceSlash", "Blink", "Stagger" };
 constexpr float kMeasureBand = 0.5f; ///< 保とうとする距離の遊び
 constexpr float kParabolaPeakScale = 4.0f; ///< t(1-t) の山の高さを1にする倍率（跳びの弧）
 constexpr float kLeapLandGap = 0.8f; ///< 跳び斬りでプレイヤーの手前に降りる距離
@@ -517,6 +522,10 @@ const MeleeAttackDef* FinalBossBattle::KatanaStep(int index) {
 
 /** @brief 技の一覧を作る */
 void FinalBossBattle::BuildMoves() {
+    // 自動テストの網羅のまとめに数える
+    for (const char* name : kMoveCoverageNames) {
+        testCoverage::Declare("final_boss_move", name);
+    }
     moves_.clear();
     moves_.push_back(std::make_unique<MeasureMove>());
     moves_.push_back(std::make_unique<RushMove>());
@@ -600,6 +609,15 @@ void FinalBossBattle::ChooseNextMove() {
 
 /** @brief 技を始める */
 void FinalBossBattle::BeginMove(IMove& move) {
+    // 自動テストの網羅のまとめに数える
+    if (testCoverage::IsEnabled()) {
+        for (size_t index = 0; index < moves_.size() && index < std::size(kMoveCoverageNames); ++index) {
+            if (moves_[index].get() == &move) {
+                testCoverage::Cover("final_boss_move", kMoveCoverageNames[index]);
+                break;
+            }
+        }
+    }
     currentMove_ = &move;
     move.Begin(*this);
 }

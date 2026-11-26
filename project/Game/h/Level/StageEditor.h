@@ -10,14 +10,18 @@
 #include "IPositionTarget.h"
 #include "CollisionConfig.h"
 #include "EditorHistory.h"
+#include "StageEditorSnap.h"
 #include "EnemyTypeEditor.h"
+#include "GameModeLibrary.h"
 #include "LevelGraphRunner.h"
 #include "LevelLoader.h"
 #include "StageEditorContentFactory.h"
 #include "StageEditorEventConnection.h"
 #include "StageEditorViewport.h"
+#include "StageEditorTypes.h"
 #include "TriggerVolume.h"
 #include "Weapon.h"
+#include "Object3dRenderQueue.h"
 #include <functional>
 #include <cstdint>
 #include <map>
@@ -49,86 +53,6 @@ class StageEditorSelectionService;
 class StageEditorHierarchyPanel;
 class StageEditorInspectorPanel;
 class ObjectKind;
-
-/** @brief kind=="enemy_basic"かつ武器種別を持つ配置物1件ぶんの参照（GetCombatEnemies()の戻り値） */
-struct CombatEnemyRef {
-    /** @brief 生成された敵の一意な識別番号 */
-    uint64_t instanceId = 0;
-    std::string name;
-    WeaponType weaponType;
-    bool hasWeapon = true; ///< falseなら武器を持たないモンスター（倒しても奪う物が無く、消えて覚醒ゲージになる）
-    bool isStageBoss = false;
-    EnemyEntity* enemy = nullptr; // 非所有。StageEditorのobjects_が生存させる
-};
-
-/** @brief 敵グループの全滅を待つ条件が見ている敵1体の様子（自動テストプレイの見張り用） */
-struct WatchedEnemyState {
-    std::string name; ///< 配置物の名前
-    Vector3 position; ///< 今の位置
-    int hp = 0; ///< 残りの体力
-    bool defeated = false; ///< 倒された扱いか
-    bool visible = true; ///< 見えているか
-    bool active = true; ///< 有効か（無効中の敵は攻撃が当たらないので、生きていると倒し切れない）
-};
-
-/** @brief 敵グループの全滅を待つ条件1つの様子（自動テストプレイの見張り用） */
-struct EnemyGroupWatch {
-    std::string conditionName; ///< 条件の配置物の名前
-    std::string group; ///< 見ている敵グループ
-    bool met = false; ///< 条件が成立しているか
-    bool waitingSpawn = false; ///< まだ出ていない敵がいるか（出現待ちの間は成立しなくて当然）
-    std::vector<WatchedEnemyState> enemies; ///< 出ている敵の様子
-};
-
-/** @brief 壊せる配置物のヒット判定と爆風に必要な読み取り専用の設定値 */
-struct BreakableSettings {
-    Vector3 scale;
-    Vector4 color;
-    float radius;
-    int playerDamage;
-    int enemyDamage;
-    bool isWall; ///< 当たり判定ありで爆風なしの物（壊せる壁）。壊すと敵を巻き込みながら吹き飛ぶ
-    std::string_view name;
-};
-
-/** @brief 壊せる配置物への操作。HPと破壊フラグの格納先は外部へ公開しない */
-class BreakableRef {
-public:
-    /** @brief 配置物が所有する実体と状態に対する非所有の操作を構築する */
-    BreakableRef(const ObjectDesc& desc, const Vector3& position, int& hp, bool& destroyed,
-        engine::graphics::Object3d* object)
-        : desc_(&desc), position_(position), hp_(&hp), destroyed_(&destroyed), object_(object) { }
-    /** @brief 判定と爆風に必要な設定だけを値として返す */
-    BreakableSettings Settings() const {
-        return { desc_->scale, desc_->breakableColor, desc_->breakableRadius,
-            desc_->breakablePlayerDamage, desc_->breakableEnemyDamage,
-            desc_->solid && desc_->breakableRadius <= 0.0f, desc_->name };
-    }
-    /** @brief 親子階層を解決した現在位置を返す */
-    Vector3 GetPosition() const {
-        return position_;
-    }
-    /** @brief 射撃の的を識別する不透明なキーを返す */
-    const void* TargetIdentity() const {
-        return desc_;
-    }
-    /** @brief 外見の色を更新し描画行列へ反映する */
-    void SetColor(const Vector4& color) const;
-    /** @brief 1回の攻撃を受け、HPが尽きたか返す */
-    bool TakeHit() const {
-        return --*hp_ <= 0;
-    }
-    /** @brief 以降の描画と当たり判定から配置物を除く */
-    void Destroy() const {
-        *destroyed_ = true;
-    }
-private:
-    const ObjectDesc* desc_;
-    Vector3 position_;
-    int* hp_;
-    bool* destroyed_;
-    engine::graphics::Object3d* object_;
-};
 
 /**
  * @brief レベルデータの読み書きと配置物の実行および編集UIを統括する
@@ -288,7 +212,6 @@ public:
     /** @brief 配置物の有効/無効を上書きする（activationFlagより優先。レベルJSONには保存しない） @return 名前が見つかればtrue */
     bool SetObjectEnabledByName(const std::string& name, bool enabled);
 
-
     /**
      * @brief solid=trueのオブジェクトのワールドAABB一覧を返す（毎フレーム呼ぶ想定）
      * @return 現在の配置状態から構築したワールドAABB一覧
@@ -369,6 +292,34 @@ public:
     const std::string& GetSky() const {
         return sky_;
     }
+    /** @brief レベルのゲームの型の id（空なら横スクロール） */
+    const std::string& GetGameMode() const {
+        return gameMode_;
+    }
+    /** @brief 道に沿って進む型の道（通る順） */
+    const std::vector<PathPointDesc>& GetPath() const {
+        return path_;
+    }
+    /** @brief エディタのテストプレイ中か */
+    bool IsPlayTestMode() const {
+        return playTestMode_;
+    }
+    /** @brief 編集カメラを指定の位置が画面の中央に来るよう動かす（記録の欄などほかの部品から使う入口） */
+    void FocusEditorCamera(const Vector3& worldPosition) {
+        FocusCameraOn(worldPosition);
+    }
+    /** @brief 今のレベルの常駐のグラフのファイル（空なら無し。ノードエディタが今のレベルのグラフを開くのに使う） */
+    const std::string& GetResidentGraphPath() const {
+        return graphPath_;
+    }
+    /** @brief このグラフが今のレベルでどう使われているかを普通の言葉で返す（使われていなければ空。StageEditorGraphLink.cpp） */
+    std::string DescribeGraphUse(const std::string& path) const;
+    /** @brief このグラフを今のレベルの常駐のグラフにして、動かし直す（元に戻せる） */
+    void UseAsResidentGraph(const std::string& path);
+    /** @brief 今の設定でレベルのグラフを最初から動かし直す（保存したグラフの中身が反映される） */
+    void RestartLevelGraphs();
+    /** @brief プレイヤーの出る位置からテストを始める（ステージエディタを開いていない時は何もしない） */
+    void PlayTestFromSpawn();
 
 private:
     enum class SelKind { kNone,
@@ -455,7 +406,8 @@ private:
     /** @brief 敵の位置の真下にある床の上で、倒れた体を置く高さを返す（床が無ければ空） */
     std::optional<float> FindCorpseFloorY(const Vector3& position, const std::vector<engine::AABB>& solids) const;
     /** @brief solid=trueの配置物のワールドAABB一覧（includeEnemyBodies=falseなら敵の体を除いた地形だけ） */
-    std::vector<engine::AABB> CollectSolidColliders(bool includeEnemyBodies, bool includeGates = true) const;
+    std::vector<engine::AABB> CollectSolidColliders(bool includeEnemyBodies, bool includeGates = true,
+        const ObjectDesc* ignored = nullptr, bool extendGates = true) const;
     /** @brief 敵を倒す等の条件が成立するまで道を塞ぐ扉で、まだ条件が成立していないか */
     static bool IsClosedGate(const ObjectDesc& desc);
     /** @brief 敵を倒す等の条件が成立すると開く扉か（条件成立で消える当たり判定持ちのギミック） */
@@ -542,6 +494,37 @@ private:
     void RenderLevelPanel();
     /** @brief 空の画像を一覧から選ぶ欄（選ぶとすぐ画面の空に映る） */
     void RenderSkyPicker();
+    /** @brief ゲームの型を選ぶ欄と、道の点の一覧（StageEditorGameModePanel.cpp） */
+    void RenderGameModePanel();
+    /** @brief 選んでいる型でよく使う部品を、押すと画面中央に置けるボタンで並べる */
+    void RenderRecommendedParts();
+    /** @brief 中央ビューに道の線と点を描く */
+    void DrawPathOverlay() const;
+    /** @brief ゲームの型に合っていない所を普通の言葉で返す（ValidateLevel から呼ぶ） */
+    std::vector<std::string> CollectGameModeIssues() const;
+    /** @brief ゲームの型に合っていない所を、直し方と一緒に返す */
+    std::vector<GameModeCheck> CollectGameModeChecks() const;
+    /** @brief 型の点検の一覧を、直すボタン付きで描く */
+    void RenderGameModeChecks();
+    /** @brief 点検の1件を直す（元に戻せるよう、直す前に履歴を取る） */
+    void ApplyGameModeFix(const GameModeCheck& check);
+    /** @brief お手本のステージを名前を付けて写し、新しいレベルとして開く（クリアのグラフも一緒に写す） */
+    void RenderLevelTemplates();
+    /** @brief 今の型を写して新しい型を作る・直す欄（StageEditorGameModeMaker.cpp） */
+    void RenderGameModeMaker();
+    /** @brief 部品の棚の部屋のひな形（保存と、押すだけで置くボタン。StageEditorRoomShelf.cpp） */
+    void RenderRoomShelf();
+    /**
+     * @brief お手本のステージから新しいレベルを作って開く
+     * @param templatePath お手本のレベルのファイル
+     * @param name 新しいレベルの名前（半角英数字と _）
+     * @return 作って開けたら true（失敗した理由はステータスに出す）
+     */
+    bool CreateLevelFromTemplate(const std::string& templatePath, const std::string& name);
+    /** @brief クリックした所が道の点の近くなら、その点を掴む（掴んだら true。ほかの選択はしない） */
+    bool BeginPathPointDrag(float mouseX, float mouseY);
+    /** @brief 掴んでいる道の点をマウスに付いて動かし、離したら確定する（掴んでいる間は true） */
+    bool UpdatePathPointDrag();
     /**
      * @brief グラフを Resources/Graphs の一覧から選ぶ欄
      * @param id ImGui の識別名（## で始める）
@@ -692,13 +675,6 @@ private:
     void PlaceEnemyOfType(const EnemyTypeDef& type);
 
     TransformTool transformTool_ = TransformTool::kMove;
-    int activeDragAxis_ = 0; // ハンドルを掴んだドラッグ中の軸（0: 自由 / 1: X / 2: Y / 3: Z）。離すと0に戻る
-    bool rotateDragging_ = false; // 回転ツールのドラッグ中か
-    bool scaleDragging_ = false; // 拡縮ツールのドラッグ中か
-    bool scaleUniform_ = false; // 拡縮ドラッグが全軸同時か
-    bool boxSelecting_ = false; // 何も無い場所からの左ドラッグで範囲選択中か
-    float boxStartX_ = 0.0f;
-    float boxStartY_ = 0.0f;
     SelKind hoverKind_ = SelKind::kNone; // マウス直下の対象（ハイライト表示用）
     int hoverIndex_ = -1;
     bool contextMenuRequested_ = false; // 右クリックの直後、次のRenderでメニューを開く
@@ -723,15 +699,7 @@ private:
 
     // レベルJSONに属さないランタイム実体（Player/Enemy等）への参照RegisterExternalEntity()で登録される
     /** @brief RegisterExternalEntity()で登録された、レベルJSON外のランタイム実体（Player等）への参照1件 */
-    struct ExternalEntityRef {
-        std::string name;
-        IPositionTarget* positionTarget = nullptr;
-        std::function<int()> getVisualPreset;
-        std::function<void(int)> setVisualPreset;
-        std::function<void(const std::string&, const std::string&)> setStaticVisualModel; // (モデルパス, テクスチャパス)
-        std::function<std::string()> getStaticVisualModel;
-        std::function<std::string()> getStaticVisualTexture;
-    };
+    using ExternalEntityRef = stageEditor::ExternalEntityRef;
     std::vector<ExternalEntityRef> externalEntities_;
 
     // トリガーのspawnsWaterSplash成立時にシーン側の演出を呼ぶためのコールバック（SetWaterSplashCallback()で登録）
@@ -745,6 +713,18 @@ private:
     Vector3 playerSpawn_ = { };
     Vector3 enemySpawn_ = { };
     std::string sky_; ///< レベルJSONの空の画像（エディタでは編集せず、保存で消えないよう持っておく）
+    std::string gameMode_; ///< レベルのゲームの型の id（空なら横スクロール）
+    std::vector<PathPointDesc> path_; ///< 道に沿って進む型の道（通る順）
+    int selectedPathPoint_ = -1; ///< 道の一覧で選んでいる点（-1 なら無し）
+    int draggingPathPoint_ = -1; ///< ビューで掴んでいる道の点（-1 なら無し）
+    engine::Input* input_ = nullptr; ///< 最後に Update で受け取った入力（操作の表をキーの名前で出すのに使う）
+    Vector3 pathDragOffset_ = { }; ///< 掴んだ時の、点とマウスの下の地面との差（掴んだ所が飛ばないように）
+    char templateLevelName_[textBufferCapacity::kIdentifier] = "my_stage"; ///< お手本から作るレベルの名前
+    GameModeDesc modeDraft_; ///< 作っている途中の型
+    bool modeDraftOpen_ = false; ///< 型を作る欄で作っている途中か
+    char modeDraftId_[textBufferCapacity::kIdentifier] = { }; ///< 作っている型のファイルの名前
+    char modeDraftName_[textBufferCapacity::kName] = { }; ///< 作っている型の名前
+    char modeDraftDescription_[textBufferCapacity::kParagraph] = { }; ///< 作っている型の説明
     std::string comment_; ///< レベルJSONの説明書き（_comment。同じく保存で消えないよう持っておく）
 
     // レベルに紐付いたノードグラフ（レベルJSONのgraphPath/flagGraphs）。実行はlevelGraphs_が担う
@@ -771,15 +751,8 @@ private:
 
     int nextSerial_ = 0; // 新規オブジェクト/トリガーの名前生成用
 
-    bool viewportDragging_ = false; // 3Dビュー上で選択物をドラッグ移動中か
-
-    UILayout* uiDragLayout_ = nullptr; // ドラッグ中の画面UI位置項目（nullptrならUIを掴んでいない）
-    size_t uiDragIndex_ = 0;
-    float uiDragGrabOffsetX_ = 0.0f; // 掴んだ瞬間の(項目の位置 - マウスの画面座標)
-    float uiDragGrabOffsetY_ = 0.0f;
-
     bool objectsDrawnThisFrame_ = false; // DrawObjects()の二重呼び出し防止用（UpdateObjects()で毎フレームリセット）
-    std::vector<engine::graphics::Object3d*> staticDrawList_; // 今フレーム描く配置物の見た目（毎フレーム詰め直し、確保は使い回す）
+    engine::graphics::Object3dRenderQueue staticDrawList_; // 今フレーム描く配置物の見た目（毎フレーム詰め直して並べ替える、確保は使い回す）
 
     /** @brief 配置物の見た目を描く。数が多ければ何本かに分けて、別々のスレッドでバンドルへ記録する */
     void DrawStaticObjects();
@@ -798,7 +771,6 @@ private:
     /** @brief 今フレーム描く配置物すべてに visit を呼ぶ */
     void VisitDrawableEntries(const std::function<void(ObjectEntry&)>& visit);
 
-
     /**
      * @brief このレベルが自分で立てるフラグ（トリガーのflag、condition_<名前>、pickup_<名前>、broken_<名前>）をfalseへ戻す
      * @note GameFlagsはシーンをまたいで残るため、同じレベルを再度開いた時に前回の進行状態（区画到達・回収済み等）が
@@ -814,24 +786,8 @@ private:
     // ObjectEntryは実体(unique_ptr)を持ちコピーできないため、Save()の保存対象と同じdescだけを控え、
     // 復元時はRegenerateInstances()で実体を作り直す（modelCache_は生きているので再構築は軽い）
     /** @brief 履歴に控える、画面UIの位置項目1件ぶんの座標 */
-    struct UIPositionRecord {
-        UILayout* layout = nullptr;
-        size_t index = 0;
-        float x = 0.0f;
-        float y = 0.0f;
-    };
-    struct LevelSnapshot {
-        std::vector<ObjectDesc> objects;
-        std::vector<TriggerDesc> triggers;
-        std::vector<CheckpointDesc> checkpoints;
-        Vector3 playerSpawn;
-        Vector3 enemySpawn;
-        std::string graphPath;
-        std::string sky;
-        std::string comment;
-        std::vector<FlagGraphBinding> flagGraphs;
-        std::vector<UIPositionRecord> uiPositions;
-    };
+    using UIPositionRecord = stageEditor::UIPositionRecord;
+    using LevelSnapshot = stageEditor::LevelSnapshot;
     /**
      * @brief 現在の配置物・トリガー・チェックポイント・スポーン位置からUndo用スナップショットを構築する
      * @return Undo/Redoスタックへ積む、descのみのコピー
@@ -954,7 +910,7 @@ private:
     /** @brief 指定位置からテストを始め、プレイヤー未登録なら警告を出す */
     void StartPlayTestOrWarn(const Vector3& worldPosition);
 
-    /** @brief スナップ有効時、値をsnapStep_の倍数へ丸める（無効時はそのまま返す） */
+    /** @brief スナップ有効時、値をスナップ間隔の倍数へ丸める（無効時はそのまま返す） */
     float SnapValue(float v) const;
 
     std::vector<ObjectDesc> objectClipboard_;
@@ -966,35 +922,23 @@ private:
     char hierarchySearch_[textBufferCapacity::kIdentifier] = { };
     int hierarchyKindFilter_ = 0; ///< 配置物一覧を種類で絞り込む番号（0 はすべて。表は StageEditorPanels.cpp）
 
-    bool snapEnabled_ = false; // グリッドスナップ（ドラッグ移動・新規配置・複製に効く）
-    float snapStep_ = 1.0f;
+    editor::StageEditorSnap snap_; ///< スナップの設定と計算
 
     /** @brief アセットパレットでクリックした時の動作 */
     enum class PaletteMode { kPlaceNew, kReplaceSelection };
     PaletteMode paletteMode_ = PaletteMode::kPlaceNew;
     /** @brief Resourcesから見つかった素材の表示情報 */
-    struct DiscoveredAsset {
-        std::string label;
-        std::string model;
-        std::string texture;
-    };
+    using DiscoveredAsset = stageEditor::DiscoveredAsset;
     std::vector<DiscoveredAsset> discoveredAssets_;
     bool assetsScanned_ = false; // 素材一覧を作ったか（以後は一覧を更新ボタンでだけ作り直す）
     char paletteSearch_[textBufferCapacity::kName] = {}; // 素材名の検索語
 
     // ── ビューのドラッグ操作（掴んだ後はマウスがビューの外へ出ても続け、どこで離しても確定する）──
     /** @brief ドラッグ開始時の対象1件ぶんの値（移動量・回転量・拡縮量はここからの累積で求める） */
-    struct DragStartTransform {
-        int index = -1;
-        Vector3 world = { };
-        float localZ = 0.0f;
-        Vector3 rotation = { };
-        Vector3 scale = { };
-        bool followsMove = true; // falseなら自分では動かない（親と一緒に動く子、画面座標の文章UI）
-    };
+    using DragStartTransform = stageEditor::DragStartTransform;
     /** @brief 左ボタンのドラッグ（配置物・範囲選択・画面UIの印）の途中か */
     bool IsViewportDragActive() const {
-        return viewportDragging_ || boxSelecting_ || uiDragLayout_ != nullptr;
+        return viewDrag_.viewportDragging || viewDrag_.boxSelecting || viewDrag_.uiDragLayout != nullptr;
     }
     /**
      * @brief ドラッグ中の処理を1フレーム進める（ボタンが離れていれば確定する）
@@ -1035,33 +979,15 @@ private:
     /** @brief 左右のパネルとゲームビューの境目に、幅を変えるつまみを出す */
     void RenderPanelSplitters();
 
-    std::vector<DragStartTransform> dragStarts_; // ドラッグ開始時の値（先頭が主選択）
-    float dragStartMouseX_ = 0.0f;
-    float dragStartMouseY_ = 0.0f;
-    float dragLastMouseX_ = 0.0f; // 最後に分かったマウス位置（ウィンドウ外で座標が取れない時に使う）
-    float dragLastMouseY_ = 0.0f;
-    bool dragThresholdPassed_ = false; // 遊びの距離を超えて実際に動かし始めたか
-    int clickPendingIndex_ = -1; // 選択中の物を押した時の番号。動かさず離したら選択を確定する
-    bool clickPendingAdditive_ = false; // 押した時にCtrlを押していたか（動かさず離したら選択から外す）
-    float rotateAccumRadians_ = 0.0f; // 回転ドラッグの開始からの累積角度
-    float rotateLastAngle_ = 0.0f; // 前フレームの、ハンドル中心から見たマウスの角度
-    bool rotateAngleValid_ = false; // rotateLastAngle_ が有効か
-    bool hoverHandleActive_ = false; // マウスが変形ハンドルの上にあるか
-    int hoverAxis_ = 0; // マウス直下のハンドルの軸（0: 中央 / 1: X / 2: Y / 3: Z）
-    bool hoverNeedsRefresh_ = true; // マウスが止まっていても次のフレームで配置物を調べ直すか
-    UILayout* uiHoverLayout_ = nullptr; // マウス直下の画面UIの印（nullptrなら無し）
-    size_t uiHoverIndex_ = 0;
-    float uiDragStartX_ = 0.0f; // ドラッグ開始時の印の座標
-    float uiDragStartY_ = 0.0f;
+    /** @brief ビューの上でドラッグしている間とマウスを重ねている間だけ使う状態（掴んだ時の値・回転の累積・マウス直下のハンドル） */
+    using ViewDragState = stageEditor::ViewDragState;
+    ViewDragState viewDrag_;
+
     static inline float sLeftPanelWidth = kLeftPanelWidth; // 左の列の幅（シーンをまたいで保つ）
     static inline float sRightPanelWidth = kRightPanelWidth; // 右の列の幅
 
-    float dragRawZ_ = 0.0f; // Shift+ドラッグ(奥行き移動)中のスナップ前のZ累積値
     // クリックした瞬間にオブジェクト原点へ位置が飛ばないよう、掴んだ時の
     // (オブジェクト位置 - マウスの接地位置)のオフセットを保持し、ドラッグ中はこれを保ったまま追従させる
-    float dragGrabOffsetX_ = 0.0f;
-    float dragGrabOffsetY_ = 0.0f;
-    int gizmoAxis_ = 0; // 0は自由移動、1から3はX・Y・Z軸へ移動を制限する
     int parentLinkChildIndex_ = -1; // マウス親子リンクで親のクリックを待っている子
 
     /** @brief 保存前検証を実行し、修正が必要な項目を返す */
@@ -1095,6 +1021,33 @@ private:
     bool showNoCodeEventPanel_ = false;
     bool showGraphPanel_ = false;
     bool showLevelPanel_ = false;
+    /** @brief 選択位置かビュー中央から遊ぶ */
+    void PlayFromHere();
+    /** @brief 素材や設定のドラッグ元を表示する */
+    void RenderPlacementPresets(bool popup);
+    /** @brief 部品をビューへ運ぶ操作を開始する */
+    void PlacementSource(const char* label, const ObjectDesc& desc);
+    /** @brief ゲーム画像に落とした部品を追加する */
+    void AcceptPlacementDrop();
+    /** @brief 配置物を追加して履歴と選択を更新する */
+    void PlacePart(const ObjectDesc& part, const Vector3& position, bool activateOnFlag = false);
+    /** @brief 選択物を真下の床に下ろす */
+    void DropSelectionToFloor();
+    /** @brief 新規配置の設定に合わせて床に乗せる */
+    void SettleNewObject(ObjectDesc& desc) const;
+    /** @brief 部品の組み合わせを保って床に乗せる高さの差を返す */
+    float GroupFloorShift(const std::vector<ObjectDesc>& parts) const;
+    /** @brief 当たり判定から床に乗る中心の高さを求める */
+    float FloorPositionY(const ObjectDesc& desc, const Vector3& world, const std::vector<engine::AABB>& floors) const;
+    /** @brief 設定した角度へ回転を丸める */
+    float SnapRotation(float radians, bool temporary = false) const;
+    static constexpr float kDefaultAngleDegrees = 15.0f; ///< 回転の吸着の既定の刻み（度）
+    float angleStepDegrees_ = kDefaultAngleDegrees; ///< 回転の吸着の刻み（度）
+    Vector3 rotationInput_ = {}; ///< 角度を丸める前の入力値
+    int rotationInputIndex_ = -1; ///< 回転を入力中の配置物
+    bool angleSnap_ = false; ///< 回転を刻みにそろえるか
+    bool autoFloor_ = true; ///< 新しく置く物を床の上に乗せるか
+    ObjectDesc draggedPart_; ///< 棚からビューへ運んでいる最中の部品
     bool showGrid_ = true; // スナップON時にグリッド線を描くか
     int levelFileIndex_ = -1; // レベル切替コンボの選択位置（-1は未選択）
     char newLevelName_[textBufferCapacity::kIdentifier] = "level03";

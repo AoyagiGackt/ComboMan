@@ -1,0 +1,53 @@
+{
+  "_comment": "性格を増やすには一覧に一件加えます。name は表示名、description は一般敵の説明、enemyHpScale・enemyDamageScale・enemySpeedScale は体力・攻撃力・接近速度の倍率、patrolSpeed は巡回する時の毎秒の距離です。ナイトは巡回速度だけを使います。",
+  "personalities": [
+    {
+      "name": "ふつう",
+      "description": "標準の体力、攻撃力、速さです。",
+      "enemyHpScale": 1,
+      "enemyDamageScale": 1,
+      "enemySpeedScale": 1,
+      "patrolSpeed": 1.5
+    },
+    {
+      "name": "強い",
+      "description": "体力と攻撃力が 1.5 倍になります。",
+      "enemyHpScale": 1.5,
+      "enemyDamageScale": 1.5,
+      "enemySpeedScale": 1,
+      "patrolSpeed": 1.8
+    },
+    {
+      "name": "すばやい",
+      "description": "接近速度が 1.6 倍、体力が 0.8 倍になります。",
+      "enemyHpScale": 0.8,
+      "enemyDamageScale": 1,
+      "enemySpeedScale": 1.6,
+      "patrolSpeed": 2.4
+    },
+    {
+      "name": "かたい",
+      "description": "体力が 2 倍、接近速度が 0.7 倍になります。",
+      "enemyHpScale": 2,
+      "enemyDamageScale": 1,
+      "enemySpeedScale": 0.7,
+      "patrolSpeed": 1
+    },
+    {
+      "name": "こわがり",
+      "description": "攻撃力が 0.7 倍、接近速度が 0.6 倍になります。",
+      "enemyHpScale": 1,
+      "enemyDamageScale": 0.7,
+      "enemySpeedScale": 0.6,
+      "patrolSpeed": 0.9
+    },
+    {
+      "name": "しつこい",
+      "description": "体力と接近速度が 1.2 倍になります。",
+      "enemyHpScale": 1.2,
+      "enemyDamageScale": 1,
+      "enemySpeedScale": 1.2,
+      "patrolSpeed": 2
+    }
+  ]
+}

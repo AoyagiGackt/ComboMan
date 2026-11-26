@@ -3,6 +3,7 @@
  * @brief エディタ内のゲーム小窓に表示するプレビュー用テクスチャの準備・取り込み・解放の実装
  */
 #include "EditorGamePreview.h"
+#include "EngineContext.h"
 #include "DirectXCommon.h"
 #include "EngineAssert.h"
 #include "SrvManager.h"
@@ -24,14 +25,14 @@ void EditorGamePreview::Prepare(DirectXCommon& graphics, StageEditor& editor) {
             &desc, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, nullptr, IID_PPV_ARGS(&texture_));
         ENGINE_ASSERT(SUCCEEDED(result));
         if (!allocated_) {
-            srv_ = SrvManager::GetInstance()->Allocate();
+            srv_ = engine::Services().srvManager->Allocate();
             allocated_ = true;
         }
-        SrvManager::GetInstance()->CreateSrvForTexture2D(srv_, texture_.Get(),
+        engine::Services().srvManager->CreateSrvForTexture2D(srv_, texture_.Get(),
             graphics.GetBackBufferFormat(), 1);
     }
     const auto view = graphics.GetCenteredClientViewport();
-    editor.SetGamePreview(SrvManager::GetInstance()->GetGPUDescriptorHandle(srv_).ptr,
+    editor.SetGamePreview(engine::Services().srvManager->GetGPUDescriptorHandle(srv_).ptr,
         view.TopLeftX / desc.Width, view.TopLeftY / desc.Height,
         (view.TopLeftX + view.Width) / desc.Width, (view.TopLeftY + view.Height) / desc.Height);
 #endif
@@ -66,7 +67,7 @@ void EditorGamePreview::Finalize() {
 #ifdef USE_IMGUI
     texture_.Reset();
     if (allocated_) {
-        SrvManager::GetInstance()->Free(srv_);
+        engine::Services().srvManager->Free(srv_);
         allocated_ = false;
     }
 #endif

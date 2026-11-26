@@ -1,9 +1,9 @@
 /**
- * @file FontRenderer.cpp
+ * @file BitmapFontRenderer.cpp
  * @brief ビットマップフォントアトラス生成とASCII/日本語文字列描画（FontRenderer）の実装
  */
-#include "FontRenderer.h"
-#include "GameConstants.h"
+#include "BitmapFontRenderer.h"
+#include "EngineConstants.h"
 #include "TextBufferCapacity.h"
 #include "Logger.h"
 #include "StringUtility.h"
@@ -17,37 +17,13 @@
 #include <unordered_set>
 #include <vector>
 #include <windows.h>
-using namespace engine::graphics;
 
-namespace engine::game {
+namespace engine::graphics {
 static constexpr const char* kAtlasKey = "__fontAtlas__";
 static constexpr const char* kAtlasKeyRegular = "__fontAtlasRegular__";
 static constexpr const char* kJpAtlasKey = "__fontAtlasJp__";
 static constexpr const char* kJpAtlasKeyRegular = "__fontAtlasJpRegular__";
 
-// ひらがな 0x3041-0x3096 (86文字), カタカナ 0x30A0-0x30FF (96文字) は範囲カバー
-// Shift_JIS範囲（後述）に含まれない文字でゲームUIに使うものを追加（範囲内の文字は重複しても無視される）
-static const wchar_t kJpExtra[] = L"覚醒中発動鬼神銃士奇術師守護者射撃段斬★" // 既存
-                                  L"格闘連玉" // 武器UI
-                                  L"武器操作説明" // TrainingScene
-                                  L"戦強敵休憩" // マップノード
-                                  L"倒獲得報酬高多選取永続効果回復最終決全力挑択定" // マップ説明
-                                  L"化延長速促進疾走跳躍乱舞維持" // スキル名
-                                  L"距離倍大数階増加弾度蓄積移減衰" // スキル説明
-                                  L"所済次開始" // タイトル・結果表示
-                                  L"切替散" // TrainingScene追加
-                                  L"満打上空手戻重騎死狂突掬剛叩落剣下刈魂斧" // 武器コマンド・スタイル名・マップ説明の不足分
-                                  L"締踏込貫通" // 銃コンボのコマンド説明
-                                  L"了交体備入前区口合固壁壊変外奪完左技接換攻有杯棄槍画直瞬破練装解訓赤迅間障青"
-                                  L"寄押" // ロックオンUI（最寄り・長押し）
-                                  L"収避無身可割価待構評吸" // 回避/無敵・武器吸収・マップ評価UIの不足分
-                                  L"空中追撃段別推奨順番" // コンボルートガイド
-                                  L"擲" // レベル2の案内文（JIS第二水準のため範囲外）
-                                  L"威混" // 武器の疲労警告
-                                  // 以下はShift_JIS範囲にも含まれるが、範囲の一括追加を外しても画面の文章が欠けないよう明示しておく
-                                  L"→○●　、。々（）：？" // HUD・マップ・案内文の記号
-                                  L"一予二先光内円再出制削告呼囲型基場実寸屋崩帰常広床役径後必快扉投抜探揺文時来桁案機正殺気波消渡渦準"
-                                  L"溜滅滞演灰特牽生目着短秒程立第箱範約紙索緑能色荒見読起超足車転軽輪近退逆遅違遠還部量面駐"; // 武器説明・レベル案内文・グラフの文章
 static constexpr uint32_t kHiraganaStart = 0x3041;
 static constexpr uint32_t kHiraganaEnd = 0x3096;
 static constexpr uint32_t kKatakanaStart = 0x30A0;
@@ -69,7 +45,6 @@ static constexpr int kSjisTrailLast = 0xFC;
 static constexpr int kSjisTrailInvalid = 0x7F;
 static constexpr uint32_t kAsciiLimit = 128;
 static constexpr int kLineGap = 4; // 改行時に行の間へ空ける隙間（文字の高さに足すpx、スケール前）
-static constexpr const char* kPanelTexture = "Resources/white.png";
 // アトラスは文字をすき間なく並べているので、拡大して線形補間で読むと隣のマスの画素が端に混ざって文字どうしが線でつながる。
 // マスの内側を半画素ずつ削って読み、隣の文字が混ざらないようにする
 static constexpr float kGlyphUvInset = 0.5f;
@@ -149,7 +124,7 @@ std::vector<uint8_t> FinishGdiCanvas(GdiCanvas& canvas, int width, int height) {
     return rgba;
 }
 
-/** @brief JPアトラスに焼く文字の並び（かな→Shift_JIS範囲→kJpExtraの残り）と文字→グリフ番号の対応表 */
+/** @brief JPアトラスに焼く文字の並び（かな→Shift_JIS範囲→追加記号）と文字→グリフ番号の対応表 */
 struct JpGlyphTable {
     std::vector<wchar_t> glyphs;
     std::unordered_map<wchar_t, int> indexOf;
@@ -173,7 +148,7 @@ void ReportMissingGlyph(wchar_t ch, const std::wstring& text) {
     char code[textBufferCapacity::kCodepoint];
     std::snprintf(code, sizeof(code), "U+%04X", static_cast<unsigned>(ch));
     Logger::LogWarning(std::string("[FontRenderer] フォントに無い文字を描画できませんでした ") + code
-        + " : " + StringUtility::ConvertString(text) + "  (FontRenderer.cppのkJpExtraへ追加してください)");
+        + " : " + StringUtility::ConvertString(text));
 }
 
 /** @brief 1フレームの文字数上限に達したことを、1回だけログへ出す */
@@ -184,7 +159,7 @@ void ReportGlyphPoolFull(int limit) {
     }
     sReported = true;
     Logger::LogWarning("[FontRenderer] 1フレームの文字数上限(" + std::to_string(limit)
-        + ")に達したため、以降の文字を描画できませんでした。FontRenderer.hのkMaxChars/kMaxRegularCharsを上げてください");
+        + ")に達したため、以降の文字を描画できませんでした。BitmapFontRenderer.hのkMaxChars/kMaxRegularCharsを上げてください");
 }
 
 /** @brief 日本語のアトラスに焼く文字の表を返す（初回に作る） */
@@ -220,11 +195,7 @@ const JpGlyphTable& GetJpGlyphTable() {
                 }
             }
         }
-        // Shift_JIS の範囲外でゲームに使う文字と、見た目の似た記号を足す
-        // どちらの表も終端の 0 まで読む
-        for (int i = 0; kJpExtra[i]; ++i) {
-            t.Add(kJpExtra[i]);
-        }
+        // 変換で得られない記号も登録する
         for (int i = 0; kLookalikeSymbols[i]; ++i) {
             t.Add(kLookalikeSymbols[i]);
         }
@@ -277,7 +248,7 @@ void FontRenderer::BuildAtlas(bool bold) {
     // 白い文字の輝度をアルファにしたテクスチャとして登録する
     const std::vector<uint8_t> rgba = FinishGdiCanvas(canvas, kAtlasPixelW, kAtlasPixelH);
     TextureManager::GetInstance()->LoadFromRawRGBA8(atlasKey, rgba.data(), kAtlasPixelW, kAtlasPixelH);
-    // FlushUploads は SceneManager がシーン初期化後に一括で行う
+    // テクスチャの転送は呼び出し側でまとめて行う
 }
 
 // JP アトラス ひらがな・カタカナ・指定漢字を 16x16 のマス（絵は kAtlasPixelScale 倍の細かさ）で焼く
@@ -336,11 +307,12 @@ void FontRenderer::BuildJpAtlas(bool bold) {
     // 白い文字の輝度をアルファにしたテクスチャとして登録する
     const std::vector<uint8_t> rgba = FinishGdiCanvas(canvas, atlasW, atlasH);
     TextureManager::GetInstance()->LoadFromRawRGBA8(atlasKey, rgba.data(), atlasW, atlasH);
-    // FlushUploads は SceneManager がシーン初期化後に一括で行う
+    // テクスチャの転送は呼び出し側でまとめて行う
 }
 
 /** @brief ASCII/JP各2種(Bold/Regular)のアトラスを構築（未生成なら）し、描画用スプライトプールを確保する */
-void FontRenderer::Initialize(SpriteCommon* spriteCommon) {
+void FontRenderer::Initialize(SpriteCommon* spriteCommon, const std::string& panelTexture) {
+    panelTexture_ = panelTexture;
     spriteCommon_ = spriteCommon;
     BuildAtlas(true);
     BuildAtlas(false);
@@ -412,7 +384,7 @@ void FontRenderer::DrawStringW(const std::wstring& text, float x, float y,
 /** @brief DrawStringW と同じ文字を、画面の左右中央に揃えて描画予約する */
 void FontRenderer::DrawStringCenteredW(const std::wstring& text, float y, float scale, const Vector4& color) {
     const Vector2 size = MeasureStringW(text, scale);
-    DrawStringW(text, gameConstants::kScreenCenterX - size.x * 0.5f, y, scale, color);
+    DrawStringW(text, engineConstants::kScreenCenterX - size.x * 0.5f, y, scale, color);
 }
 
 /** @brief 文字の下に敷く単色の板を積む（Draw()で文字より先に描く） */
@@ -458,7 +430,7 @@ void FontRenderer::Reset() {
 void FontRenderer::Draw() {
     // ── 下敷きの板（文字より先に描いて後ろへ回す） ───────────────────────
     for (const auto& panel : panelCmds_) {
-        auto& s = AcquireGlyphSprite(panelSprites_, panelSpriteIdx_, kPanelTexture);
+        auto& s = AcquireGlyphSprite(panelSprites_, panelSpriteIdx_, panelTexture_.c_str());
         s.SetPosition({ panel.x, panel.y });
         s.SetSize({ panel.width, panel.height });
         s.SetColor(panel.color);
@@ -548,4 +520,4 @@ void FontRenderer::Draw() {
     }
 }
 
-} // namespace engine::game
+} // namespace engine::graphics

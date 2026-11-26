@@ -7,6 +7,8 @@
  */
 #pragma once
 #include "BlendMode.h"
+#include "DirectXCommon.h"
+#include "PipelineCache.h"
 #include "EngineAssert.h"
 #include <algorithm>
 #include <array>
@@ -17,7 +19,6 @@
 #include <wrl.h>
 #include <dxcapi.h>
 
-namespace engine { class DirectXCommon; }
 namespace engine::graphics { class SrvManager; class Object3dCommon; class ShadowManager; }
 
 namespace engine::graphics::pipelineHelper {
@@ -87,6 +88,7 @@ inline constexpr UINT kInstances = 0;
 inline constexpr UINT kTexture = 1;
 inline constexpr UINT kSoftConstants = 2; ///< ソフトパーティクルの定数（ピクセルシェーダーの b0）
 inline constexpr UINT kSceneDepth = 3; ///< 写し取った深度（ピクセルシェーダーの t2）
+inline constexpr UINT kDrawList = 4; ///< 生きている粒の番号の一覧（頂点シェーダーの t3）
 }
 
 /** @brief GPU パーティクルの計算用シェーダーのルートの並び（ParticleManagerPipeline.cpp で作る順と同じ） */
@@ -114,7 +116,7 @@ inline constexpr UINT kParticles = 1;
 inline constexpr UINT kFreeList = 2;
 inline constexpr UINT kCounter = 3;
 }
-// ParticleUpdate.CS: b0 定数, b1 出し直し, u0 粒, u1 描画用, u2 空き一覧, u3 空きの数, b2 場
+// ParticleUpdate.CS: b0 定数, b1 出し直し, u0 粒, u1 描画用, u2 空き一覧, u3 空きの数, b2 場, u4 生きている粒の一覧
 namespace update {
 inline constexpr UINT kConstants = 0;
 inline constexpr UINT kLoop = 1;
@@ -123,6 +125,13 @@ inline constexpr UINT kInstances = 3;
 inline constexpr UINT kFreeList = 4;
 inline constexpr UINT kCounter = 5;
 inline constexpr UINT kFields = 6;
+inline constexpr UINT kDrawList = 7;
+}
+// ParticleBuildArgs.CS: b0 定数, u3 空きの数と生きている数, u5 間接描画の引数
+namespace buildArgs {
+inline constexpr UINT kConstants = 0;
+inline constexpr UINT kCounter = 1;
+inline constexpr UINT kDrawArgs = 2;
 }
 }
 
@@ -156,6 +165,43 @@ inline constexpr D3D12_INPUT_ELEMENT_DESC kTangentElement = { "TANGENT", 0, DXGI
 
 /** @brief 3D標準頂点レイアウト（POSITION / TEXCOORD / NORMAL / TANGENT） */
 inline constexpr D3D12_INPUT_ELEMENT_DESC kStandardInputLayout[] = { kPositionElement, kTexcoordElement, kNormalElement, kTangentElement };
+
+/** @brief まとめ描きで、1体ごとの変換行列を渡す頂点バッファの番号（1本目はモデルの頂点） */
+inline constexpr UINT kInstanceInputSlot = 1;
+
+/**
+ * @brief まとめ描きで1体ごとに進む、行列の1行（float4）の入力要素を作る
+ * @param semanticName シェーダーの意味の名前（INSTANCE_WVP など）
+ * @param row 行の番号（意味の番号になる）
+ */
+constexpr D3D12_INPUT_ELEMENT_DESC MakeInstanceRowElement(const char* semanticName, UINT row) {
+    return { semanticName, row, DXGI_FORMAT_R32G32B32A32_FLOAT, kInstanceInputSlot, D3D12_APPEND_ALIGNED_ELEMENT,
+        D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1 };
+}
+
+/**
+ * @brief まとめ描き用の頂点レイアウト（標準の4つ＋1体ごとの行列4つ。Object3dInstancedVS.hlsl と合わせる）
+ * @note 行列の並びは Object3d の変換行列（wvp・world・worldInverseTranspose・lightVP）と同じ
+ */
+inline constexpr D3D12_INPUT_ELEMENT_DESC kInstancedInputLayout[] = {
+    kPositionElement, kTexcoordElement, kNormalElement, kTangentElement,
+    MakeInstanceRowElement("INSTANCE_WVP", 0),
+    MakeInstanceRowElement("INSTANCE_WVP", 1),
+    MakeInstanceRowElement("INSTANCE_WVP", 2),
+    MakeInstanceRowElement("INSTANCE_WVP", 3),
+    MakeInstanceRowElement("INSTANCE_WORLD", 0),
+    MakeInstanceRowElement("INSTANCE_WORLD", 1),
+    MakeInstanceRowElement("INSTANCE_WORLD", 2),
+    MakeInstanceRowElement("INSTANCE_WORLD", 3),
+    MakeInstanceRowElement("INSTANCE_WIT", 0),
+    MakeInstanceRowElement("INSTANCE_WIT", 1),
+    MakeInstanceRowElement("INSTANCE_WIT", 2),
+    MakeInstanceRowElement("INSTANCE_WIT", 3),
+    MakeInstanceRowElement("INSTANCE_LIGHT", 0),
+    MakeInstanceRowElement("INSTANCE_LIGHT", 1),
+    MakeInstanceRowElement("INSTANCE_LIGHT", 2),
+    MakeInstanceRowElement("INSTANCE_LIGHT", 3),
+};
 
 /** @brief 接線を持たないエフェクト用メッシュ・パーティクルの頂点レイアウト（POSITION / TEXCOORD / NORMAL） */
 inline constexpr D3D12_INPUT_ELEMENT_DESC kEffectMeshInputLayout[] = { kPositionElement, kTexcoordElement, kNormalElement };
@@ -209,6 +255,11 @@ struct RenderTargetFormats {
     DXGI_FORMAT resource; ///< テクスチャ本体（TYPELESS にすると RTV と SRV を SRGB で共有できる）
     DXGI_FORMAT rtv; ///< 描き込む時の形式
     DXGI_FORMAT srv; ///< シェーダーから読む時の形式
+};
+
+/** @brief シーンを描き込むオフスクリーン（ポストエフェクトの描き込み先など）の形式。描画先の PSO と同じシーンの色バッファの形式にする */
+inline constexpr RenderTargetFormats kSceneColorTargetFormats = {
+    DirectXCommon::kSceneColorFormat, DirectXCommon::kSceneColorFormat, DirectXCommon::kSceneColorFormat
 };
 
 /** @brief 作った描画先テクスチャとビューの置き場所 */
@@ -275,7 +326,7 @@ D3D12_RENDER_TARGET_BLEND_DESC MakeBlendDesc(BlendMode mode);
 
 /**
  * @brief 3D描画の標準PSO設定を埋めたひな形を作る
- * @note カリングなし・深度書き込みあり(LESS_EQUAL/D24S8)・SRGBレンダーターゲット1枚・三角形リスト。
+ * @note カリングなし・深度書き込みあり(LESS_EQUAL/D24S8)・シーンの色バッファ（浮動小数点）のレンダーターゲット1枚・三角形リスト。
  * VS / PS / RootSignature / InputLayout / BlendState は呼び出し側で設定する
  */
 D3D12_GRAPHICS_PIPELINE_STATE_DESC MakeDefault3dPsoDesc();

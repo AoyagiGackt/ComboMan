@@ -5,6 +5,7 @@
  *       連続ヒットで盛る度合いなどの手触りは combat_tuning.json が持つ
  */
 #include "GamePlayScene.h"
+#include "StageEditorPlaytest.h"
 #include "GameSounds.h"
 #include "AudioBridge.h"
 #include "CombatTuning.h"
@@ -85,9 +86,8 @@ void GamePlayScene::EmitEnemyHitEffect(const Vector3& enemyPos, const Vector4& c
     const auto& visuals = HitEffectLibrary::GetInstance()->SceneParticles();
     // 当て続けるほど盛る（途切れずに当てた手応えを命中演出の量で返す）
     const CombatTuningData& tune = CombatTune();
-    ++hitEscalationCount_;
-    hitEscalationTimer_ = tune.hitEscalationKeepSeconds;
-    const float escalation = HitEscalationRatio();
+    hitEscalation_.RegisterHit();
+    const float escalation = hitEscalation_.Ratio();
     strength *= 1.0f + tune.hitEscalationStrengthGain * escalation;
     extraBurstCount += static_cast<int>(static_cast<float>(extraBurstCount) * tune.hitEscalationExtraBurstGain * escalation);
     const int extraSparks = static_cast<int>(static_cast<float>(tune.hitEscalationExtraSparks) * escalation);
@@ -121,12 +121,6 @@ void GamePlayScene::EmitEnemyHitEffect(const Vector3& enemyPos, const Vector4& c
     }
 }
 
-/** @brief 連続ヒット数に応じた命中演出の盛り度合い（0.0=初撃〜1.0=上限） */
-float GamePlayScene::HitEscalationRatio() const {
-    const int hits = (std::max)(hitEscalationCount_ - 1, 0);
-    return (std::min)(static_cast<float>(hits) / static_cast<float>((std::max)(CombatTune().hitEscalationMaxHits, 1)), 1.0f);
-}
-
 /** @brief 属性名ごとの追加命中演出を出す（近接・固有技・銃で共通） */
 void GamePlayScene::EmitElementalHitEffect(const WeaponData& weapon, const Vector3& enemyPos, int comboStep) {
     EmitElementalHitEffect(weapon.element, ColorFromArray(weapon.effectColor), enemyPos,
@@ -135,7 +129,7 @@ void GamePlayScene::EmitElementalHitEffect(const WeaponData& weapon, const Vecto
 
 /** @brief 属性名ごとの追加命中演出を出す（近接・固有技・銃で共通） */
 void GamePlayScene::EmitElementalHitEffect(const std::string& element, const Vector4& color, const Vector3& enemyPos, float scale) {
-    const float stepScale = scale * (1.0f + CombatTune().elementEscalationScaleGain * HitEscalationRatio());
+    const float stepScale = scale * (1.0f + CombatTune().elementEscalationScaleGain * hitEscalation_.Ratio());
     if (const IElementEffect* effect = IElementEffect::Find(element)) {
         effect->EmitHit(ElementContext(), enemyPos, color, stepScale);
     }
@@ -511,6 +505,9 @@ void GamePlayScene::UpdateBossSlamAttack(float dt) {
     if (dx * dx + dy * dy <= slamRadius * slamRadius && !TryJustDodge(bossSlamTargetPos_) && !player_->IsInvincible()) {
         RunData::GetInstance()->TakeDamage(EnemyTuning::GetInstance()->BossSlam().damage);
         player_->OnHit();
+#ifdef USE_IMGUI
+        stagePlaytest::Hit(GetStageEditor(), player_->GetPosition());
+#endif
         fx.Impact("boss_slam");
     }
 

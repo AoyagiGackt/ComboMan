@@ -82,6 +82,9 @@ bool GamePlayScene::TryStartBossExecution() {
     services.comboFeel = &comboFeel_;
     // ロックオンでカメラが片寄らないように外してから映す
     lockedEnemy_ = nullptr;
+    // とどめの演出中に空中に残らないよう、飛行中の斧の投擲を終える。
+    thrownWeapons_.Clear();
+    player_->ClearWeaponThrow();
     bossExecution_.Start(setup, services);
     // 壁際で倒した時に演出がずらしたボスの位置へ、ボスの体も合わせる
     GetStageEditor().PlaceEnemyAt(enemy_, bossExecution_.GetBossPosition());

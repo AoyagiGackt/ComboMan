@@ -4,6 +4,7 @@
     "player_params.json": "プレイヤー",
     "combat_tuning.json": "戦闘",
     "enemy_params.json": "敵",
+    "enemy_personalities.json": "敵の性格",
     "weapons.json": "武器",
     "game_rules.json": "ゲームのルール",
     "style_meter.json": "スタイルランク",
@@ -580,7 +581,7 @@
     },
     "fusionDurability": {
       "name": "武器の合体の耐久",
-      "help": "近接・固有技を当てるたびに1減り、0になると合体した武器ごと砕ける",
+      "help": "近接・固有技を当てるたびに1減る。0になると武器が砕け、最後の1本なら元の武器が残る",
       "type": "int"
     },
     "fusionDamageMult": {

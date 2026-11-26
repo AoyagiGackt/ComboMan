@@ -6,18 +6,14 @@
  */
 #pragma once
 #include "GraphTypes.h"
+#include "NodeTypeRegistry.h"
 #include <functional>
-#include <map>
-#include <optional>
-#include <string>
-#include <vector>
+
 namespace engine::game {
-
 class GraphRuntime;
-
-/** @brief ノード実行の結果次に進めるか（Continue）、フレームをまたいで待つか（Suspend） */
-enum class NodeResult { kContinue,
-    kSuspend };
+using scripting::NodeParamSpec;
+using scripting::NodeResult;
+using scripting::NodeTypeSpec;
 
 /**
  * @brief 1ノード分の実行ロジック
@@ -29,71 +25,22 @@ enum class NodeResult { kContinue,
  */
 using NodeExecuteFn = std::function<NodeResult(GraphRuntime& rt, const GraphNode& node, std::string& outNextId)>;
 
-/** @brief パラメータ1個ぶんのピン情報（データ配線の型チェック・エディタでのピン色分けに使う） */
-struct NodeParamSpec {
-    std::string key;
-    GraphValueType type = GraphValueType::kAny;
-    std::optional<GraphValue> defaultValue; // ノード追加時の初期値（省略時は型ごとの既定値）
-
-    /** @brief エディタでノードを追加した時に入れる初期値を返す */
-    GraphValue InitialValue() const;
-};
-
-/** @brief ノード種別1個ぶんのピン情報 */
-struct NodeTypeSpec {
-    std::vector<NodeParamSpec> params; // 入力データピン（パラメータ）の並び
-    bool hasOutput = false; // 出力データピンを持つか
-    GraphValueType outputType = GraphValueType::kAny; // 出力データピンの型
-    std::string description; // 何ができるかの一言説明（ノード追加メニューのツールチップに使う）
-    std::string category; // ノード追加メニューでのグループ分け（例  "よく使う", "敵"）空ならその他扱い
-    bool branches = false; // trueなら実行出力が真/偽の2本（nextTrue/nextFalse）、falseなら1本（next）
-    std::string openPathParam; // 空でなければ、このパラメータが指すグラフをエディタで開くボタンを出す
-};
-
-/**
- * @brief ノード種別名とその実行ロジック・ピン情報を登録・検索するレジストリ
- * @details 組み込みノードはコンストラクタでRegisterBuiltins()により登録され、
- * グラフJSON側は登録済みのtype名を書くだけで対応するノードを使えるようになる
- */
-class NodeRegistry {
+/** @brief ゲーム用の実行関数を登録する共有のノード表 */
+class NodeRegistry : public scripting::NodeRegistry<NodeExecuteFn> {
 public:
-    /**
-     * @brief 唯一のNodeRegistryインスタンスを取得する（未生成なら生成し、組み込みノードを登録する）
-     * @return NodeRegistryのインスタンス
-     */
+    /** @brief ゲームで共有する登録表を取得する */
     static NodeRegistry* GetInstance();
 
-    /** @brief 新しいノード種別を登録する（同名で上書きも可） */
-    void Register(const std::string& type, NodeExecuteFn fn);
-
-    /** @brief ノード種別のピン情報を登録する（データ配線を使わないノードは省略可） */
-    void RegisterSpec(const std::string& type, NodeTypeSpec spec);
-
-    /** @brief 型名から実行ロジックを引く登録が無ければnullptr */
-    const NodeExecuteFn* Find(const std::string& type) const;
-
-    /** @brief 型名からピン情報を引く登録が無ければnullptr（エディタはAny扱いにする） */
-    const NodeTypeSpec* FindSpec(const std::string& type) const;
-    /** @brief 実行出力が真/偽の2本に分かれるノード種別か（未登録の種別はfalse） */
-    bool IsBranchType(const std::string& type) const {
-        const NodeTypeSpec* spec = FindSpec(type);
-        return spec && spec->branches;
-    }
-
-    /** @brief 登録済みの型名一覧を返す（GraphEditorのノード追加メニュー用） */
-    std::vector<std::string> GetRegisteredTypes() const;
-
 private:
-    NodeRegistry(); // 組み込みノード（SetVariable/If/Wait/EmitEvent等）をここで登録する
+    /** @brief ゲームのノードの定義と実行関数を登録する（GetInstance が初めて呼ばれた時に1回だけ呼ぶ） */
+    void RegisterBuiltins();
+    NodeRegistry() = default;
     NodeRegistry(const NodeRegistry&) = delete;
     NodeRegistry& operator=(const NodeRegistry&) = delete;
-
-    void RegisterBuiltins();
-    /** @brief 進行の流れ・演出の追加・プレイヤーの状態を扱うノードを登録する（定義は NodeRegistryProgressNodes.cpp にある） */
+    /** @brief 進行と演出を扱うノードを登録する */
     void RegisterProgressNodes();
-
-    std::map<std::string, NodeExecuteFn> executors_;
-    std::map<std::string, NodeTypeSpec> specs_;
+    /** @brief 勝ち負けの条件を作るノードを登録する（NodeRegistryRuleNodes.cpp） */
+    void RegisterRuleNodes();
 };
 
 } // namespace engine::game

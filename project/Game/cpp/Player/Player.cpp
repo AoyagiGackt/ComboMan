@@ -3,10 +3,14 @@
  * @brief プレイヤー（Player）の初期化と1フレームの更新の実装
  */
 #include "Player.h"
+#include "EngineContext.h"
+#include "GameActions.h"
+#include "TestCoverage.h"
 #include "GroundSupport.h"
 #include "CharacterVisuals.h"
 #include "Easing.h"
 #include "GameConstants.h"
+#include "GameRules.h"
 #include "GravityBody.h"
 #include "Input.h"
 #include "ModelCommon.h"
@@ -16,6 +20,8 @@
 #include "PlayerTuning.h"
 #include "Weapon.h"
 #include "WeaponManager.h"
+#include "ThrownWeaponPool.h"
+#include "WeaponFinisherTuning.h"
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -37,6 +43,52 @@ const PlayerTuning& Tuning() {
 
 /** @brief 描画基盤・アニメーション・手持ち武器とプレイヤー状態を初期化する */
 void Player::Initialize(ModelCommon* modelCommon) {
+    weaponThrow_ = {};
+    // 利用できる攻撃の段を登録する。
+    if (testCoverage::IsEnabled()) {
+        // 操作の種類を登録する
+        for (const char* action : { "dodge", "just_dodge", "warp", "awaken", "rampage", "finisher", "steal", "ally" }) {
+            testCoverage::Declare("player_action", action);
+        }
+        const auto declareMelee = [](const MeleeComboSet& set) {
+            for (int i = 0; i < set.ground.count; ++i) {
+                testCoverage::Declare("melee_step", set.ground[i].id);
+            }
+            for (int i = 0; i < set.air.count; ++i) {
+                testCoverage::Declare("melee_step", set.air[i].id);
+            }
+            if (set.launcher != nullptr) {
+                testCoverage::Declare("melee_step", set.launcher->id);
+            }
+        };
+        // 本編で手に入る武器（武器の表に読み込んだ種類）の段だけを、試せる物として数える
+        for (const auto& weapon : WeaponManager::GetInstance()->GetList()) {
+            declareMelee(GetMeleeComboSet(weapon.type));
+            if (const auto* boss = GetBossMeleeComboSet(weapon.type)) {
+                declareMelee(*boss);
+            }
+        }
+        // 武器と固有技は、武器の表にある種類の全部を試せる物として数える
+        for (const auto& weapon : WeaponManager::GetInstance()->GetList()) {
+            testCoverage::Declare("weapon", WeaponTypeName(weapon.type));
+            testCoverage::Declare("weapon_skill", WeaponTypeName(weapon.type));
+        }
+        // 銃の持ち替えを切っている時は最初の銃しか使わないので、その銃と段だけを試せる物として数える
+        const auto declareGun = [](GunType gun) {
+            testCoverage::Declare("gun", GunTypeName(gun));
+            const auto& set = GetGunComboSet(gun);
+            for (int step = 0; step < set.count; ++step) {
+                testCoverage::Declare("gun_shot", set[step].id);
+            }
+        };
+        if (GameRules::GetInstance()->Get().gunSwitchEnabled) {
+            for (size_t i = 0; i < kGunTypeCount; ++i) {
+                declareGun(static_cast<GunType>(i));
+            }
+        } else {
+            declareGun(WeaponManager::GetInstance()->GetRanged().type);
+        }
+    }
     modelCommon_ = modelCommon;
 
     // スキンメッシュ共通設定（両フォームのリグで共有）
@@ -45,11 +97,11 @@ void Player::Initialize(ModelCommon* modelCommon) {
     // 見た目リグの共通セットアップ（静的モデル + スキンモデル + アニメーション一式）
     auto initRig = [&](CharacterRig& rig, const RigVisualDef& def) {
         // 残像・分身演出用の静的モデル（ボーンなし、ボーン付きモデルと同じ見た目）
-        rig.staticModel = ModelManager::GetInstance()->GetOrLoad(modelCommon, def.staticModelPath, def.texture);
+        rig.staticModel = engine::Services().models->GetOrLoad(modelCommon, def.staticModelPath, def.texture);
 
         // 本体（ボーンアニメーション付き）
         std::string modelPath = std::string(def.dir) + "/" + def.file;
-        rig.skinnedModel = ModelManager::GetInstance()->GetOrLoadSkinned(modelCommon->GetDxCommon(), modelPath, def.texture);
+        rig.skinnedModel = engine::Services().models->GetOrLoadSkinned(modelCommon->GetDxCommon(), modelPath, def.texture);
 
         rig.modelScale = def.scale;
         rig.modelOffsetY = def.offsetY;
@@ -96,38 +148,8 @@ void Player::Initialize(ModelCommon* modelCommon) {
 
     afterImageRenderer_.Initialize(modelCommon, rig_->staticModel, rig_->modelScale);
 
-    // 手持ち武器の共通セットアップ（読み込み + リムライト設定）
-    auto initHeldWeapon = [&](Model*& model, std::unique_ptr<Object3d>& object,
-                              const char* modelPath, const char* texturePath) {
-        model = ModelManager::GetInstance()->GetOrLoad(modelCommon, modelPath, texturePath);
-        object = std::make_unique<Object3d>();
-        object->Initialize(modelCommon);
-        object->SetModel(model);
-        object->SetEnableLighting(true);
-        object->SetRimColor(kRimColor);
-        object->SetRimPower(kRimPower);
-        object->SetRimIntensity(kRimIntensity);
-        object->SetEnableRim(true);
-    };
-
-    /** @brief 武器表の握り姿勢と描画実体を対応するスロットへ組み立て、所有権を移す */
-    auto initializeSlots = [&](auto& slots, const auto& assets) {
-        using Slot = typename std::decay_t<decltype(slots)>::value_type;
-        slots.clear();
-        for (const auto& asset : assets) {
-            Slot slot;
-            slot.type = asset.type;
-            slot.gripScale = asset.gripScale;
-            slot.gripRotate = asset.gripRotate;
-            slot.gripTranslate = asset.gripTranslate;
-            initHeldWeapon(slot.model, slot.object, asset.modelPath, asset.texturePath);
-            slots.push_back(std::move(slot));
-        }
-    };
-    // 右手の近接武器と、左手の銃を同じ手順で準備する。表示対象の選択は各更新処理が行う。
-    initializeSlots(heldWeapons_, kHeldWeaponVisuals);
-    initializeSlots(fusedPartnerWeapons_, kHeldWeaponVisuals);
-    initializeSlots(guns_, kGunVisuals);
+    // 右手の近接武器・合体の素材・左手の銃を用意する（表示する物の選択は毎フレームの付け直しが行う）
+    weaponVisuals_.Initialize(modelCommon, kRimColor, kRimPower, kRimIntensity);
 }
 
 /** @brief 武器奪取の刺突モーションを頭から再生する（外部トリガー用、既存の斬撃を流用） */
@@ -140,6 +162,62 @@ void Player::PlayStealStab() {
 void Player::CancelAttacksForWeaponBreak() {
     meleeCombo_.Reset();
     ResetWeaponSkills();
+}
+
+/** @brief 装備を次の武器に切り替え、手放した武器を正面へ飛ばす */
+void Player::UpdateWeaponThrow(Input* input, const std::vector<AABB>& blocks) {
+    const auto& axe = WeaponFinisherTuning::Get(WeaponType::kAxe);
+    if (weaponThrow_.remainingDistance <= 0.0f) {
+        weaponThrow_.secondsLeft = 0.0f;
+    }
+    if (!HasWeaponInFlight()) {
+        if (!input->TriggerAction(GameAction::kThrowWeapon) || explorationMode_ || weaponsDropped_ || IsRampaging()) {
+            return;
+        }
+        auto* weapons = WeaponManager::GetInstance();
+        if (weapons->HasPendingWeapon() || weapons->HasPendingBossChoice()) {
+            return;
+        }
+        const auto& weapon = weapons->GetCurrent();
+        if (axe.throwSpeed <= 0.0f || axe.throwDistance <= 0.0f || axe.throwMaxSeconds <= 0.0f
+            || BehaviorFor(weapon.type).IsDisarmed() || !weapons->TryBreakCurrentWeapon()) {
+            return;
+        }
+        CancelAttacksForWeaponBreak();
+        const Vector3 start = { pos_.x, pos_.y + ThrownWeaponParams::kLaunchHeight, pos_.z };
+        weaponThrow_ = { weapon.type, start, lastDirX_, axe.throwMaxSeconds, 0.0f, weapon.damage, axe.throwDistance };
+    }
+    const float dt = gameConstants::kFrameDeltaTime;
+    const float movement = ThrownWeaponParams::OutwardStep(axe.throwSpeed, axe.throwDistance, weaponThrow_.remainingDistance, dt);
+    weaponThrow_.remainingDistance -= movement;
+    weaponThrow_.previousX = weaponThrow_.position.x;
+    weaponThrow_.position.x += weaponThrow_.direction * movement;
+    weaponThrow_.spin -= weaponThrow_.direction * axe.throwSpinSpeed * dt;
+    weaponThrow_.secondsLeft -= dt;
+    for (const AABB& block : blocks) {
+        constexpr float kTerrainRadius = 0.2f;
+        if (ConsumeWeaponThrowHit(block, kTerrainRadius) > 0.0f) {
+            break;
+        }
+    }
+}
+
+/** @brief 地形または敵に触れたら飛行を終え、命中した時だけ威力を返す */
+float Player::ConsumeWeaponThrowHit(const AABB& target) {
+    return ConsumeWeaponThrowHit(target, WeaponFinisherTuning::Get(WeaponType::kAxe).throwHitRadius);
+}
+
+/** @brief このフレームの飛行区間全体で当たりを取る */
+float Player::ConsumeWeaponThrowHit(const AABB& target, float radius) {
+    const Vector3& p = weaponThrow_.position;
+    if (!HasWeaponInFlight() || (std::max)(weaponThrow_.previousX, p.x) < target.min.x - radius
+        || (std::min)(weaponThrow_.previousX, p.x) > target.max.x + radius
+        || p.y < target.min.y - radius || p.y > target.max.y + radius
+        || p.z < target.min.z - radius || p.z > target.max.z + radius) {
+        return 0.0f;
+    }
+    weaponThrow_.secondsLeft = 0.0f;
+    return weaponThrow_.damage;
 }
 
 /** @brief 床を抜けて落ちた時に、指定した所へ置き直す（落ちる速さ・前のフレームの位置・技の途中の動きも消す） */
@@ -172,89 +250,91 @@ int Player::GetComboMax() const {
 /** @brief 現在の武器と覚醒状態から攻撃ダメージ倍率を返す（覚醒中はweapons.jsonのawakened.damageMult） */
 float Player::GetAwakenedDamageMult() const {
     const auto* wm = WeaponManager::GetInstance();
-    return (isAwakened_ && wm->HasEquippedWeapon()) ? wm->GetCurrent().awakened.damageMult : 1.0f;
+    return (awaken_.isAwakened && wm->HasEquippedWeapon()) ? wm->GetCurrent().awakened.damageMult : 1.0f;
 }
 
 /** @brief 現在の武器と覚醒状態から固有技の判定範囲倍率を返す（非覚醒時は1.0） */
 float Player::GetAwakenedSkillRadiusMult() const {
     const auto* wm = WeaponManager::GetInstance();
-    return (isAwakened_ && wm->HasEquippedWeapon()) ? wm->GetCurrent().awakened.skillRadiusMult : 1.0f;
+    return (awaken_.isAwakened && wm->HasEquippedWeapon()) ? wm->GetCurrent().awakened.skillRadiusMult : 1.0f;
 }
 
 /** @brief 現在の武器と覚醒状態からノックバック倍率を返す（非覚醒時は1.0） */
 float Player::GetAwakenedKnockbackMult() const {
     const auto* wm = WeaponManager::GetInstance();
-    return (isAwakened_ && wm->HasEquippedWeapon()) ? wm->GetCurrent().awakened.knockbackMult : 1.0f;
+    return (awaken_.isAwakened && wm->HasEquippedWeapon()) ? wm->GetCurrent().awakened.knockbackMult : 1.0f;
 }
 
 /** @brief 回避ボタンの押下を先行入力として記憶する */
 void Player::BufferDodgeInput(Input* input) {
-    if (input->TriggerAction(Input::Action::kDodge)) {
-        dodgeBufferFrames_ = Tuning().dodgeBufferFrames;
+    if (input->TriggerAction(GameAction::kDodge)) {
+        dodge_.bufferFrames = Tuning().dodgeBufferFrames;
     }
 }
 
 /** @brief 回避入力の受付と回避移動の進行を処理する */
 void Player::HandleDodge(Input* input) {
-    dodgeCooldown_ = (std::max)(dodgeCooldown_ - gameConstants::kFrameDeltaTime, 0.0f);
-    dodgeSpamTimer_ += gameConstants::kFrameDeltaTime;
+    dodge_.cooldown = (std::max)(dodge_.cooldown - gameConstants::kFrameDeltaTime, 0.0f);
+    dodge_.spamTimer += gameConstants::kFrameDeltaTime;
 
     // 先行入力の残りフレームを消費しつつ、このフレームの押下も同じバッファに載せる
     // （シーンがBufferDodgeInput()を呼んでいなくても直押しで回避できるように）
     BufferDodgeInput(input);
-    const bool dodgeRequested = dodgeBufferFrames_ > 0;
-    dodgeBufferFrames_ = (std::max)(dodgeBufferFrames_ - 1, 0);
+    const bool dodgeRequested = dodge_.bufferFrames > 0;
+    dodge_.bufferFrames = (std::max)(dodge_.bufferFrames - 1, 0);
 
     // 進行中の回避を進める（イージングで滑らかに移動し、終わったら無敵を解く）
-    if (dodgeActive_) {
-        if (AdvanceHorizontalMove(dodgeTimer_, Tuning().dodgeDuration, dodgeStartX_, dodgeTargetX_)) {
-            dodgeActive_ = false;
-            dodgeCooldown_ = Tuning().dodgeCooldown;
+    if (dodge_.active) {
+        if (AdvanceHorizontalMove(dodge_.timer, Tuning().dodgeDuration, dodge_.startX, dodge_.targetX)) {
+            dodge_.active = false;
+            dodge_.cooldown = Tuning().dodgeCooldown;
         }
         return;
     }
 
     // ロックオン中に敵の方へ倒して回避を押したら、回避の代わりにワープする（パッドのボタン数を減らすため）
     if (dodgeRequested && IsWarpChordHeld(input) && CanStartWarp()) {
-        dodgeBufferFrames_ = 0;
-        warpRequestedByDodge_ = true;
+        dodge_.bufferFrames = 0;
+        warp_.requestedByDodge = true;
         return;
     }
 
-    const bool blocked = inWater_ || finisherCharging_ || IsRampaging()
-        || dodgeCooldown_ > 0.0f || warpActive_;
+    const bool blocked = inWater_ || finisher_.charging || IsRampaging()
+        || dodge_.cooldown > 0.0f || warp_.active;
     if (blocked || !dodgeRequested) {
         return;
     }
-    dodgeBufferFrames_ = 0; // 消費した先行入力で二重に回避しない
+    dodge_.bufferFrames = 0; // 消費した先行入力で二重に回避しない
 
     // 方向は移動入力優先で、その方向を向いて前転する
     // 無ければ向いている方向の逆へバックステップ（向き自体は変えない＝敵を見たまま退く）
     const float heldDirX = GetHeldMoveDirection(input);
-    dodgeBackward_ = heldDirX == 0.0f;
-    const float dirX = dodgeBackward_ ? -lastDirX_ : heldDirX;
-    if (!dodgeBackward_) {
+    dodge_.backward = heldDirX == 0.0f;
+    const float dirX = dodge_.backward ? -lastDirX_ : heldDirX;
+    if (!dodge_.backward) {
         lastDirX_ = dirX;
     }
 
     // 短い間隔で繰り返した回避は連打として数える（危険の無い場面での乱用をスタイル評価で咎めるため）
-    dodgeSpamCount_ = dodgeSpamTimer_ < Tuning().dodgeSpamWindow ? dodgeSpamCount_ + 1 : 0;
-    dodgeSpamTimer_ = 0.0f;
+    dodge_.spamCount = dodge_.spamTimer < Tuning().dodgeSpamWindow ? dodge_.spamCount + 1 : 0;
+    dodge_.spamTimer = 0.0f;
 
-    dodgeActive_ = true;
+    dodge_.active = true;
+    // 自動テストの網羅のまとめに数える
+    testCoverage::Cover("player_action", "dodge");
     SetFrameEvent(FrameEvent::kDodged);
-    dodgeRewardClaimed_ = false;
-    dodgeTimer_ = 0.0f;
-    dodgeStartX_ = pos_.x;
-    dodgeTargetX_ = std::clamp(pos_.x + dirX * Tuning().dodgeDistance, minX_, maxX_);
+    dodge_.rewardClaimed = false;
+    dodge_.timer = 0.0f;
+    dodge_.startX = pos_.x;
+    dodge_.targetX = std::clamp(pos_.x + dirX * Tuning().dodgeDistance, minX_, maxX_);
 
     // 回避はコンボの逃げ道。振りかけの段は打ち切り、踏み込み系の技も止める
     meleeCombo_.Reset();
     InterruptWeaponSkills();
     // バックステップは立ちジャンプ、前転は走りジャンプのモーションを速めて見せる
     const PlayerTuning& t = Tuning();
-    PlayAttackAnim(dodgeBackward_ ? rig_->jumpAnim : rig_->runningJumpAnim,
-        dodgeBackward_ ? t.backDodgeAnimSpeed : t.dodgeAnimSpeed);
+    PlayAttackAnim(dodge_.backward ? rig_->jumpAnim : rig_->runningJumpAnim,
+        dodge_.backward ? t.backDodgeAnimSpeed : t.dodgeAnimSpeed);
 }
 
 /**
@@ -272,33 +352,35 @@ bool Player::AdvanceHorizontalMove(float& timer, float duration, float startX, f
 
 /** @brief テレポート斬り入力の受付とワープ移動の進行を処理する */
 void Player::HandleWarp(Input* input) {
-    warpCooldown_ = (std::max)(warpCooldown_ - gameConstants::kFrameDeltaTime, 0.0f);
+    warp_.cooldown = (std::max)(warp_.cooldown - gameConstants::kFrameDeltaTime, 0.0f);
 
     // 進行中のワープを進める（イージングで滑らかに移動し、終わったら無敵を解く）
-    if (warpActive_) {
-        if (AdvanceHorizontalMove(warpTimer_, Tuning().warpDuration, warpStartX_, warpTargetX_)) {
-            warpActive_ = false;
-            warpCooldown_ = isAwakened_ ? Tuning().warpAwakenedCooldown : Tuning().warpCooldown;
+    if (warp_.active) {
+        if (AdvanceHorizontalMove(warp_.timer, Tuning().warpDuration, warp_.startX, warp_.targetX)) {
+            warp_.active = false;
+            warp_.cooldown = awaken_.isAwakened ? Tuning().warpAwakenedCooldown : Tuning().warpCooldown;
         }
         return;
     }
 
     // 専用ボタンか、回避ボタンとの組み合わせ（HandleDodge で受け付け済み）で始める
-    const bool requested = input->TriggerAction(Input::Action::kWarp) || warpRequestedByDodge_;
-    warpRequestedByDodge_ = false;
+    const bool requested = input->TriggerAction(GameAction::kWarp) || warp_.requestedByDodge;
+    warp_.requestedByDodge = false;
     if (!requested || !CanStartWarp()) {
         return;
     }
 
-    if (!isAwakened_) {
-        awakenGauge_ -= Tuning().warpGaugeCost;
+    if (!awaken_.isAwakened) {
+        awaken_.gauge -= Tuning().warpGaugeCost;
     }
 
-    warpActive_ = true;
-    warpTimer_ = 0.0f;
-    warpStartX_ = pos_.x;
-    const float distance = isAwakened_ ? Tuning().warpAwakenedDistance : Tuning().warpDistance;
-    warpTargetX_ = std::clamp(pos_.x + lastDirX_ * distance, minX_, maxX_);
+    // 自動テストの網羅のまとめに数える
+    testCoverage::Cover("player_action", "warp");
+    warp_.active = true;
+    warp_.timer = 0.0f;
+    warp_.startX = pos_.x;
+    const float distance = awaken_.isAwakened ? Tuning().warpAwakenedDistance : Tuning().warpDistance;
+    warp_.targetX = std::clamp(pos_.x + lastDirX_ * distance, minX_, maxX_);
 
     // ワープはコンボの逃げ道兼割り込み技。振りかけの段は打ち切り、踏み込み系の技も止める
     meleeCombo_.Reset();
@@ -308,15 +390,15 @@ void Player::HandleWarp(Input* input) {
 
 /** @brief 今ワープを始められるか（妨げる状態でなく、ゲージかクールタイムの条件を満たしているか） */
 bool Player::CanStartWarp() const {
-    const bool blocked = inWater_ || finisherCharging_ || IsRampaging()
-        || warpCooldown_ > 0.0f || dodgeActive_ || warpActive_;
-    const bool hasGauge = isAwakened_ || awakenGauge_ >= Tuning().warpGaugeCost;
+    const bool blocked = inWater_ || finisher_.charging || IsRampaging()
+        || warp_.cooldown > 0.0f || dodge_.active || warp_.active;
+    const bool hasGauge = awaken_.isAwakened || awaken_.gauge >= Tuning().warpGaugeCost;
     return !blocked && hasGauge;
 }
 
 /** @brief ロックオンを押しながら、向いている方（ロック中は敵の方）へ移動入力しているか */
 bool Player::IsWarpChordHeld(Input* input) const {
-    if (!input->PushAction(Input::Action::kLockOn)) {
+    if (!input->PushAction(GameAction::kLockOn)) {
         return false;
     }
     // 敵から離れる方向やニュートラルなら、普通の回避で逃げられるように残す
@@ -357,7 +439,7 @@ void Player::Update(Input* input, const Vector3& enemyPos, bool enemySolid, bool
         invincibleTimer_ -= gameConstants::kFrameDeltaTime;
     }
 
-    justDodgeWindowTimer_ = (std::max)(justDodgeWindowTimer_ - gameConstants::kFrameDeltaTime, 0.0f);
+    dodge_.justDodgeWindowTimer = (std::max)(dodge_.justDodgeWindowTimer - gameConstants::kFrameDeltaTime, 0.0f);
 
     // 歩くだけの状態では、移動とジャンプと見た目だけを進める（戦いの入力は受け付けない）
     if (explorationMode_) {
@@ -380,8 +462,8 @@ void Player::Update(Input* input, const Vector3& enemyPos, bool enemySolid, bool
     }
 
     // 乱舞はシーンが選んだ近くの相手へ向かう（選ばれていなければ渡された敵の位置）
-    const Vector3 rampageTarget = hasRampageTarget_ ? rampageTarget_ : enemyPos;
-    hasRampageTarget_ = false;
+    const Vector3 rampageTarget = rampageData_.hasTarget ? rampageData_.target : enemyPos;
+    rampageData_.hasTarget = false;
 
     HandleRangedCombat(input);
     HandleMeleeCombat(input, rampageTarget);
@@ -459,12 +541,17 @@ void Player::ResolveBlockCollision(const std::vector<AABB>& blocks) {
     // 壁のように同じX/Zに積み重なったブロックの途中の継ぎ目に、ジャンプで壁へ突っ込んだ際に
     // 乗ってしまわないよう、頭上（立った時に体が収まる高さ）に別のブロックが無いことも確認する
     auto hasClearanceAbove = [&](const AABB& candidate) {
+        // 足元とこの床が実際に重なる範囲だけを見る。隣の壁に肩が入っていても床は足を支えられる。
+        const float left = (std::max)(pos_.x - kHalf, candidate.min.x);
+        const float right = (std::min)(pos_.x + kHalf, candidate.max.x);
+        const float nearZ = (std::max)(pos_.z - kHalf, candidate.min.z);
+        const float farZ = (std::min)(pos_.z + kHalf, candidate.max.z);
         for (const auto& other : blocks) {
             if (&other == &candidate) {
                 continue;
             }
-            bool otherOverlapXZ = (pos_.x + kHalf) > other.min.x && (pos_.x - kHalf) < other.max.x
-                && (pos_.z + kHalf) > other.min.z && (pos_.z - kHalf) < other.max.z;
+            const bool otherOverlapXZ = left < other.max.x && right > other.min.x
+                && nearZ < other.max.z && farZ > other.min.z;
             if (!otherOverlapXZ) {
                 continue;
             }
@@ -502,9 +589,6 @@ void Player::ResolveBlockCollision(const std::vector<AABB>& blocks) {
 
     // 水平方向  側面から重なっているブロックがあれば侵入量が小さい側へ押し出す
     for (const auto& b : blocks) {
-        if (landedOnTop(b)) {
-            continue;
-        }
         bool overlapY = (pos_.y + kHalf) > b.min.y + kSideOverlapMargin && (pos_.y - kHalf) < b.max.y - kSideOverlapMargin;
         if (!overlapY) {
             continue;
@@ -513,6 +597,10 @@ void Player::ResolveBlockCollision(const std::vector<AABB>& blocks) {
         bool overlapX = (pos_.x + kHalf) > b.min.x && (pos_.x - kHalf) < b.max.x;
         bool overlapZ = (pos_.z + kHalf) > b.min.z && (pos_.z - kHalf) < b.max.z;
         if (!overlapX || !overlapZ) {
+            continue;
+        }
+        // 露出した上面は着地で処理する。積んだ壁の継ぎ目は側面として入ってきた側へ押し戻す。
+        if (landedOnTop(b) && hasClearanceAbove(b)) {
             continue;
         }
 

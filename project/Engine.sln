@@ -3,7 +3,7 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 18
 VisualStudioVersion = 18.4.11620.152
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "CG2-1", "CG2-1.vcxproj", "{6D06300C-8293-46EC-AA68-DE6C7590CDE1}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Game", "CG2-1.vcxproj", "{6D06300C-8293-46EC-AA68-DE6C7590CDE1}"
 	ProjectSection(ProjectDependencies) = postProject
 		{68E2707E-352E-4FBF-BCD6-D7839A8120C8} = {68E2707E-352E-4FBF-BCD6-D7839A8120C8}
 		{371B9FA9-4C90-4AC6-A123-ACED756D6C77} = {371B9FA9-4C90-4AC6-A123-ACED756D6C77}
@@ -28,6 +28,10 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "BugHunt", "BugHunt\BugHunt.
 		{6D06300C-8293-46EC-AA68-DE6C7590CDE1} = {6D06300C-8293-46EC-AA68-DE6C7590CDE1}
 	EndProjectSection
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "EngineLib", "EngineLib.vcxproj", "{B7E4C2A1-5D3F-4E8A-9C61-2F0A7D3E9B54}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "externals", "externals", "{5A4F65CE-5521-4336-82E3-B9A9B74C1B95}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -35,6 +39,12 @@ Global
 		Release|x64 = Release|x64
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{B7E4C2A1-5D3F-4E8A-9C61-2F0A7D3E9B54}.Debug|x64.ActiveCfg = Debug|x64
+		{B7E4C2A1-5D3F-4E8A-9C61-2F0A7D3E9B54}.Debug|x64.Build.0 = Debug|x64
+		{B7E4C2A1-5D3F-4E8A-9C61-2F0A7D3E9B54}.Development|x64.ActiveCfg = Development|x64
+		{B7E4C2A1-5D3F-4E8A-9C61-2F0A7D3E9B54}.Development|x64.Build.0 = Development|x64
+		{B7E4C2A1-5D3F-4E8A-9C61-2F0A7D3E9B54}.Release|x64.ActiveCfg = Release|x64
+		{B7E4C2A1-5D3F-4E8A-9C61-2F0A7D3E9B54}.Release|x64.Build.0 = Release|x64
 		{6D06300C-8293-46EC-AA68-DE6C7590CDE1}.Debug|x64.ActiveCfg = Debug|x64
 		{6D06300C-8293-46EC-AA68-DE6C7590CDE1}.Debug|x64.Build.0 = Debug|x64
 		{6D06300C-8293-46EC-AA68-DE6C7590CDE1}.Development|x64.ActiveCfg = Development|x64
@@ -74,6 +84,11 @@ Global
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{68E2707E-352E-4FBF-BCD6-D7839A8120C8} = {5A4F65CE-5521-4336-82E3-B9A9B74C1B95}
+		{371B9FA9-4C90-4AC6-A123-ACED756D6C77} = {5A4F65CE-5521-4336-82E3-B9A9B74C1B95}
+		{88AFB9A5-4411-43B8-AF3B-FB90D0D98E52} = {5A4F65CE-5521-4336-82E3-B9A9B74C1B95}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {39DB5C80-A86A-448B-974A-323AD14B99D6}

@@ -40,11 +40,8 @@ static void CreateOffscreenTexture(
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& outRtvHeap,
     D3D12_CPU_DESCRIPTOR_HANDLE& outRtvHandle,
     uint32_t& outSrvIndex) {
-    // 本体は TYPELESS にして、RTV と SRV を同じ SRGB 形式で共有する
-    constexpr pipelineHelper::RenderTargetFormats kFormats = {
-        DXGI_FORMAT_R8G8B8A8_TYPELESS, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB
-    };
-    pipelineHelper::CreateRenderTarget(device, srvManager, width, height, kFormats, pipelineHelper::kOffscreenClearColor,
+    // シーンをそのまま描き込むので、描画先の PSO と同じシーンの色バッファの形式にする
+    pipelineHelper::CreateRenderTarget(device, srvManager, width, height, pipelineHelper::kSceneColorTargetFormats, pipelineHelper::kOffscreenClearColor,
         { outTexture, outRtvHeap, outRtvHandle, outSrvIndex });
 }
 
@@ -396,7 +393,7 @@ void ImageFilter::BoxGaussianFilterMode::Apply(ImageFilter& filter, ID3D12Graphi
     const D3D12_VIEWPORT& vp, const D3D12_RECT& scissor, D3D12_CPU_DESCRIPTOR_HANDLE backRtv) const {
     // Box / Gaussian  水平→垂直の 2 パス
     cmd->SetGraphicsRootSignature(filter.rootSignature_.Get());
-    cmd->SetPipelineState(GetPipeline(filter));
+    cmd->SetPipelineState(PipelineCache::Resolve(GetPipeline(filter)));
 
     // Pass 1: 水平（sceneTexture → intermediateTexture、内部解像度は固定のまま）
     if (!filter.isIntermediateFirstFrame_) {

@@ -4,6 +4,9 @@
  * @note ParticleManager の粒の発生だけを ParticleManager.cpp から分けて置いている（クラスは ParticleManager のまま）
  */
 #include "ParticleManager.h"
+#include "PoolOverflowCounter.h"
+// 乱数の種を共通の窓口から取得する。
+#include "RandomSeed.h"
 #include "EngineAssert.h"
 #include "EngineConstants.h"
 #include "GraphicsTuning.h"
@@ -128,6 +131,8 @@ Vector3 Uniform(float scale) {
 bool ParticleManager::SpawnParticle(ParticleGroup& group, const ParticleSpawn& spawn) {
     // 枠を取るのは GPU（空き一覧）。CPU はグループの枠の数までしか頼まない
     if (group.pendingSpawns.size() >= ParticleGroup::kNumMaxInstance) {
+        // 発生依頼の上限超過を数える。
+        engine::poolOverflowCounter::Count("particle_spawn_requests");
         return false;
     }
     GPUParticleState p {};
@@ -251,7 +256,7 @@ void ParticleManager::EmitScatterLoop(const std::string& name,
     count = (std::min)(count, ParticleGroup::kNumMaxInstance);
 
     // 位置・寿命・速度のばらつき
-    static std::mt19937 sRng { std::random_device { }() };
+    static std::mt19937 sRng { engine::randomSeed::Next() };
     std::uniform_real_distribution<float> xzDist(-radius, radius);
     std::uniform_real_distribution<float> yDist(0.0f, kScatterHeight);
     std::uniform_real_distribution<float> lifeDist(lifeTimeMin, lifeTimeMax);
@@ -301,7 +306,7 @@ void ParticleManager::EmitBurst(const std::string& name,
     // 前の粒を全部消してから出し直す
     RequestReset(group);
 
-    static std::mt19937 sRng { std::random_device { }() };
+    static std::mt19937 sRng { engine::randomSeed::Next() };
     std::uniform_real_distribution<float> distXZ(-kBurstSpreadXZ, kBurstSpreadXZ);
     std::uniform_real_distribution<float> distY(0.0f, kScatterHeight);
     const ParticleMotion motion = flicker ? ParticleMotion::kFlicker : ParticleMotion::kLinear;
@@ -320,7 +325,7 @@ void ParticleManager::EmitHitStar(const std::string& name,
     ENGINE_ASSERT(particleGroups_.contains(name));
     ParticleGroup& group = particleGroups_[name];
 
-    static std::default_random_engine sEngine { std::random_device { }() };
+    static std::default_random_engine sEngine { engine::randomSeed::Next() };
     std::uniform_real_distribution<float> rotDist(-std::numbers::pi_v<float>, std::numbers::pi_v<float>);
     const HitStarPreset& preset = LoadedHitStarPreset();
     std::uniform_real_distribution<float> lengthDist(preset.lengthMin, preset.lengthMax);

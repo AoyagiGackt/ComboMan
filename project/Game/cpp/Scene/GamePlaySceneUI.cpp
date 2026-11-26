@@ -404,7 +404,7 @@ void GamePlayScene::DrawStyleUI() {
     }
     // 武器の疲労警告・ノードグラフのメッセージ・武器一覧・操作説明
     DrawWeaponFatigueWarning();
-    DrawScriptMessage();
+    scriptEffects_.DrawMessage(fontRenderer_, kLayoutName);
     DrawWeaponListPanel();
     // ラスボス戦の間は、戦闘の前の操作説明と同じ闘技場の操作を出す
     if (finalBoss_.IsActive()) {
@@ -416,7 +416,7 @@ void GamePlayScene::DrawStyleUI() {
     }
     hud_.QueueText(fontRenderer_);
     DrawWeaponStealPrompts(weaponStealPromptScale, weaponStealPromptColor);
-    DrawWeaponAcquireBanner();
+    banner_.Draw(fontRenderer_, kLayoutName);
     DrawOffscreenEnemyGuide();
     DrawAllyMark();
 
@@ -526,37 +526,5 @@ void GamePlayScene::SetupPauseMenu() {
          } });
     pauseMenu_.InitializeCommandPreview(modelCommon_.get());
     pauseMenu_.EnableWeaponFusionOption();
-}
-/** @brief ノードグラフのメッセージ・カメラ・操作停止の受け口を登録する */
-void GamePlayScene::RegisterScriptEffectHandlers() {
-    auto* bridge = SceneEffectBridge::GetInstance();
-    bridge->SetMessageHandler([this](const std::string& text, float seconds) {
-        scriptMessage_ = StringUtility::ConvertString(text);
-        scriptMessageSeconds_ = seconds;
-    });
-    bridge->SetCameraFocusHandler([this](float x, float y, float seconds) {
-        scriptCameraFocus_ = { x, y, 0.0f };
-        scriptCameraFocusSeconds_ = seconds;
-    });
-    bridge->SetControlLockHandler([this](bool locked) {
-        // 戻した時は上書きを外して、実機の入力をそのまま使う
-        if (scriptControlLocked_ && !locked) {
-            input_->ClearActionOverrides();
-        }
-        scriptControlLocked_ = locked;
-    });
-}
-
-/** @brief ノードグラフで操作を止めている間は、ポーズ以外の操作を押していない扱いにする */
-void GamePlayScene::ApplyScriptControlLock() {
-    if (!scriptControlLocked_) {
-        return;
-    }
-    for (int i = 0; i < static_cast<int>(Input::Action::kCount); ++i) {
-        const auto action = static_cast<Input::Action>(i);
-        if (action != Input::Action::kPause) {
-            input_->SetActionOverride(action, false);
-        }
-    }
 }
 } // namespace engine::game

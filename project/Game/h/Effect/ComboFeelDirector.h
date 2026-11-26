@@ -8,6 +8,10 @@
 #include "Weapon.h"
 #include "WeaponTrailEffect.h"
 #include <array>
+#include <string>
+#ifdef USE_IMGUI
+#include "PanelEditSession.h"
+#endif
 
 namespace engine {
 class DirectXCommon;
@@ -28,9 +32,36 @@ struct BladeRange {
     Vector3 tip;
 };
 
+/**
+ * @brief 武器ごとの手応えの違い（共通の調整値に掛ける倍率）
+ * @note 軽い武器は短く細く刻み、重い武器は太く長く残して締めを重くする、といった性格を付ける
+ */
+struct WeaponFeel {
+    float trailLifetimeScale = 1.0f; ///< 刃の軌跡が残る長さの倍率
+    float trailAlphaScale = 1.0f; ///< 刃の軌跡の濃さの倍率
+    float slashLengthScale = 1.0f; ///< 斬撃線の長さの倍率
+    float slashThicknessScale = 1.0f; ///< 斬撃線の太さの倍率
+    float slashSecondsScale = 1.0f; ///< 斬撃線が残る長さの倍率
+    int slashExtraLines = 0; ///< 斬撃線に平行に重ねる細い線の本数（刻んだ跡を何本も残す）
+    float slashLineSpread = 0.0f; ///< 平行に重ねる線どうしの間（ワールド単位）
+    float impactScale = 1.0f; ///< 締めのブラーと寄りの強さの倍率
+    float slowSecondsScale = 1.0f; ///< 締めのスローの長さの倍率
+    std::string trailTexture; ///< 刃の軌跡に掛ける筋の画像（空なら一様な帯）
+    float trailIntensity = 1.0f; ///< 刃の軌跡の明るさの倍率（1を超えると芯が白く飛び、ブルームで光る）
+    float trailTextureRepeat = 1.0f; ///< 軌跡の長さに筋の画像を何回並べるか
+    float trailTextureScroll = 0.0f; ///< 筋の画像を軌跡に沿って流す速さ（1秒に画像の何枚ぶん）
+    int finisherEnemyStopFrames = 0; ///< 締めの後、全体のヒットストップが明けてから敵だけを止めるフレーム数（自分は動ける）
+};
+
 /** @brief 演出ごとのオン/オフと調整値（Resources/Config/combo_feel.json に保存する） */
 struct ComboFeelSettings {
     static constexpr int kWeaponTypeCount = static_cast<int>(engine::game::kWeaponTypeCount); ///< WeaponType の要素数
+    static constexpr const char* kFilePath = "Resources/Config/combo_feel.json"; ///< 保存先
+    static constexpr int kMaxSlashExtraLines = 6; ///< 斬撃線に平行に重ねる細い線の上限
+    /** @brief WeaponType の並び順の武器の名前（パネルと JSON のキーに使う） */
+    static constexpr std::array<const char*, kWeaponTypeCount> kBladeWeaponNames = {
+        "Sword", "Spear", "Hammer", "Dagger", "Ball", "Greatsword", "Scythe", "Axe"
+    };
 
     // 刃の軌跡
     bool trailEnabled = true;
@@ -73,6 +104,9 @@ struct ComboFeelSettings {
     int awakenSlashCount = 3; ///< 1ヒットで出す斬撃線の本数
     float awakenSlashSpreadDeg = 16.0f; ///< 斬撃線を扇状に広げる角度（度）
     float awakenImpactScale = 1.4f; ///< 締め演出（ブラー・ズーム・スロー）の強さの倍率
+
+    // 武器ごとの手応え
+    std::array<WeaponFeel, kWeaponTypeCount> weaponFeels { }; ///< WeaponType 順の武器ごとの倍率
 
     ComboFeelSettings();
 };
@@ -161,6 +195,12 @@ private:
     void LoadSettings();
     void SaveSettings() const;
 
+    /** @brief 今持っている（最後に振った）武器の手応え */
+    const WeaponFeel& CurrentFeel() const;
+    /** @brief 刃の向きの線を1本引く（中心からの横のずれ・長さ・太さ・色を指定する） */
+    void SpawnSlashLine(const Vector3& center, const Vector2& dir, float offset, float halfLen, float thickness,
+        const Vector4& color, float seconds, const engine::graphics::Camera* camera) const;
+
     /** @brief 覚醒の上乗せを今使うか */
     bool IsAwakenBoosted() const {
         return (awakened_ || previewAwaken_) && settings_.awakenEnabled;
@@ -175,6 +215,7 @@ private:
 
     const MeleeAttackDef* lastAttack_ = nullptr; ///< 段が変わったら軌跡を切るための前フレームの段
     int lastWeaponIndex_ = 0; ///< デバッグパネルで刃の範囲を編集する対象
+    int heldWeaponIndex_ = 0; ///< 最後に振った武器（武器ごとの手応えを選ぶのに使う。パネルの選択では変わらない）
     Vector3 lastPlayerPos_ = { }; ///< デバッグパネルから締め演出を試す時の中心
     float lastTrailMicros_ = 0.0f; ///< 軌跡の更新にかかったCPU時間（マイクロ秒）
 
@@ -186,6 +227,9 @@ private:
     float blurCenterV_ = 0.5f;
 
     bool showPanel_ = false;
+#ifdef USE_IMGUI
+    engine::editor::PanelEditSession<ComboFeelSettings> panelSession_; ///< パネルの元に戻す・戻す操作・説明
+#endif
 };
 
 } // namespace engine::game

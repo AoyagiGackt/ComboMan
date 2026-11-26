@@ -6,6 +6,7 @@
 #include "PipelineHelper.h"
 #include "ResourceAlignment.h"
 #include "Camera.h"
+#include "FrustumCulling.h"
 #include "LightManager.h"
 #include "LightingMode.h"
 #include "ModelCommon.h"
@@ -16,12 +17,20 @@
 #include "SrvManager.h"
 #include "TextureManager.h"
 #include <cmath>
+#include <vector>
 
 namespace engine::graphics {
 namespace {
 
 // マテリアルの初期値
 constexpr engine::graphics::ObjectMaterialLayout kDefaultMaterial {};
+
+/** @brief 画面外の判定で、モデルを囲む箱を広げる割合（シェーダーで頂点が少し動く物や丸め誤差で縁が欠けないようにする） */
+constexpr float kCullingBoundsPadding = 0.1f;
+
+/** @brief まとめ描きの見分けに使う 64bit FNV-1a の初期値と掛ける数 */
+constexpr uint64_t kBatchKeyOffsetBasis = 14695981039346656037ull;
+constexpr uint64_t kBatchKeyPrime = 1099511628211ull;
 
 /** @brief 変換行列だけを指定スロットへ束縛し、材質を伴わないパスでモデル形状を描画する */
 void DrawGeometryWithTransform(Model* model, ModelCommon* common, D3D12_GPU_VIRTUAL_ADDRESS transform, UINT slot) {
@@ -41,6 +50,57 @@ Camera* Object3d::sCommonCamera = nullptr;
 Matrix4x4 Object3d::sCommonLightVP = MakeIdentity4x4();
 Object3dCommon* Object3d::sCommonObjectCommon = nullptr;
 ShadowManager* Object3d::sCommonShadowManager = nullptr;
+bool Object3d::sFrustumCullingEnabled = true;
+std::atomic<uint32_t> Object3d::sDrawnCount = 0;
+std::atomic<uint32_t> Object3d::sCulledCount = 0;
+
+/** @brief 数えた描画の数を取り出して 0 に戻す */
+Object3d::CullingStats Object3d::TakeCullingStats() {
+    CullingStats stats;
+    stats.drawn = sDrawnCount.exchange(0);
+    stats.culled = sCulledCount.exchange(0);
+    return stats;
+}
+
+/** @brief 今の変換行列で、モデルを囲む箱が画面に映る範囲の外に完全に出ているか */
+bool Object3d::IsOutsideView() const {
+    // 箱を各軸の大きさの一定の割合だけ広げてから調べる（映るかもしれない物は描く側に倒す）
+    return IsPaddedBoxOutsideClipSpace(transformationMatrix_.wvp,
+        model_->GetLocalBoundsMin(), model_->GetLocalBoundsMax(), kCullingBoundsPadding);
+}
+
+/** @brief ワールド行列とライト空間の行列で、シャドウマップに映る範囲の外に完全に出ているか */
+bool Object3d::IsOutsideShadowView() const {
+    // 影のシェーダーと同じ行列（ワールド行列を掛けたライト空間の行列）で調べる
+    return IsPaddedBoxOutsideClipSpace(transformationMatrix_.lightVP,
+        model_->GetLocalBoundsMin(), model_->GetLocalBoundsMax(), kCullingBoundsPadding);
+}
+
+/** @brief 画面外の判定をして、描いた数と飛ばした数を数える */
+bool Object3d::PassesViewCulling() {
+    // 画面に映る範囲の外に完全に出ている物は、命令を積まずに飛ばす
+    if (sFrustumCullingEnabled && IsOutsideView()) {
+        ++sCulledCount;
+        return false;
+    }
+    ++sDrawnCount;
+    return true;
+}
+
+/** @brief マテリアル・座標変換・法線マップのルート引数を設定する */
+void Object3d::BindObjectConstants(ID3D12GraphicsCommandList* commandList) {
+    // マテリアルと座標変換を設定（描画ごとに別の領域へ写すので、同じフレームで値を変えて何度描いてもよい）
+    commandList->SetGraphicsRootConstantBufferView(pipelineHelper::modelRootSlot::kMaterial, UploadMaterial());
+    commandList->SetGraphicsRootConstantBufferView(pipelineHelper::modelRootSlot::kTransform, UploadTransform());
+    BindNormalMap(commandList);
+}
+
+/** @brief スロット7 に法線マップを設定する */
+void Object3d::BindNormalMap(ID3D12GraphicsCommandList* commandList) const {
+    // 未設定時は diffuse をダミーとして流用する
+    const std::string& normalPath = normalMapFilePath_.empty() ? model_->GetTextureFilePath() : normalMapFilePath_;
+    commandList->SetGraphicsRootDescriptorTable(pipelineHelper::modelRootSlot::kNormalMap, TextureManager::GetInstance()->GetSrvHandleGPU(normalPath));
+}
 
 /** @brief ライト・シャドウマップのルート引数を再バインドする */
 void Object3d::RebindCommonLighting(ID3D12GraphicsCommandList* cmd) {
@@ -111,7 +171,8 @@ void Object3d::Update() {
     transformationMatrix_.wvp = worldViewProjectionMatrix;
     transformationMatrix_.world = worldMatrix;
     transformationMatrix_.worldInverseTranspose = Transpose(Inverse(worldMatrix));
-    transformationMatrix_.lightVP = sCommonLightVP;
+    // シェーダーはモデル内の座標にそのまま掛けるので、ワールド行列を先に掛けておく
+    transformationMatrix_.lightVP = Multiply(worldMatrix, sCommonLightVP);
 
     // 毎フレームライティングモードをマテリアルに反映させる（ロック済みオブジェクトは除外）
     if (!lockShadingType_) {
@@ -134,6 +195,14 @@ D3D12_GPU_VIRTUAL_ADDRESS Object3d::UploadMaterial() {
 
 /** @brief シャドウパス用の描画（テクスチャなし・深度のみ） */
 void Object3d::DrawShadow() {
+    if (!model_) {
+        return;
+    }
+    // シャドウマップに映る範囲の外の物は影を落とさないので飛ばす
+    if (sFrustumCullingEnabled && IsOutsideShadowView()) {
+        ++sCulledCount;
+        return;
+    }
     DrawGeometryWithTransform(model_, modelCommon_, UploadTransform(), pipelineHelper::shadowRootSlot::kTransform);
 }
 
@@ -169,6 +238,10 @@ void Object3d::Draw() {
     if (!model_) {
         return;
     }
+    // 画面外の物は飛ばす（影のパスは DrawShadow でシャドウマップの範囲を別に調べる）
+    if (!PassesViewCulling()) {
+        return;
+    }
 
     // ModelCommonからコマンドリストを取得
     ID3D12GraphicsCommandList* commandList = modelCommon_->GetDxCommon()->GetCommandList();
@@ -177,15 +250,97 @@ void Object3d::Draw() {
     // 使用する平行光源・ポイントライト・シャドウマップを描画直前に保証する
     RebindCommonLighting(commandList);
 
-    // マテリアルと座標変換を設定（描画ごとに別の領域へ写すので、同じフレームで値を変えて何度描いてもよい）
-    commandList->SetGraphicsRootConstantBufferView(pipelineHelper::modelRootSlot::kMaterial, UploadMaterial());
-    commandList->SetGraphicsRootConstantBufferView(pipelineHelper::modelRootSlot::kTransform, UploadTransform());
-
-    // スロット7: 法線マップ（未設定時は diffuse をダミーとして流用）
-    const std::string& normalPath = normalMapFilePath_.empty() ? model_->GetTextureFilePath() : normalMapFilePath_;
-    commandList->SetGraphicsRootDescriptorTable(pipelineHelper::modelRootSlot::kNormalMap, TextureManager::GetInstance()->GetSrvHandleGPU(normalPath));
-
+    BindObjectConstants(commandList);
     model_->Draw(modelCommon_);
+}
+
+/** @brief 並べ替えた順に続けて描く。直前と同じモデルなら頂点とテクスチャを設定し直さない */
+bool Object3d::DrawBatched(const Model*& boundModel) {
+    if (!model_ || !PassesViewCulling()) {
+        return false;
+    }
+    DrawPrepared(modelCommon_->GetDxCommon()->GetCommandList(), boundModel);
+    return true;
+}
+
+/** @brief 定数を設定し、モデルが変わった時だけ頂点とテクスチャを設定してから1体描く */
+void Object3d::DrawPrepared(ID3D12GraphicsCommandList* commandList, const Model*& boundModel) {
+    BindObjectConstants(commandList);
+    // モデルが変わった時だけ、頂点・添字のバッファとテクスチャを設定する
+    if (boundModel != model_) {
+        model_->BindForDraw(modelCommon_);
+        boundModel = model_;
+    }
+    model_->DrawIndexed(modelCommon_);
+}
+
+/** @brief モデルの共通設定・マテリアルのバイト列・法線マップの名前から、64bit の見分けを作る */
+uint64_t Object3d::ComputeBatchKey() const {
+    // 並びの中身をそのまま混ぜる（マテリアルは 4 バイトの値だけで詰め物が無いので、バイトで比べてよい）
+    uint64_t hash = kBatchKeyOffsetBasis;
+    const auto mix = [&hash](const void* data, size_t size) {
+        const auto* bytes = static_cast<const uint8_t*>(data);
+        for (size_t i = 0; i < size; ++i) {
+            hash ^= bytes[i];
+            hash *= kBatchKeyPrime;
+        }
+    };
+    const ModelCommon* common = modelCommon_;
+    mix(&common, sizeof(common));
+    mix(&material_, sizeof(material_));
+    mix(normalMapFilePath_.data(), normalMapFilePath_.size());
+    return hash;
+}
+
+/** @brief 画面内の物の変換行列を並べ、2本目の頂点バッファとして渡して1回で描く */
+uint32_t Object3d::DrawInstancedGroup(Object3d* const* objects, size_t count, const Model*& boundModel) {
+    // 1体ごとの変換行列を並べる場所（スレッドごとに持ち、確保を使い回す）
+    thread_local std::vector<TransformationMatrix> sInstanceTransforms;
+    sInstanceTransforms.clear();
+    Object3d* first = nullptr;
+    for (size_t i = 0; i < count; ++i) {
+        Object3d* object = objects[i];
+        if (!object->model_ || !object->PassesViewCulling()) {
+            continue;
+        }
+        if (first == nullptr) {
+            first = object;
+        }
+        sInstanceTransforms.push_back(object->transformationMatrix_);
+    }
+    if (first == nullptr) {
+        return 0;
+    }
+    ID3D12GraphicsCommandList* commandList = first->modelCommon_->GetDxCommon()->GetCommandList();
+    // 画面内に1体しか残らなければ、いつもの描き方の方が手間が少ない
+    if (sInstanceTransforms.size() == 1) {
+        first->DrawPrepared(commandList, boundModel);
+        return 1;
+    }
+
+    // マテリアルと法線マップは組の最初の物を使う（組は同じ中身の物だけなので、どれを使っても同じ）
+    commandList->SetGraphicsRootConstantBufferView(pipelineHelper::modelRootSlot::kMaterial, first->UploadMaterial());
+    first->BindNormalMap(commandList);
+    if (boundModel != first->model_) {
+        first->model_->BindForDraw(first->modelCommon_);
+        boundModel = first->model_;
+    }
+
+    // 変換行列の並びを、このフレームの領域へ写して頂点バッファにする
+    const UINT stride = static_cast<UINT>(sizeof(TransformationMatrix));
+    const UINT instanceCount = static_cast<UINT>(sInstanceTransforms.size());
+    D3D12_VERTEX_BUFFER_VIEW instanceView {};
+    instanceView.BufferLocation = first->modelCommon_->GetDxCommon()->GetFrameUploadAllocator().Allocate(
+        sInstanceTransforms.data(), static_cast<size_t>(stride) * instanceCount);
+    instanceView.SizeInBytes = stride * instanceCount;
+    instanceView.StrideInBytes = stride;
+    commandList->IASetVertexBuffers(pipelineHelper::kInstanceInputSlot, 1, &instanceView);
+
+    // まとめ描き用のパイプラインで描き、通常のパイプラインに戻す
+    first->modelCommon_->BeginInstancedDraw();
+    first->model_->DrawIndexed(first->modelCommon_, instanceCount);
+    first->modelCommon_->EndInstancedDraw();
+    return instanceCount;
 }
 
 } // namespace engine::graphics

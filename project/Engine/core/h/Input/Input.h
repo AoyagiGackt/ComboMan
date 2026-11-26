@@ -12,6 +12,8 @@
 #include "WinApp.h"
 #include <array>
 #include <string>
+#include <type_traits>
+#include <vector>
 #include <wrl/client.h>
 
 #pragma comment(lib, "xinput.lib")
@@ -23,31 +25,32 @@ namespace engine {
  */
 class Input {
 public: // メンバ関数
-    /** @brief ゲームコードが物理キーへ依存しないための操作名 */
-    enum class Action {
-        kMoveLeft,
-        kMoveRight,
-        kJump,
-        kDown,
-        kAttack,
-        kShoot,
-        kSkill,
-        kAwaken,
-        kFinisher,
-        kGunSwitch,
-        kDodge,
-        kWarp,
-        kSteal,
-        kInteract,
-        kLockOn,
-        kPause,
-        kArenaForward, ///< 闘技場で奥（カメラの向き）へ進む
-        kArenaBack, ///< 闘技場で手前へ下がる
-        kArenaLeft, ///< 闘技場で左へ回り込む
-        kArenaRight, ///< 闘技場で右へ回り込む
-        kArenaJump, ///< 闘技場でのジャンプ（前進と同じキーにしない）
-        kCount
+    /** @brief 操作に割り当てる左スティックの方向 */
+    enum class StickDirection { kNone, kLeft, kRight, kUp, kDown };
+
+    /** @brief しきい値に入力機器のデッドゾーンを使う指定 */
+    static constexpr float kUseDeadzone = -1.0f;
+
+    /** @brief 設定と操作案内で使う名前と既定の入力割り当て */
+    struct ActionDef {
+        const char* name; ///< 設定ファイル（input_bindings の actions）と案内の波括弧で使う操作名
+        BYTE primaryKey; ///< 既定の主キー（0 は割り当て無し）
+        BYTE secondaryKey; ///< 既定の副キー（0 は割り当て無し）
+        WORD gamepadButton; ///< 既定のパッドのボタン（0 は割り当て無し）
+        StickDirection stick; ///< 反応する左スティックの方向
+        float stickThreshold; ///< スティックのしきい値（kUseDeadzone ならデッドゾーン）
     };
+
+    /** @brief 操作番号順に割り当てを登録し、設定ファイルの内容を反映する */
+    void SetActionTable(const std::vector<ActionDef>& defs);
+
+    /** @brief 案内名の表記を返す関数。未対応の名前には空文字列を返す */
+    using PromptResolver = std::wstring (*)(const Input&, const std::wstring&);
+
+    /** @brief 追加の操作案内を解決する関数を登録する */
+    void SetPromptResolver(PromptResolver resolver) {
+        promptResolver_ = resolver;
+    }
 
     /** @brief XInputが使っていないビットへ割り当てたトリガー（wButtonsと同じ扱いで押下判定できる） */
     static constexpr WORD kGamepadLeftTrigger = 0x0400;
@@ -127,10 +130,22 @@ public: // メンバ関数
     Stick GetLeftStick() const;
 
     /** @brief 指定アクションが押されているかを返す */
-    bool PushAction(Action action) const;
+    bool PushAction(int action) const;
+
+    /** @brief 列挙値で指定した操作が押されているかを返す */
+    template <class E> requires std::is_enum_v<E>
+    bool PushAction(E action) const {
+        return PushAction(static_cast<int>(action));
+    }
 
     /** @brief 指定アクションが押された瞬間かを返す */
-    bool TriggerAction(Action action) const;
+    bool TriggerAction(int action) const;
+
+    /** @brief 列挙値で指定した操作が押された瞬間かを返す */
+    template <class E> requires std::is_enum_v<E>
+    bool TriggerAction(E action) const {
+        return TriggerAction(static_cast<int>(action));
+    }
 
     /**
      * @brief 指定アクションの押下状態を実機入力の代わりに強制する（タイトルデモ等の自動操作用）
@@ -138,7 +153,13 @@ public: // メンバ関数
      * オーバーライドしていない他のActionには一切影響しない）。毎フレーム希望する状態で呼び直すこと
      * （1フレームだけtrueにしてTriggerAction()へパルスを起こしたい場合、次フレームは明示的にfalseで呼ぶ）
      */
-    void SetActionOverride(Action action, bool pressed);
+    void SetActionOverride(int action, bool pressed);
+
+    /** @brief 列挙値で指定した操作の押下状態を強制する */
+    template <class E> requires std::is_enum_v<E>
+    void SetActionOverride(E action, bool pressed) {
+        SetActionOverride(static_cast<int>(action), pressed);
+    }
 
     /** @brief 全アクションのオーバーライドを解除し、実機入力の参照に戻す */
     void ClearActionOverrides();
@@ -151,6 +172,18 @@ public: // メンバ関数
 
     /** @brief 押したことにしていたキーをすべて離す */
     void ClearInjectedKeys();
+
+    /**
+     * @brief 本物のキーボード・マウス・パッドの入力を使うかを決める（自動テストで同じ動きを再現する時は切る）
+     * @param enabled false なら本物の入力を押していない扱いにする（Esc だけはアプリを閉じられるよう通す）
+     */
+    void SetPhysicalInputEnabled(bool enabled) {
+        physicalInputEnabled_ = enabled;
+    }
+    /** @brief 本物の入力を使っているか */
+    bool IsPhysicalInputEnabled() const {
+        return physicalInputEnabled_;
+    }
 
     /** @brief キーの名前（"Enter" "F5" "Space" など、input_bindings.json と同じ書き方）から DIK のキー番号を返す（知らない名前なら 0） */
     static BYTE KeyFromName(const std::string& name);
@@ -184,15 +217,19 @@ public: // メンバ関数
     bool TriggerMenuConfirm() const;
     /** @brief 戻る（Backspace/Bボタン。Escはアプリ終了なので含めない） */
     bool TriggerMenuCancel() const;
-    /** @brief 演出を飛ばす（決定・攻撃・ジャンプのどれか） */
-    bool TriggerCinematicSkip() const;
 
     /** @brief 操作の表示名を、最後に使った機器に合わせて返す（例: キーボードなら "J"、パッドなら "LT"） */
-    std::wstring GetActionLabel(Action action) const;
+    std::wstring GetActionLabel(int action) const;
+
+    /** @brief 列挙値で指定した操作の表示名を返す */
+    template <class E> requires std::is_enum_v<E>
+    std::wstring GetActionLabel(E action) const {
+        return GetActionLabel(static_cast<int>(action));
+    }
 
     /**
      * @brief 文章中の {操作名} を、最後に使った機器のボタン名へ置き換える
-     * @param text {Steal} や {Dodge} などを含む文章。Action名のほかに {Move} {Slot} {Slot1}〜{Slot3} {Confirm} {Back} が使える
+     * @param text 登録した操作名や案内名を波括弧で囲んだ文章
      * @return 置き換え後の文章（知らない名前はそのまま残す）
      */
     std::wstring ExpandPrompts(const std::wstring& text) const;
@@ -226,13 +263,14 @@ public: // メンバ関数
 private:
     /** @brief ゲーム内アクションに対応するキーボードとパッドの割り当て */
     struct ActionBinding {
-        BYTE primaryKey = 0;
-        BYTE secondaryKey = 0;
-        WORD gamepadButton = 0;
+        std::wstring name; ///< 設定ファイルと案内の波括弧で使う操作名
+        BYTE primaryKey; ///< 主キー（0 は割り当て無し）
+        BYTE secondaryKey; ///< 副キー（0 は割り当て無し）
+        WORD gamepadButton; ///< パッドのボタン（0 は割り当て無し）
+        StickDirection stick; ///< 反応する左スティックの方向
+        float stickThreshold; ///< スティックのしきい値（kUseDeadzone ならデッドゾーン）
     };
 
-    /** @brief Resources/Config/input_bindings.jsonから操作割り当てを読み込む */
-    void LoadActionBindings();
     /** @brief DirectInput 8 の本体ポインタ */
     ComPtr<IDirectInput8> directInput_;
 
@@ -245,6 +283,7 @@ private:
     BYTE key_[kKeyCount] = { };
     /** @brief 自動テストが押したことにしているキー（InjectKey 参照） */
     std::array<bool, kKeyCount> injectedKeys_ { };
+    bool physicalInputEnabled_ = true; ///< 本物のキーボード・マウス・パッドの入力を使うか（SetPhysicalInputEnabled 参照）
 
     /** @brief 1フレーム前のキー状態（kKeyCount 個のキー分） */
     BYTE keyPre_[kKeyCount] = { };
@@ -265,7 +304,8 @@ private:
     bool gamepadConnected_ = false; ///< 現在の接続状態
     bool gamepadConnectedPrevious_ = false; ///< 前フレームの接続状態
     bool usingGamepad_ = false; ///< 最後に操作した機器がゲームパッドか
-    std::array<ActionBinding, static_cast<size_t>(Action::kCount)> actionBindings_ { };
+    std::vector<ActionBinding> actionBindings_;
+    PromptResolver promptResolver_ = nullptr;
 
     static inline const Input* sCurrent = nullptr;
 
@@ -277,9 +317,9 @@ private:
     void RecordInputBreadcrumbs() const;
 
     // アクションオーバーライド（SetActionOverride参照）。有効なアクションだけ実機入力より優先する
-    std::array<bool, static_cast<size_t>(Action::kCount)> actionOverrideEnabled_ { };
-    std::array<bool, static_cast<size_t>(Action::kCount)> actionOverridePressed_ { };
-    std::array<bool, static_cast<size_t>(Action::kCount)> actionOverridePressedPrev_ { };
+    std::vector<bool> actionOverrideEnabled_;
+    std::vector<bool> actionOverridePressed_;
+    std::vector<bool> actionOverridePressedPrev_;
 
     // マウス状態管理用
 

@@ -77,6 +77,8 @@ void SkinCS::Initialize(DirectXCommon* dxCommon,
     device->CreateRootSignature(
         0, sigBlob->GetBufferPointer(), sigBlob->GetBufferSize(),
         IID_PPV_ARGS(&csRootSig_));
+    // 同じ設定のパイプラインを保存から見分けられるよう、中身から作った目印を付ける
+    PipelineCache::TagRootSignature(csRootSig_.Get(), sigBlob.Get());
 
     // コンピュートPSO
 
@@ -87,7 +89,8 @@ void SkinCS::Initialize(DirectXCommon* dxCommon,
     D3D12_COMPUTE_PIPELINE_STATE_DESC psoDesc { };
     psoDesc.pRootSignature = csRootSig_.Get();
     psoDesc.CS = { csBlob->GetBufferPointer(), csBlob->GetBufferSize() };
-    device->CreateComputePipelineState(&psoDesc, IID_PPV_ARGS(&csPSO_));
+    // 保存した物があれば取り出し、無ければ作って保存する（スキンのモデルごとに作るので、同じ物は2回目から取り出せる）
+    csPSO_ = PipelineCache::GetInstance()->CreateCompute(device, psoDesc);
 
     // 出力バッファ (DEFAULT heap, UAV フラグ付き)
 
@@ -97,6 +100,8 @@ void SkinCS::Initialize(DirectXCommon* dxCommon,
     D3D12_RESOURCE_DESC rd = pipelineHelper::MakeBufferDesc(outputSize);
     rd.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 
+    // 作り直す時に前の物をその場で手放さないよう、先に預けてから作る（IID_PPV_ARGS の受け取りは即座に手放すため）
+    outputBuffer_ = nullptr;
     device->CreateCommittedResource(
         &heap, D3D12_HEAP_FLAG_NONE, &rd,
         D3D12_RESOURCE_STATE_COMMON, nullptr,
@@ -117,7 +122,7 @@ void SkinCS::Dispatch(ID3D12GraphicsCommandList* cmd,
     }
 
     cmd->SetComputeRootSignature(csRootSig_.Get());
-    cmd->SetPipelineState(csPSO_.Get());
+    cmd->SetPipelineState(PipelineCache::Resolve(csPSO_.Get()));
 
     // スロット 0: 頂点数 (32ビット定数, b1)
     cmd->SetComputeRoot32BitConstant(skinComputeRootSlot::kVertexCount, vertexCount_, 0);

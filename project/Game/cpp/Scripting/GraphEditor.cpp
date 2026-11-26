@@ -224,6 +224,23 @@ void GraphEditor::DeleteSelectedNodes() {
     ClearSelection();
 }
 
+/** @brief 複製の対象に含まれる配線だけを新しい番号へ向ける */
+void GraphEditor::RemapNodeLinks(GraphNode& node, const std::map<std::string, std::string>& ids) {
+    // 実行線と値の線で同じ番号表を使う
+    const auto remap = [&ids](std::string& target) {
+        const auto found = ids.find(target);
+        if (found != ids.end()) {
+            target = found->second;
+        }
+    };
+    for (const ExecPinDef& pin : kExecPins) {
+        remap(node.*pin.target);
+    }
+    for (auto& [key, source] : node.paramLinks) {
+        remap(source);
+    }
+}
+
 /** @brief 選択中のノードを複製する（選択の中どうしの配線は複製先へつなぎ替える） */
 void GraphEditor::DuplicateSelectedNodes() {
     // ドラッグの途中は履歴の順番が崩れるので受け付けない
@@ -248,24 +265,15 @@ void GraphEditor::DuplicateSelectedNodes() {
     }
 
     // 選択の中どうしの配線は複製先どうしをつなぐ（選択の外への配線はそのまま残す）
-    const auto remap = [&newIds](std::string& target) {
-        const auto found = newIds.find(target);
-        if (found != newIds.end()) {
-            target = found->second;
-        }
-    };
     selectedNodeIds_.clear();
     for (const auto& [oldId, newId] : newIds) {
         GraphNode& copy = graph_.nodes[newId];
-        for (const ExecPinDef& pin : kExecPins) {
-            remap(copy.*pin.target);
-        }
-        for (auto& [key, sourceId] : copy.paramLinks) {
-            remap(sourceId);
-        }
+        RemapNodeLinks(copy, newIds);
         selectedNodeIds_.insert(newId);
     }
-    remap(selectedNodeId_);
+    if (newIds.contains(selectedNodeId_)) {
+        selectedNodeId_ = newIds.at(selectedNodeId_);
+    }
     SyncSelection();
     selectedCommentId_.clear();
 }
@@ -343,10 +351,8 @@ void GraphEditor::DeleteComment(const std::string& id) {
     graph_.comments.erase(id);
 }
 
-/** @brief 開始ノードからの深さごとに列を作ってノードを並べ直す（Undo できるように記録する） */
-void GraphEditor::ArrangeNodes() {
-    // 並べ替え前の配置を元に戻せるよう残しておく
-    RecordUndoSnapshotNow();
+/** @brief 実行線を順にたどり、到達できるノードまでの距離を求める */
+std::map<std::string, int> GraphEditor::FindExecutionDepths() const {
     // 開始ノードからのBFSで各ノードの深さ（開始から何手先か）を求め、深さごとに列を作って並べる
     std::map<std::string, int> depth;
     std::vector<std::string> queue;
@@ -374,7 +380,7 @@ void GraphEditor::ArrangeNodes() {
         }
 
         for (const std::string& n : nexts) {
-            if (n.empty() || depth.count(n)) {
+            if (n.empty() || depth.count(n) || !graph_.nodes.contains(n)) {
                 continue;
             }
             depth[n] = depth[cur] + 1;
@@ -382,6 +388,63 @@ void GraphEditor::ArrangeNodes() {
         }
     }
 
+    return depth;
+}
+
+/** @brief 実行線の到達範囲と入力側の接続を調べる */
+void GraphEditor::UpdateWarnings() {
+    warnings_.clear();
+    const auto depths = FindExecutionDepths();
+    std::set<std::string> incoming;
+    // 分岐に使う線と通常の線を区別して入力側を集める
+    for (const auto& [id, node] : graph_.nodes) {
+        const bool branches = NodeRegistry::GetInstance()->IsBranchType(node.type);
+        for (const auto& pin : kExecPins) {
+            if (pin.branch == branches && !(node.*pin.target).empty()) {
+                incoming.insert(node.*pin.target);
+            }
+        }
+    }
+    // 開始地点自体がない時は最初に直す場所を案内する
+    for (const auto& [id, node] : graph_.nodes) {
+        if (depths.empty()) {
+            warnings_[id] = "開始ノードがありません。最初に動かすノードを選んで開始ノードに設定してください。";
+        } else if (!depths.contains(id)) {
+            warnings_[id] = incoming.contains(id)
+                ? "開始ノードからここまで実行の線が続いていません。"
+                : "前のノードから実行の線が来ていません。左上の入力につないでください。";
+        }
+    }
+}
+
+/** @brief 点検結果から該当するノードを選び、画面の中央へ移す */
+void GraphEditor::DrawInspection() {
+    if (ImGui::Button("つなぎ忘れを点検")) {
+        ImGui::OpenPopup("点検結果");
+    }
+    if (!ImGui::BeginPopup("点検結果")) {
+        return;
+    }
+    if (warnings_.empty()) {
+        ImGui::TextUnformatted(graph_.nodes.empty() ? "ノードがありません。" : "すべてのノードに開始ノードから実行の線が続いています。");
+    }
+    // 同じ種類のノードを番号で見分けられるようにする
+    for (const auto& [id, reason] : warnings_) {
+        const std::string label = GraphNodeLabels::TypeName(graph_.nodes.at(id).type) + "  " + id;
+        if (ImGui::Selectable(label.c_str())) {
+            SelectOnlyNode(id);
+            requestFrameAll_ = false;
+            FrameNodes(true);
+        }
+        ImGui::TextWrapped("%s", reason);
+    }
+    ImGui::EndPopup();
+}
+
+/** @brief 開始ノードからの深さごとに列を作ってノードを並べ直す */
+void GraphEditor::ArrangeNodes() {
+    RecordUndoSnapshotNow();
+    const auto depth = FindExecutionDepths();
     // 開始ノードから辿り着けないノードは、右端にまとめて別の列として置く
     int maxDepth = -1;
     for (const auto& [id, d] : depth) {

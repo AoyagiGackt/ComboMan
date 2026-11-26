@@ -5,6 +5,7 @@
  * @note StageEditor のパネルの描画だけを StageEditor.cpp から分けて置いている（クラスは StageEditor のまま）
  */
 #include "StageEditor.h"
+#include "ObjectKind.h"
 #include "TextBufferCapacity.h"
 #ifdef USE_IMGUI
 #include "Camera.h"
@@ -237,6 +238,7 @@ void StageEditor::RenderGameViewport() {
     ImGui::Image((ImTextureID)previewTextureId_, size, { previewU0_, previewV0_ }, { previewU1_, previewV1_ });
     // マウス判定とデバッグ描画が、表示した画像の位置に合うよう伝える
     viewport_.SetImageRect(origin.x, origin.y, size.x, size.y, ImGui::IsItemHovered());
+    AcceptPlacementDrop();
     diagnosticsDraw::SetImageViewport(origin, size, ImGui::GetWindowDrawList());
     ImGui::End();
 }
@@ -284,6 +286,17 @@ void StageEditor::RenderEditorToolbar() {
     // 今のモード・保存・未保存の表示・元に戻す/やり直す
     ImGui::TextColored(kModeLabelColor, playTestMode_ ? "テスト中" : "ステージ編集");
     ImGui::SameLine();
+    ImGui::BeginDisabled(playTestMode_);
+    ImGui::PushStyleColor(ImGuiCol_Button, kStartPlayTestColor);
+    if (ImGui::Button("ここから遊ぶ")) {
+        PlayFromHere();
+    }
+    ImGui::PopStyleColor();
+    if (ImGui::IsItemHovered()) {
+        editorUI::TooltipWrapped("Ctrl+Enter で選んだ物の位置から遊びます。何も選んでいない時は画面の中央から始めます。");
+    }
+    ImGui::EndDisabled();
+    ImGui::SameLine();
     if (ImGui::Button("保存 (Ctrl+S)")) {
         Save();
     }
@@ -326,10 +339,10 @@ void StageEditor::RenderEditorToolbar() {
     toolButton("回転 E", TransformTool::kRotate);
     toolButton("拡縮 R", TransformTool::kScale);
     // スナップのオンオフと、揃える間隔
-    ImGui::Checkbox("座標を揃える", &snapEnabled_);
+    ImGui::Checkbox("座標を揃える", &snap_.Enabled());
     ImGui::SameLine();
     ImGui::SetNextItemWidth(kToolbarSnapStepWidth);
-    ImGui::DragFloat("##toolbarSnapStep", &snapStep_, editorUi::kDragStepPosition, editorUi::kMinSnapStep, editorUi::kMaxSnapStep, "%.1f");
+    ImGui::DragFloat("##toolbarSnapStep", &snap_.Step(), editorUi::kDragStepPosition, editorUi::kMinSnapStep, editorUi::kMaxSnapStep, "%.1f");
     ImGui::EndDisabled();
     ImGui::SameLine();
     // 編集とテストプレイの切り替えボタン
@@ -365,6 +378,23 @@ void StageEditor::RenderEditorToolbar() {
     ImGui::Separator();
     // 3段目: 追加ボタンと、表示の切り替えのメニュー
     ImGui::BeginDisabled(playTestMode_);
+    if (ImGui::Button("置き方")) {
+        ImGui::OpenPopup("置き方の設定");
+    }
+    if (ImGui::BeginPopup("置き方の設定")) {
+        // 座標とは別に角度と接地を設定する
+        ImGui::Checkbox("回転を揃える", &angleSnap_);
+        constexpr float kMaxAngleDegrees = 180.0f;
+        ImGui::SliderFloat("角度の刻み", &angleStepDegrees_, 1.0f, kMaxAngleDegrees, "%.1f 度", ImGuiSliderFlags_AlwaysClamp);
+        ImGui::Checkbox("新しく置く物を床に乗せる", &autoFloor_);
+        ImGui::BeginDisabled(selKind_ != SelKind::kObject);
+        if (ImGui::Button("選んだ物を床に下ろす (End)")) {
+            DropSelectionToFloor();
+        }
+        ImGui::EndDisabled();
+        ImGui::EndPopup();
+    }
+    ImGui::SameLine();
     if (ImGui::Button("文章UIを追加")) {
         AddUITextAt(editorUi::kScreenCenterPosition);
     }
@@ -501,7 +531,7 @@ void StageEditor::RenderAssetPalette() {
         paletteMode_ = PaletteMode::kPlaceNew;
     }
     bool applyToSelection = (paletteMode_ == PaletteMode::kReplaceSelection && hasPropSel);
-    ImGui::TextDisabled(applyToSelection ? "クリックで選択中の配置物のモデルを差し替え" : "クリックで画面中央に新規配置");
+    ImGui::TextDisabled(applyToSelection ? "クリックで選択中の配置物のモデルを差し替え" : "クリックで画面中央に配置、ドラッグで好きな場所に配置");
 
     ImGui::SetNextItemWidth(-1.0f);
     ImGui::InputTextWithHint("##素材検索", "素材名で検索", paletteSearch_, sizeof(paletteSearch_));
@@ -562,6 +592,13 @@ void StageEditor::RenderAssetPalette() {
         const bool clicked = thumbnail != 0
             ? ImGui::ImageButton("##thumbnail", (ImTextureID)thumbnail, ImVec2(kAssetTileSize, kAssetTileSize))
             : ImGui::Button(label, ImVec2(tileWidth, kAssetTileSize + ImGui::GetStyle().FramePadding.y * 2.0f));
+        if (ImGui::IsItemActive()) {
+            ObjectDesc part;
+            part.name = "obj";
+            part.model = model;
+            part.texture = texture;
+            PlacementSource(label, part);
+        }
         if (ImGui::IsItemHovered()) {
             ImGui::BeginTooltip();
             ImGui::TextUnformatted(label);
@@ -581,7 +618,14 @@ void StageEditor::RenderAssetPalette() {
             }
         }
     };
-    ImGui::SeparatorText("プリセット");
+    // 選んでいるゲームの型でよく使う部品を先に並べる
+    RenderRecommendedParts();
+    // 保存してある部屋のひな形
+    RenderRoomShelf();
+    if (ImGui::CollapsingHeader("配置プリセット")) {
+        RenderPlacementPresets(false);
+    }
+    ImGui::SeparatorText("素材");
     int column = 0;
     for (const auto& preset : kAssetPresets) {
         drawAsset(preset.label, preset.model, preset.texture, column);
@@ -597,48 +641,6 @@ void StageEditor::RenderAssetPalette() {
     }
 
     ImGui::End();
-}
-
-/** @brief 選択中の配置物を名前付きプレハブへ保存する */
-void StageEditor::SaveSelectedPrefab() {
-    if (selKind_ != SelKind::kObject || selIndex_ < 0 || selIndex_ >= static_cast<int>(objects_.size())) {
-        return;
-    }
-    const std::string path = StageEditorPrefabService::Save(prefabName_, objects_[selIndex_].desc);
-    if (path.empty()) {
-        statusMessage_ = "プレハブの保存に失敗しました";
-        statusTimer_ = kStatusLongSeconds;
-        return;
-    }
-    statusMessage_ = "プレハブを保存しました: " + path;
-    statusTimer_ = StageEditor::kStatusShortSeconds;
-}
-
-/** @brief 名前付きプレハブを画面中央へ生成する */
-void StageEditor::InstantiatePrefab() {
-    const std::string path = StageEditorPrefabService::MakePath(prefabName_);
-    std::vector<ObjectDesc> prefabObjects = StageEditorPrefabService::Load(prefabName_);
-    if (prefabObjects.empty()) {
-        statusMessage_ = "プレハブが見つかりません: " + path;
-        statusTimer_ = StageEditor::kStatusShortSeconds;
-        return;
-    }
-
-    RecordUndoSnapshotNow();
-    Vector3 center = playerSpawn_;
-    center = ViewCenterOnGround();
-    for (ObjectDesc desc : prefabObjects) {
-        ObjectEntry entry;
-        entry.desc = std::move(desc);
-        entry.desc.name = "prefab_" + std::to_string(nextSerial_++);
-        entry.desc.parent.clear();
-        entry.desc.position = center + entry.desc.position;
-        objects_.push_back(std::move(entry));
-        RegenerateInstances(objects_.back());
-    }
-    SelectLastObject();
-    statusMessage_ = "プレハブを配置しました";
-    statusTimer_ = StageEditor::kStatusShortSeconds;
 }
 
 #else

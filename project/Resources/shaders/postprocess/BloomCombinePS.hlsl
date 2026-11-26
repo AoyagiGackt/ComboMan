@@ -20,6 +20,6 @@ float4 main(PSInput input) : SV_TARGET
     float4 scene = gScene.Sample(gSampler, input.uv);
     float4 bloom = gBloom.Sample(gSampler, input.uv);
 
-    // 加算合成（Bloom は発光エネルギーの追加分として扱う）
-    return float4(saturate(scene.rgb + bloom.rgb), scene.a);
+    // 加算合成（Bloom は発光エネルギーの追加分として扱う）。1 を超えた分はこの後のトーンマップで丸める
+    return float4(scene.rgb + bloom.rgb, scene.a);
 }

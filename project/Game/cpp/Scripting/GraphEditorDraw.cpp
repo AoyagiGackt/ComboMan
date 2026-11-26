@@ -409,6 +409,12 @@ void GraphEditor::UpdateHoveredNode(CanvasFrameState& state) {
         const ImVec2 frameMax(rect.second.x + boxPad, rect.second.y + boxPad);
         if (GraphEditorDrawingStyle::RectContains(frameMin, frameMax, mouse)) {
             state.hoveredNodeId = id;
+            // 枠や入力欄の上でもノードの説明と警告を一緒に読めるようにする
+            const auto warning = warnings_.find(id);
+            if (warning != warnings_.end()) {
+                const auto* spec = NodeRegistry::GetInstance()->FindSpec(graph_.nodes.at(id).type);
+                graphics::editorUI::TooltipWrapped("%s\n%s", spec ? spec->description.c_str() : "", warning->second);
+            }
             return;
         }
     }

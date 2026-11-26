@@ -7,6 +7,7 @@
 #include "PipelineHelper.h"
 #include "AssetPack.h"
 #include "EngineAssert.h"
+#include "FrustumCulling.h"
 #include "ModelCommon.h"
 #include "TextureManager.h"
 #include <algorithm>
@@ -75,6 +76,8 @@ void Model::Initialize(ModelCommon* modelCommon, const std::string& modelFilePat
         (this->*(loader != std::end(kLoaders) ? loader->load : &Model::LoadGltfFile))(modelFilePath);
         RecordPackedGeometry(packKey);
     }
+    // 画面外の判定に使う、全頂点を囲む箱
+    ComputeLocalBounds();
 
     // 頂点をアップロードヒープのバッファへ書き込み、頂点バッファビューを作る
     ID3D12Device* device = modelCommon_->GetDxCommon()->GetDevice();
@@ -98,6 +101,12 @@ void Model::Initialize(ModelCommon* modelCommon, const std::string& modelFilePat
 
 /** @brief モデルの描画コマンド（DrawIndexedInstanced）を積む */
 void Model::Draw(ModelCommon* modelCommon) {
+    BindForDraw(modelCommon);
+    DrawIndexed(modelCommon);
+}
+
+/** @brief 頂点・添字のバッファと、通常テクスチャ・環境マップを設定する */
+void Model::BindForDraw(ModelCommon* modelCommon) {
     ID3D12GraphicsCommandList* commandList = modelCommon->GetDxCommon()->GetCommandList();
 
     commandList->IASetVertexBuffers(0, 1, &vertexBufferView_);
@@ -113,8 +122,12 @@ void Model::Draw(ModelCommon* modelCommon) {
     } else {
         commandList->SetGraphicsRootDescriptorTable(pipelineHelper::modelRootSlot::kEnvironment, textureSrvHandle);
     }
+}
 
-    commandList->DrawIndexedInstanced(static_cast<UINT>(indices_.size()), 1, 0, 0, 0);
+/** @brief 設定済みのバッファで描画の命令だけを積む */
+void Model::DrawIndexed(ModelCommon* modelCommon, UINT instanceCount) {
+    ID3D12GraphicsCommandList* commandList = modelCommon->GetDxCommon()->GetCommandList();
+    commandList->DrawIndexedInstanced(static_cast<UINT>(indices_.size()), instanceCount, 0, 0, 0);
 }
 
 /** @brief シャドウパス用の描画（テクスチャバインドなし、頂点バッファのみ） */
@@ -123,6 +136,11 @@ void Model::DrawGeometryOnly(ModelCommon* modelCommon) {
     commandList->IASetVertexBuffers(0, 1, &vertexBufferView_);
     commandList->IASetIndexBuffer(&indexBufferView_);
     commandList->DrawIndexedInstanced(static_cast<UINT>(indices_.size()), 1, 0, 0, 0);
+}
+
+/** @brief vertices_ の全頂点を囲む箱を計算する（頂点が無ければ原点の点にする） */
+void Model::ComputeLocalBounds() {
+    ComputeVertexBounds(vertices_, localBoundsMin_, localBoundsMax_);
 }
 
 // OBJファイル読み込み

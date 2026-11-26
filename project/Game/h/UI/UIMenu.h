@@ -24,12 +24,13 @@
 #include "MakeAffine.h"
 #include "Sprite.h"
 #include "SpriteCommon.h"
-#include "UIButton.h"
+#include "MenuSelection.h"
 #include <memory>
 #include <string>
 #include <vector>
 namespace engine::game {
 using engine::Input;
+using graphics::UIButton;
 using engine::graphics::Sprite;
 using engine::graphics::SpriteCommon;
 
@@ -85,7 +86,7 @@ public:
 
     /** @brief 現在選択中の項目インデックスを取得する */
     int GetSelectedIndex() const {
-        return cursor_;
+        return selection_.GetSelectedIndex();
     }
 
     /** @brief メニュー左上の現在位置（項目の横に値を添えて描く時に使う） */
@@ -103,7 +104,7 @@ public:
 private:
     /** @brief UILayoutから位置・大きさ・色を読み直し、変わっていればハイライト枠を作り直す */
     void ApplyBoundLayout();
-    /** @brief items_ と layout の両方が揃っていればハイライト用Spriteを再構築する */
+    /** @brief 項目と配置が揃っていればハイライト用Spriteを再構築する */
     void RebuildBoxes();
     /** @brief 選択中・無効・通常に応じてハイライトの色を塗り直す */
     void RefreshBoxColors();
@@ -112,11 +113,9 @@ private:
     FontRenderer* fontRenderer_ = nullptr;
     engine::Audio* audio_ = nullptr;
 
-    std::vector<UIButton> items_;
-    std::vector<std::wstring> labels_; ///< items_のラベルを描画用のワイド文字列にしたもの
+    graphics::MenuSelection selection_;
+    std::vector<std::wstring> labels_; ///< 項目のラベルを描画用のワイド文字列にしたもの
     std::vector<std::unique_ptr<Sprite>> boxes_;
-
-    int cursor_ = 0;
 
     std::string layoutName_;
     std::string group_;

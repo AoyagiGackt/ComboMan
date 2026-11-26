@@ -3,6 +3,8 @@
  * @brief 斧を回転させながら投げ、減速と帰還、往復の命中を処理する
  */
 #include "ThrownWeaponPool.h"
+#include "EngineContext.h"
+#include "PoolOverflowCounter.h"
 #include "ModelCommon.h"
 #include "ModelManager.h"
 #include "Object3d.h"
@@ -20,6 +22,14 @@ constexpr float kHitStepFraction = 0.5f; ///< 1回の移動距離に対する命
 constexpr float kMinimumStepDistance = 0.01f; ///< 半径がゼロの場合にも時間を進めるための距離
 } // namespace
 
+/** @brief 斧と使い捨ての武器を同じ速度曲線で飛ばす */
+float ThrownWeaponParams::OutwardStep(float speed, float distance, float remaining, float dt) {
+    const float brakeDistance = distance * kBrakeFraction;
+    const float speedRatio = brakeDistance > 0.0f
+        ? std::sqrt((std::min)(1.0f, remaining / brakeDistance)) : 1.0f;
+    return (std::min)(remaining, speed * (std::max)(kMinimumSpeedFraction, speedRatio) * dt);
+}
+
 /** @brief 描画実体を作らずに初期状態を用意する */
 ThrownWeaponPool::ThrownWeaponPool() = default;
 
@@ -29,7 +39,7 @@ ThrownWeaponPool::~ThrownWeaponPool() = default;
 /** @brief モデルを共有し、ゲーム中に使い回す描画実体を先に用意する */
 void ThrownWeaponPool::Initialize(engine::graphics::ModelCommon* modelCommon,
     const std::string& model, const std::string& texture) {
-    engine::graphics::Model* sharedModel = engine::graphics::ModelManager::GetInstance()->GetOrLoad(modelCommon, model, texture);
+    engine::graphics::Model* sharedModel = engine::Services().models->GetOrLoad(modelCommon, model, texture);
     for (auto& object : objects_) {
         // 再初期化でも既存の描画実体を保持する
         if (!object) {
@@ -66,6 +76,8 @@ bool ThrownWeaponPool::Launch(const Vector3& position, float dirX, const ThrownW
         UpdateVisual(index);
         return true;
     }
+    // 利用できる枠がない依頼を数える。
+    engine::poolOverflowCounter::Count("thrown_weapon_pool");
     return false;
 }
 
@@ -93,11 +105,7 @@ std::vector<ThrownWeaponHit> ThrownWeaponPool::Update(float dt, const Vector3& r
             if (!returning) {
                 // 行きの高さと奥行きを固定し、終点手前では残り距離に応じて減速する
                 const float remainingDistance = (std::max)(kZero, weapon.params.distance - weapon.traveled);
-                const float brakeDistance = weapon.params.distance * kBrakeFraction;
-                const float speedRatio = brakeDistance > kZero
-                    ? std::sqrt((std::min)(kOne, remainingDistance / brakeDistance)) : kOne;
-                const float speed = weapon.params.speed * (std::max)(kMinimumSpeedFraction, speedRatio);
-                const float movement = (std::min)(remainingDistance, speed * step);
+                const float movement = ThrownWeaponParams::OutwardStep(weapon.params.speed, weapon.params.distance, remainingDistance, step);
                 weapon.position.x += weapon.direction * movement;
                 weapon.traveled += movement;
                 if (movement >= remainingDistance) {

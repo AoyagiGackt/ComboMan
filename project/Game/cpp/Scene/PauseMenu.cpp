@@ -3,6 +3,7 @@
  * @brief プレイ中のシーンで共通に使う一時停止画面（PauseMenu）の実装
  */
 #include "PauseMenu.h"
+#include "GameActions.h"
 #include "Audio.h"
 #include "ComboTrial.h"
 #include "FontRenderer.h"
@@ -295,7 +296,7 @@ void PauseMenu::RebuildItems() {
 /** @brief 開閉と一時停止中の入力を処理する */
 bool PauseMenu::Update(Input* input, bool canOpen) {
     // コマンド表を開いている間の戻るボタンはコマンド表を閉じるのに使い、一時停止の解除には回さない
-    const bool toggle = input->TriggerAction(Input::Action::kPause)
+    const bool toggle = input->TriggerAction(GameAction::kPause)
         || (controller_.IsPaused() && !page_->HandlesBack() && input->TriggerMenuCancel());
     const bool wasPaused = controller_.IsPaused();
     const GamePauseController::UpdateMode mode = controller_.Advance(toggle && canOpen);

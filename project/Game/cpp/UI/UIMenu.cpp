@@ -71,7 +71,7 @@ void UIMenu::ApplyBoundLayout() {
     y_ = position.y;
     itemWidth_ = itemSize.x;
     itemHeight_ = itemSize.y;
-    if (moved || boxes_.size() != items_.size()) {
+    if (moved || boxes_.size() != selection_.Count()) {
         RebuildBoxes();
     } else {
         RefreshBoxColors();
@@ -80,30 +80,23 @@ void UIMenu::ApplyBoundLayout() {
 
 /** @brief 選択項目一覧を設定する（先頭の enabled な項目へカーソルを合わせる） */
 void UIMenu::SetItems(const std::vector<UIButton>& items) {
-    items_ = items;
+    selection_.SetItems(items);
     labels_.clear();
-    for (const UIButton& item : items_) {
+    for (const UIButton& item : items) {
         labels_.push_back(StringUtility::ConvertString(item.label));
-    }
-    cursor_ = 0;
-    for (size_t i = 0; i < items_.size(); ++i) {
-        if (items_[i].enabled) {
-            cursor_ = static_cast<int>(i);
-            break;
-        }
     }
     RebuildBoxes();
 }
 
-/** @brief items_ と layout の両方が揃っていればハイライト用Spriteを再構築する */
+/** @brief 項目と配置が揃っていればハイライト用Spriteを再構築する */
 void UIMenu::RebuildBoxes() {
-    if (items_.empty() || itemWidth_ <= 0.0f || itemHeight_ <= 0.0f || !spriteCommon_) {
+    if (selection_.Count() == 0 || itemWidth_ <= 0.0f || itemHeight_ <= 0.0f || !spriteCommon_) {
         return;
     }
 
     boxes_.clear();
-    boxes_.reserve(items_.size());
-    for (size_t i = 0; i < items_.size(); ++i) {
+    boxes_.reserve(selection_.Count());
+    for (size_t i = 0; i < selection_.Count(); ++i) {
         auto box = std::make_unique<Sprite>();
         box->Initialize(spriteCommon_, "Resources/white.png");
         box->SetPosition({ x_, y_ + itemHeight_ * static_cast<float>(i) });
@@ -117,9 +110,9 @@ void UIMenu::RebuildBoxes() {
 void UIMenu::RefreshBoxColors() {
     for (size_t i = 0; i < boxes_.size(); ++i) {
         Vector4 color = idleColor_;
-        if (!items_[i].enabled) {
+        if (!selection_.IsEnabled(i)) {
             color = disabledColor_;
-        } else if (static_cast<int>(i) == cursor_) {
+        } else if (static_cast<int>(i) == GetSelectedIndex()) {
             color = selectedColor_;
         }
         boxes_[i]->SetColor(color);
@@ -129,29 +122,13 @@ void UIMenu::RefreshBoxColors() {
 
 /** @brief 毎フレーム更新カーソル移動とハイライト色の更新を行う */
 void UIMenu::Update(Input* input) {
-    if (items_.empty()) {
+    if (selection_.Count() == 0) {
         return;
     }
 
-    const int previousCursor = cursor_;
-    if (input->TriggerMenuUp()) {
-        for (int i = cursor_ - 1; i >= 0; --i) {
-            if (items_[i].enabled) {
-                cursor_ = i;
-                break;
-            }
-        }
-    }
-    if (input->TriggerMenuDown()) {
-        for (int i = cursor_ + 1; i < static_cast<int>(items_.size()); ++i) {
-            if (items_[i].enabled) {
-                cursor_ = i;
-                break;
-            }
-        }
-    }
-
-    if (audio_ && cursor_ != previousCursor) {
+    const bool up = input->TriggerMenuUp();
+    const bool down = input->TriggerMenuDown();
+    if (selection_.Move(up, down) && audio_) {
         audio_->PlayMenuChoice();
     }
     RefreshBoxColors();
@@ -159,10 +136,8 @@ void UIMenu::Update(Input* input) {
 
 /** @brief 決定入力があったかを判定する */
 bool UIMenu::ConsumeConfirm(Input* input) {
-    if (items_.empty() || !items_[cursor_].enabled) {
-        return false;
-    }
-    const bool confirmed = input->TriggerMenuConfirm();
+    const bool confirm = input && input->TriggerMenuConfirm();
+    const bool confirmed = selection_.Decide(confirm, false) == MenuDecision::kConfirm;
     if (confirmed && audio_) {
         audio_->PlayMenuSelect();
     }
@@ -178,15 +153,15 @@ void UIMenu::Draw() {
         box->Draw();
     }
 
-    for (size_t i = 0; i < items_.size(); ++i) {
-        const Vector4 textColor = items_[i].enabled ? textColor_ : textDisabledColor_;
+    for (size_t i = 0; i < selection_.Count(); ++i) {
+        const Vector4 textColor = selection_.IsEnabled(i) ? textColor_ : textDisabledColor_;
         const float labelY = y_ + itemHeight_ * static_cast<float>(i) + itemHeight_ * kLabelTopRatio;
         const float labelX = centerLabels_
             ? x_ + (itemWidth_ - MeasureTextWidth(labels_[i], labelScale_)) * kHalf
             : x_ + labelPaddingX_;
         fontRenderer_->DrawStringW(labels_[i], labelX, labelY, labelScale_, textColor);
 
-        if (static_cast<int>(i) == cursor_) {
+        if (static_cast<int>(i) == GetSelectedIndex()) {
             fontRenderer_->DrawStringW(L">", x_ - labelPaddingX_, labelY, labelScale_, selectedColor_);
             fontRenderer_->DrawStringW(L"<", x_ + itemWidth_ + kCursorGap, labelY, labelScale_, selectedColor_);
         }

@@ -11,7 +11,9 @@
 #include "KnightEnemy.h"
 #include "Matrix4x4.h"
 #include "Object3d.h"
+#include "ObjectKind.h"
 #include "StageEditorUiStyle.h"
+#include "StageEditorObjectPresets.h"
 #include "UILayout.h"
 #include <algorithm>
 #include <cfloat>
@@ -23,6 +25,7 @@ using namespace engine::graphics;
 #ifdef USE_IMGUI
 namespace engine::game {
 namespace {
+constexpr char kPlacementPayload[] = "STAGE_PART";
 using stageEditorUiStyle::kZDragPerPixel;
 using stageEditorUiStyle::kPickRadiusPx;
 using stageEditorUiStyle::kPickMarkerPriorityPx;
@@ -152,13 +155,13 @@ void StageEditor::HandleViewportClick(float mouseX, float mouseY) {
     int handleAxis = 0;
     bool handleUniform = false;
     if (!linkingParent && PickTransformHandle(mouseX, mouseY, handleAxis, handleUniform)) {
-        viewportDragging_ = true;
+        viewDrag_.viewportDragging = true;
         BeginUndoCapture();
         CaptureDragStart(mouseX, mouseY);
-        activeDragAxis_ = handleAxis;
-        scaleUniform_ = handleUniform;
-        rotateDragging_ = transformTool_ == TransformTool::kRotate;
-        scaleDragging_ = transformTool_ == TransformTool::kScale;
+        viewDrag_.activeDragAxis = handleAxis;
+        viewDrag_.scaleUniform = handleUniform;
+        viewDrag_.rotateDragging = transformTool_ == TransformTool::kRotate;
+        viewDrag_.scaleDragging = transformTool_ == TransformTool::kScale;
         return;
     }
 
@@ -175,9 +178,9 @@ void StageEditor::HandleViewportClick(float mouseX, float mouseY) {
     if (!PickViewportTarget(mouseX, mouseY, bestKind, bestIdx)) {
         // 3. 何も無い場所: 範囲選択を始める（離した時に矩形が小さければ選択解除）
         if (!linkingParent) {
-            boxSelecting_ = true;
-            boxStartX_ = mouseX;
-            boxStartY_ = mouseY;
+            viewDrag_.boxSelecting = true;
+            viewDrag_.boxStartX = mouseX;
+            viewDrag_.boxStartY = mouseY;
         }
         return;
     }
@@ -196,13 +199,13 @@ void StageEditor::HandleViewportClick(float mouseX, float mouseY) {
         && std::find(selectedObjectIndices_.begin(), selectedObjectIndices_.end(), bestIdx) != selectedObjectIndices_.end();
     if (alreadySelected) {
         selIndex_ = bestIdx;
-        clickPendingIndex_ = bestIdx;
-        clickPendingAdditive_ = additive;
+        viewDrag_.clickPendingIndex = bestIdx;
+        viewDrag_.clickPendingAdditive = additive;
     } else {
         SelectionKindOf(bestKind).SelectFromClick(*this, bestIdx, additive);
     }
     UILayout::SetSelectedHandle(nullptr, 0);
-    viewportDragging_ = true;
+    viewDrag_.viewportDragging = true;
 
     // ドラッグ1回ぶんを1つのUndoにまとめるため、変更前をここで控える
     // （エンティティはスナップショット対象外なので、動かしても確定時に捨てられる）
@@ -212,14 +215,14 @@ void StageEditor::HandleViewportClick(float mouseX, float mouseY) {
 
 /** @brief ドラッグ開始時のマウス位置と選択物の値を控える */
 void StageEditor::CaptureDragStart(float mouseX, float mouseY) {
-    dragStartMouseX_ = mouseX;
-    dragStartMouseY_ = mouseY;
-    dragThresholdPassed_ = false;
-    rotateAccumRadians_ = 0.0f;
-    rotateAngleValid_ = false;
-    dragGrabOffsetX_ = 0.0f;
-    dragGrabOffsetY_ = 0.0f;
-    dragStarts_.clear();
+    viewDrag_.dragStartMouseX = mouseX;
+    viewDrag_.dragStartMouseY = mouseY;
+    viewDrag_.dragThresholdPassed = false;
+    viewDrag_.rotateAccumRadians = 0.0f;
+    viewDrag_.rotateAngleValid = false;
+    viewDrag_.dragGrabOffsetX = 0.0f;
+    viewDrag_.dragGrabOffsetY = 0.0f;
+    viewDrag_.dragStarts.clear();
     if (selKind_ == SelKind::kNone) {
         return;
     }
@@ -236,7 +239,7 @@ void StageEditor::CaptureDragStart(float mouseX, float mouseY) {
             start.rotation = objects_[index].desc.rotation;
             start.scale = objects_[index].desc.scale;
         }
-        dragStarts_.push_back(start);
+        viewDrag_.dragStarts.push_back(start);
     };
     // 主選択を先頭に、複数選択の残りを続けて控える
     addStart(selIndex_);
@@ -256,27 +259,27 @@ void StageEditor::CaptureDragStart(float mouseX, float mouseY) {
                     break;
                 }
             }
-            dragStarts_.back().followsMove = followsMove;
+            viewDrag_.dragStarts.back().followsMove = followsMove;
         }
     }
 
     // Shift+ドラッグ(Z移動)用に、主選択の現在のZをスナップ前の生値として持つ
-    dragRawZ_ = dragStarts_.front().localZ;
+    viewDrag_.dragRawZ = viewDrag_.dragStarts.front().localZ;
 
     // クリックした位置がオブジェクト原点とずれていても、その場で原点まで飛ばないよう、
     // 掴んだ瞬間の(オブジェクト位置 - マウス位置)のオフセットを控えておく
     // （"screen"座標のui_textはワールド平面と無関係なので、ゲーム画面のpx位置を基準にする）
     if (selected.IsScreenAnchor(*this, selIndex_)) {
         const Vector3 logicalMouse = viewport_.ImageToScreen(mouseX, mouseY);
-        dragGrabOffsetX_ = objects_[selIndex_].desc.position.x - logicalMouse.x;
-        dragGrabOffsetY_ = objects_[selIndex_].desc.position.y - logicalMouse.y;
+        viewDrag_.dragGrabOffsetX = objects_[selIndex_].desc.position.x - logicalMouse.x;
+        viewDrag_.dragGrabOffsetY = objects_[selIndex_].desc.position.y - logicalMouse.y;
         return;
     }
     Vector3 grabWorld { };
     Vector3 grabGround { };
     if (selected.WorldPosition(*this, selIndex_, grabWorld) && MouseToGround(mouseX, mouseY, grabGround)) {
-        dragGrabOffsetX_ = grabWorld.x - grabGround.x;
-        dragGrabOffsetY_ = grabWorld.y - grabGround.y;
+        viewDrag_.dragGrabOffsetX = grabWorld.x - grabGround.x;
+        viewDrag_.dragGrabOffsetY = grabWorld.y - grabGround.y;
     }
 }
 
@@ -290,22 +293,22 @@ bool StageEditor::UpdateActiveViewportDrag(float mouseX, float mouseY) {
         return true;
     }
     // 範囲選択は矩形を描くだけなので、離すまで何もしない
-    if (boxSelecting_) {
+    if (viewDrag_.boxSelecting) {
         return true;
     }
     // 押してから少し動くまでは何も変えない（クリックだけで物がずれるのを防ぐ）
-    if (!dragThresholdPassed_) {
-        const float dx = mouseX - dragStartMouseX_;
-        const float dy = mouseY - dragStartMouseY_;
+    if (!viewDrag_.dragThresholdPassed) {
+        const float dx = mouseX - viewDrag_.dragStartMouseX;
+        const float dy = mouseY - viewDrag_.dragStartMouseY;
         if (dx * dx + dy * dy < kDragStartThresholdPx * kDragStartThresholdPx) {
             return true;
         }
-        dragThresholdPassed_ = true;
+        viewDrag_.dragThresholdPassed = true;
     }
     ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeAll);
-    if (uiDragLayout_) {
+    if (viewDrag_.uiDragLayout) {
         UpdateUILayoutDrag(mouseX, mouseY);
-    } else if (rotateDragging_ || scaleDragging_) {
+    } else if (viewDrag_.rotateDragging || viewDrag_.scaleDragging) {
         UpdateRotateScaleDrag(mouseX, mouseY);
     } else {
         UpdateViewportDrag(mouseX, mouseY);
@@ -316,18 +319,18 @@ bool StageEditor::UpdateActiveViewportDrag(float mouseX, float mouseY) {
 /** @brief ドラッグ・範囲選択を確定して状態を戻す */
 void StageEditor::FinishViewportDrag(float mouseX, float mouseY) {
     // 実際に動かしていた場合だけ1回分のUndoとして確定する
-    if (viewportDragging_ || uiDragLayout_) {
+    if (viewDrag_.viewportDragging || viewDrag_.uiDragLayout) {
         CommitUndoCapture();
     }
-    if (boxSelecting_) {
+    if (viewDrag_.boxSelecting) {
         FinishBoxSelect(mouseX, mouseY);
     }
     // 選択中の物を動かさずに離した: Ctrl付きなら選択から外し、Ctrl無しならその1つだけを選択する
-    if (clickPendingIndex_ >= 0 && !dragThresholdPassed_) {
-        if (!clickPendingAdditive_) {
-            selectedObjectIndices_ = { clickPendingIndex_ };
+    if (viewDrag_.clickPendingIndex >= 0 && !viewDrag_.dragThresholdPassed) {
+        if (!viewDrag_.clickPendingAdditive) {
+            selectedObjectIndices_ = { viewDrag_.clickPendingIndex };
         } else {
-            selectedObjectIndices_.erase(std::remove(selectedObjectIndices_.begin(), selectedObjectIndices_.end(), clickPendingIndex_),
+            selectedObjectIndices_.erase(std::remove(selectedObjectIndices_.begin(), selectedObjectIndices_.end(), viewDrag_.clickPendingIndex),
                 selectedObjectIndices_.end());
             selIndex_ = selectedObjectIndices_.empty() ? -1 : selectedObjectIndices_.back();
             selKind_ = selectedObjectIndices_.empty() ? SelKind::kNone : SelKind::kObject;
@@ -338,15 +341,15 @@ void StageEditor::FinishViewportDrag(float mouseX, float mouseY) {
 
 /** @brief ドラッグに関わる状態をすべて戻す */
 void StageEditor::ResetViewportDragState() {
-    viewportDragging_ = false;
-    rotateDragging_ = false;
-    scaleDragging_ = false;
-    boxSelecting_ = false;
-    activeDragAxis_ = 0;
-    uiDragLayout_ = nullptr;
-    clickPendingIndex_ = -1;
-    dragThresholdPassed_ = false;
-    dragStarts_.clear();
+    viewDrag_.viewportDragging = false;
+    viewDrag_.rotateDragging = false;
+    viewDrag_.scaleDragging = false;
+    viewDrag_.boxSelecting = false;
+    viewDrag_.activeDragAxis = 0;
+    viewDrag_.uiDragLayout = nullptr;
+    viewDrag_.clickPendingIndex = -1;
+    viewDrag_.dragThresholdPassed = false;
+    viewDrag_.dragStarts.clear();
     ClearViewportHover();
 }
 
@@ -360,20 +363,20 @@ void StageEditor::UpdateViewportDrag(float mouseX, float mouseY) {
         // スクリーン座標のテキストはワールド平面と無関係なので、マウスのピクセル位置へそのまま追従させる（Z移動もない）
         ObjectDesc& desc = objects_[selIndex_].desc;
         const Vector3 logicalMouse = viewport_.ImageToScreen(mouseX, mouseY);
-        desc.position.x = logicalMouse.x + dragGrabOffsetX_;
-        desc.position.y = logicalMouse.y + dragGrabOffsetY_;
+        desc.position.x = logicalMouse.x + viewDrag_.dragGrabOffsetX;
+        desc.position.y = logicalMouse.y + viewDrag_.dragGrabOffsetY;
         if (mouseMoved) {
             MarkUndoDirty();
         }
         return;
     }
-    if (dragStarts_.empty()) {
+    if (viewDrag_.dragStarts.empty()) {
         return;
     }
-    const DragStartTransform& primary = dragStarts_.front();
+    const DragStartTransform& primary = viewDrag_.dragStarts.front();
 
     // ハンドルの軸矢印を掴んだ場合はその軸、そうでなければワークフローパネルの軸制限に従う
-    const int axis = activeDragAxis_ != 0 ? activeDragAxis_ : gizmoAxis_;
+    const int axis = viewDrag_.activeDragAxis != 0 ? viewDrag_.activeDragAxis : viewDrag_.gizmoAxis;
     if (io.KeyShift || axis == stageEditorUiStyle::kGizmoAxisZ) {
         // カメラが遠いほど1pxあたりの移動量を増やし、近くでも遠くでも同じ操作感にする
         constexpr float kDefaultCameraDistance = 10.0f; // カメラ未設定時に操作量の基準にする距離
@@ -382,12 +385,12 @@ void StageEditor::UpdateViewportDrag(float mouseX, float mouseY) {
             camDist = (std::max)(1.0f, std::abs(camera_->GetTranslate().z));
         }
         // Zの矢印を掴んでいる時は矢印の向きに沿って動かす。それ以外はマウスの上下で動かす
-        const float pixels = activeDragAxis_ == stageEditorUiStyle::kGizmoAxisZ
-            ? AxisDragPixels(activeDragAxis_, io.MouseDelta.x, io.MouseDelta.y)
+        const float pixels = viewDrag_.activeDragAxis == stageEditorUiStyle::kGizmoAxisZ
+            ? AxisDragPixels(viewDrag_.activeDragAxis, io.MouseDelta.x, io.MouseDelta.y)
             : -io.MouseDelta.y;
-        dragRawZ_ += pixels * camDist * kZDragPerPixel * viewport_.ImagePixelScale();
-        const float deltaZ = SnapValue(dragRawZ_) - primary.localZ;
-        for (const DragStartTransform& start : dragStarts_) {
+        viewDrag_.dragRawZ += pixels * camDist * kZDragPerPixel * viewport_.ImagePixelScale();
+        const float deltaZ = SnapValue(viewDrag_.dragRawZ) - primary.localZ;
+        for (const DragStartTransform& start : viewDrag_.dragStarts) {
             if (start.followsMove) {
                 selected.SetLocalZ(*this, start.index, start.localZ + deltaZ, mouseMoved);
             }
@@ -401,9 +404,9 @@ void StageEditor::UpdateViewportDrag(float mouseX, float mouseY) {
     }
     // 掴んだ時のオフセットを保ったまま追従させる（クリック位置がオブジェクト原点からずれていても飛ばない）
     // スナップは主選択のワールド座標側で丸めてから、他の選択物へ同じ移動量を渡す（親がいる場合はローカル座標へ逆算される）
-    const float deltaX = SnapValue(ground.x + dragGrabOffsetX_) - primary.world.x;
-    const float deltaY = SnapValue(ground.y + dragGrabOffsetY_) - primary.world.y;
-    for (const DragStartTransform& start : dragStarts_) {
+    const float deltaX = SnapValue(ground.x + viewDrag_.dragGrabOffsetX) - primary.world.x;
+    const float deltaY = SnapValue(ground.y + viewDrag_.dragGrabOffsetY) - primary.world.y;
+    for (const DragStartTransform& start : viewDrag_.dragStarts) {
         if (start.followsMove) {
             selected.DragTo(*this, start.index, start.world.x + deltaX, start.world.y + deltaY, axis, mouseMoved);
         }
@@ -449,6 +452,130 @@ void StageEditor::SetParentPreservingWorld(int childIndex, int parentIndex) {
     selectedObjectIndices_ = { childIndex };
 }
 
+/** @brief 選択中の物か、カメラが見ている場所からテストを始める */
+void StageEditor::PlayFromHere() {
+    Vector3 start;
+    if (!SelectionWorldPosition(start)) {
+        start = ViewCenterOnGround();
+    }
+    StartPlayTestOrWarn(start);
+}
+
+/** @brief 配置物を指定の位置へ追加し、操作を一回分として記録する */
+void StageEditor::PlacePart(const ObjectDesc& part, const Vector3& position, bool activateOnFlag) {
+    RecordUndoSnapshotNow();
+    ObjectEntry entry;
+    entry.desc = part;
+    do {
+        entry.desc.name = part.name + "_" + std::to_string(nextSerial_++);
+    } while (FindDescByName(entry.desc.name));
+    if (activateOnFlag) {
+        entry.desc.activationFlag = entry.desc.name + "_active";
+    }
+    entry.desc.position = position;
+    SettleNewObject(entry.desc);
+    entry.authoredPosition = entry.desc.position;
+    objects_.push_back(std::move(entry));
+    RegenerateInstances(objects_.back());
+    SelectLastObject();
+}
+
+/** @brief 運ぶ部品の設定を保持し、画像へ渡す種類を登録する */
+void StageEditor::PlacementSource(const char* label, const ObjectDesc& desc) {
+    if (ImGui::BeginDragDropSource()) {
+        draggedPart_ = desc;
+        ImGui::SetDragDropPayload(kPlacementPayload, nullptr, 0);
+        ImGui::Text("%s をゲーム画面に置く", label);
+        ImGui::EndDragDropSource();
+    }
+}
+
+/** @brief 画像の上で離した時だけマウスの下へ部品を置く */
+void StageEditor::AcceptPlacementDrop() {
+    if (playTestMode_ || !ImGui::BeginDragDropTarget()) {
+        return;
+    }
+    if (ImGui::AcceptDragDropPayload(kPlacementPayload)) {
+        Vector3 world;
+        const auto mouse = ImGui::GetMousePos();
+        if (MouseToGround(mouse.x, mouse.y, world)) {
+            PlacePart(draggedPart_, world, draggedPart_.kind == objectKindName::kGimmick);
+        }
+    }
+    ImGui::EndDragDropTarget();
+}
+
+/** @brief 棚と追加メニューに同じ配置プリセットを表示する */
+void StageEditor::RenderPlacementPresets(bool popup) {
+    /** @brief 表示名と配置データの対応 */
+    struct Preset {
+        const char* label;
+        const char* prefix;
+        const char* kind;
+    };
+    static constexpr Preset kPresets[] = {
+        { "ブロック", "obj", "prop" }, { "背景モデル", "background", "background" },
+        { "ギミック", "gimmick", "gimmick" }, { "収集物", "pickup", "pickup" },
+        { "壊せる物", "breakable", "breakable" }, { "地形", "terrain", "terrain" },
+    };
+    for (const auto& preset : kPresets) {
+        const bool clicked = ImGui::Button(preset.label);
+        if (!clicked && !ImGui::IsItemActive()) {
+            continue;
+        }
+        ObjectDesc part;
+        part.name = preset.prefix;
+        part.kind = preset.kind;
+        const Vector3 center = ViewCenterOnGround();
+        part.position = { SnapValue(center.x), SnapValue(center.y), center.z };
+        if (!stageEditorObjectPresets::TryApply(preset.kind, part)) {
+            if (clicked) {
+                statusMessage_ = "配置の設定を読み込めませんでした";
+                statusTimer_ = kStatusNormalSeconds;
+            }
+            continue;
+        }
+        PlacementSource(preset.label, part);
+        if (clicked) {
+            PlacePart(part, part.position, part.kind == objectKindName::kGimmick);
+            if (popup) {
+                ImGui::CloseCurrentPopup();
+            }
+        }
+    }
+}
+
+/** @brief 選んだ配置物を低い順に床へ下ろす */
+void StageEditor::DropSelectionToFloor() {
+    if (selKind_ != SelKind::kObject) {
+        return;
+    }
+    std::vector<int> indices = selectedObjectIndices_;
+    if (indices.empty()) {
+        indices.push_back(selIndex_);
+    }
+    std::erase_if(indices, [&](int index) {
+        return index < 0 || index >= static_cast<int>(objects_.size()) || SelectionKindOf(selKind_).IsScreenAnchor(*this, index);
+    });
+    std::stable_sort(indices.begin(), indices.end(), [&](int left, int right) {
+        return WorldPositionOf(objects_[left].desc).y < WorldPositionOf(objects_[right].desc).y;
+    });
+    bool recorded = false;
+    for (int index : indices) {
+        auto& entry = objects_[index];
+        Vector3 world = WorldPositionOf(entry.desc);
+        const float y = FloorPositionY(entry.desc, world, CollectSolidColliders(false, true, &entry.desc, false));
+        if (y != world.y) {
+            if (!recorded) {
+                RecordUndoSnapshotNow();
+                recorded = true;
+            }
+            world.y = y;
+            TeleportObjectByName(entry.desc.name, LocalPositionOf(entry.desc, world));
+        }
+    }
+}
+
 /** @brief 種類に応じた既定値で配置物を指定位置へ追加し、選択する */
 int StageEditor::AddObjectAt(const std::string& kind, const Vector3& position) {
     RecordUndoSnapshotNow();
@@ -458,6 +585,7 @@ int StageEditor::AddObjectAt(const std::string& kind, const Vector3& position) {
     desc.type = PlacementType::kStatic;
     desc.position = { SnapValue(position.x), SnapValue(position.y), position.z };
     ObjectKind::Of(kind).InitializeNewDesc(desc, nextSerial_++);
+    SettleNewObject(desc);
     entry.authoredPosition = desc.position;
     objects_.push_back(std::move(entry));
     const int index = static_cast<int>(objects_.size()) - 1;

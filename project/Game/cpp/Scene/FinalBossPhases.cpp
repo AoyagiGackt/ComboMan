@@ -4,6 +4,7 @@
  * @note 状態は FinalBossBattle が持ち、段階は時間の進め方と見せ方だけを決める
  */
 #include "FinalBossBattle.h"
+#include "GameActions.h"
 #include "CharacterVisuals.h"
 #include "Easing.h"
 #include "EnemyEntity.h"
@@ -282,7 +283,7 @@ void FinalBossBattle::GatherPhase::Update(FinalBossBattle& battle, float deltaTi
     battle.forgedKatana_->SetPosition({ center.x, katanaY, center.z });
     battle.forgedKatana_->SetRotation({ 0.0f, kKatanaSpin * now, 0.0f });
     // 降り切ったら持ち物を刀だけにして、白い幕で闘技場の名乗りへ
-    if (now >= endAt || battle.links_.input->TriggerCinematicSkip()) {
+    if (now >= endAt || TriggerCinematicSkip(*battle.links_.input)) {
         battle.EquipKatanaOnly();
         battle.gatherVisible_ = false;
         battle.katanaVisible_ = false;
@@ -330,7 +331,7 @@ void FinalBossBattle::IntroPhase::Update(FinalBossBattle& battle, float deltaTim
     const Vector3 boss = { battle.bossX_, t.shadowBaseY, 0.0f };
     battle.desiredShot_ = { { boss.x + std::sin(angle) * t.introOrbitRadius, boss.y + t.introCameraHeight, boss.z + std::cos(angle) * t.introOrbitRadius },
         { boss.x, boss.y + kIntroTargetHeight, boss.z } };
-    if (now >= t.introSeconds || battle.links_.input->TriggerCinematicSkip()) {
+    if (now >= t.introSeconds || TriggerCinematicSkip(*battle.links_.input)) {
         battle.whiteVeil_ = 0.0f;
         battle.nameReveal_ = 0.0f;
         battle.ChangePhase(GuidePhase::Instance());
@@ -348,7 +349,7 @@ void FinalBossBattle::GuidePhase::Update(FinalBossBattle& battle, float deltaTim
     Input* input = battle.links_.input;
     // 閉じた後は、攻撃ボタンを離してから戦闘へ（オートコンボは長押しでも攻撃を出すため）
     if (!battle.guideVisible_) {
-        if (!input->PushAction(Input::Action::kAttack)) {
+        if (!input->PushAction(GameAction::kAttack)) {
             battle.ChangePhase(FightPhase::Instance());
         }
         return;
@@ -357,7 +358,7 @@ void FinalBossBattle::GuidePhase::Update(FinalBossBattle& battle, float deltaTim
     if (battle.phaseTimer_ < Tune().guideMinSeconds) {
         return;
     }
-    if (input->TriggerMenuConfirm() || input->TriggerAction(Input::Action::kAttack)) {
+    if (input->TriggerMenuConfirm() || input->TriggerAction(GameAction::kAttack)) {
         battle.guideVisible_ = false;
     }
 }

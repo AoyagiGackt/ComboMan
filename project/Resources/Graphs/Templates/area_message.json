@@ -1,0 +1,53 @@
+{
+  "comments": {
+    "c0": {
+      "text": "エリアに入ったら案内を出す",
+      "x": 0,
+      "y": -200,
+      "w": 460,
+      "h": 72
+    },
+    "c1": {
+      "text": "エリアの中心と広さを指定します。外にいる間は少し待って調べ直し、中に入ると一度だけ案内を出します。",
+      "x": 0,
+      "y": -115,
+      "w": 1050,
+      "h": 72
+    }
+  },
+  "start": "area",
+  "nodes": {
+    "area": {
+      "type": "IfPlayerInArea",
+      "params": {
+        "x": 10,
+        "y": 1,
+        "width": 4,
+        "height": 4
+      },
+      "nextTrue": "message",
+      "nextFalse": "wait",
+      "editorX": 0,
+      "editorY": 0
+    },
+    "message": {
+      "type": "ShowMessage",
+      "params": {
+        "text": "ここから先は戦闘エリアです",
+        "seconds": 3
+      },
+      "next": "",
+      "editorX": 300,
+      "editorY": 0
+    },
+    "wait": {
+      "type": "Wait",
+      "params": {
+        "seconds": 0.2
+      },
+      "next": "area",
+      "editorX": 300,
+      "editorY": 190
+    }
+  }
+}

@@ -96,6 +96,8 @@ Microsoft::WRL::ComPtr<ID3D12RootSignature> CreateRootSignature(
     if (FAILED(hr)) {
         return nullptr;
     }
+    // 同じ設定のパイプラインを保存から見分けられるよう、中身から作った目印を付ける
+    PipelineCache::TagRootSignature(rootSignature.Get(), signatureBlob.Get());
     return rootSignature;
 }
 
@@ -141,7 +143,7 @@ D3D12_GRAPHICS_PIPELINE_STATE_DESC MakeDefault3dPsoDesc() {
     psoDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
     psoDesc.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
     psoDesc.NumRenderTargets = 1;
-    psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+    psoDesc.RTVFormats[0] = DirectXCommon::kSceneColorFormat; // シーンの色バッファへ描く
     psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
     psoDesc.SampleMask = D3D12_DEFAULT_SAMPLE_MASK;
     psoDesc.SampleDesc.Count = 1;
@@ -158,17 +160,16 @@ D3D12_GRAPHICS_PIPELINE_STATE_DESC MakeFullscreenPsoDesc() {
     desc.SampleMask = D3D12_DEFAULT_SAMPLE_MASK;
     desc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
     desc.NumRenderTargets = 1;
-    desc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+    desc.RTVFormats[0] = DirectXCommon::kSceneColorFormat; // シーンの色バッファへ描く
     desc.SampleDesc.Count = 1;
     return desc;
 }
 
-/** @brief 呼び出し側で確定した設定からPSOを生成し、失敗を検出する */
+/** @brief 呼び出し側で確定した設定からPSOを生成し、失敗を検出する（保存した物があれば取り出す） */
 Microsoft::WRL::ComPtr<ID3D12PipelineState> CreateGraphicsPipeline(
     ID3D12Device* device, const D3D12_GRAPHICS_PIPELINE_STATE_DESC& desc) {
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> pipeline;
-    const HRESULT hr = device->CreateGraphicsPipelineState(&desc, IID_PPV_ARGS(&pipeline));
-    ENGINE_ASSERT(SUCCEEDED(hr));
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> pipeline = PipelineCache::GetInstance()->CreateGraphics(device, desc);
+    ENGINE_ASSERT(pipeline);
     return pipeline;
 }
 
@@ -181,9 +182,9 @@ Microsoft::WRL::ComPtr<ID3D12PipelineState> CreateComputePipeline(
     D3D12_COMPUTE_PIPELINE_STATE_DESC desc { };
     desc.pRootSignature = rootSignature;
     desc.CS = { shader->GetBufferPointer(), shader->GetBufferSize() };
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> pipeline;
-    const HRESULT hr = dxCommon->GetDevice()->CreateComputePipelineState(&desc, IID_PPV_ARGS(&pipeline));
-    ENGINE_ASSERT(SUCCEEDED(hr));
+    // 保存した物があれば取り出し、無ければ作って保存する
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> pipeline = PipelineCache::GetInstance()->CreateCompute(dxCommon->GetDevice(), desc);
+    ENGINE_ASSERT(pipeline);
     return pipeline;
 }
 
@@ -212,7 +213,8 @@ D3D12_STATIC_SAMPLER_DESC MakeLinearClampSampler() {
 void SetTrianglePipeline(ID3D12GraphicsCommandList* cmd,
     ID3D12RootSignature* rootSignature, ID3D12PipelineState* pipelineState) {
     cmd->SetGraphicsRootSignature(rootSignature);
-    cmd->SetPipelineState(pipelineState);
+    // シェーダーを書き換えて作り直した後なら、そちらを使う
+    cmd->SetPipelineState(PipelineCache::Resolve(pipelineState));
     cmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 }
 

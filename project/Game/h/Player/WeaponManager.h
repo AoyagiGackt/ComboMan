@@ -180,11 +180,13 @@ public:
     /** @brief 選んでいる枠の武器に合体している相棒の武器（合体していなければ nullptr） */
     const WeaponData* GetCurrentFusionPartner() const;
     /**
-     * @brief 選んでいる枠の合体の耐久を減らす。尽きたら枠の武器ごと砕き、ほかの枠の武器へ持ち替える
+     * @brief 合体耐久が尽きたら武器を砕く。最後の1本なら合体だけを解除する
      * @param amount 減らす量
      * @return 砕けたら true
      */
     bool ConsumeFusionDurability(int amount);
+    /** @brief 他の装備枠が埋まっていれば現在の武器を壊し、次の武器を選ぶ */
+    bool TryBreakCurrentWeapon();
 
     /**
      * @brief 指定タイプの武器を解放し、そのまま装備する（敵からの武器奪取用）
