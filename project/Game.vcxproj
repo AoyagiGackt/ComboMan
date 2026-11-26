@@ -18,7 +18,7 @@
     <VCProjectVersion>17.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>
     <ProjectGuid>{6d06300c-8293-46ec-aa68-de6c7590cde1}</ProjectGuid>
-    <RootNamespace>CG21</RootNamespace>
+    <RootNamespace>Game</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
     <ProjectName>Game</ProjectName>
     <DisableFastUpToDateCheck>true</DisableFastUpToDateCheck>
