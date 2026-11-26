@@ -30,6 +30,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "BugHunt", "BugHunt\BugHunt.
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "EngineLib", "EngineLib.vcxproj", "{B7E4C2A1-5D3F-4E8A-9C61-2F0A7D3E9B54}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "externals", "externals", "{5A4F65CE-5521-4336-82E3-B9A9B74C1B95}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -82,6 +84,11 @@ Global
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{68E2707E-352E-4FBF-BCD6-D7839A8120C8} = {5A4F65CE-5521-4336-82E3-B9A9B74C1B95}
+		{371B9FA9-4C90-4AC6-A123-ACED756D6C77} = {5A4F65CE-5521-4336-82E3-B9A9B74C1B95}
+		{88AFB9A5-4411-43B8-AF3B-FB90D0D98E52} = {5A4F65CE-5521-4336-82E3-B9A9B74C1B95}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {39DB5C80-A86A-448B-974A-323AD14B99D6}
