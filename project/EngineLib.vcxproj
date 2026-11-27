@@ -50,12 +50,15 @@
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="$(MSBuildThisFileDirectory)IncludeDirs.props" />
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="$(MSBuildThisFileDirectory)IncludeDirs.props" />
   </ImportGroup>
   <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Development|x64'" Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="$(MSBuildThisFileDirectory)IncludeDirs.props" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
@@ -84,7 +87,10 @@
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
       <TreatWarningAsError>true</TreatWarningAsError>
-      <AdditionalIncludeDirectories>$(ProjectDir)Engine\math\h;$(ProjectDir)Engine\graphics\cpp;$(ProjectDir)Engine\graphics\h;$(ProjectDir)Engine\core\h;$(ProjectDir)Engine\core\h\Window;$(ProjectDir)Engine\core\h\Device;$(ProjectDir)Engine\core\h\Input;$(ProjectDir)Engine\core\h\Audio;$(ProjectDir)Engine\core\h\Time;$(ProjectDir)Engine\core\h\App;$(ProjectDir)Engine\core\h\Util;$(ProjectDir)Engine\core\h\Object;$(ProjectDir)Engine\core\h\Collision;$(ProjectDir)Engine\graphics\h\2D;$(ProjectDir)Engine\graphics\h\3D;$(ProjectDir)Engine\graphics\h\Camera;$(ProjectDir)Engine\graphics\h\Diagnostics;$(ProjectDir)Engine\graphics\h\Effect;$(ProjectDir)Engine\graphics\h\ImGui;$(ProjectDir)Engine\graphics\h\Light;$(ProjectDir)Engine\graphics\h\Manager;$(ProjectDir)Engine\graphics\h\Offscreen;$(ProjectDir)Engine\graphics\h\Particle;$(ProjectDir)Engine\graphics\h\Skeleton;$(ProjectDir)Engine\graphics\h\Text;$(ProjectDir)Engine\graphics\h\UI;$(ProjectDir)Engine\scripting\h;$(ProjectDir)Engine\editor\h;$(ProjectDir)Resources\shaders\lighting;$(ProjectDir)Resources\shaders\object3d;$(SolutionDir)..\externals\imgui;$(SolutionDir)..\externals\DirectXTex;$(SolutionDir)..\externals\assimp\include;$(SolutionDir)..\externals\json;$(ProjectDir)Resources\shaders\Particle;$(ProjectDir)Resources;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(EngineIncludeDirs);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PrecompiledHeader>Use</PrecompiledHeader>
+      <PrecompiledHeaderFile>EnginePch.h</PrecompiledHeaderFile>
+      <ForcedIncludeFiles>EnginePch.h;%(ForcedIncludeFiles)</ForcedIncludeFiles>
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -100,7 +106,10 @@
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <Optimization>MinSpace</Optimization>
-      <AdditionalIncludeDirectories>$(ProjectDir)Engine\math\h;$(ProjectDir)Engine\graphics\cpp;$(ProjectDir)Engine\graphics\h;$(ProjectDir)Engine\core\h;$(ProjectDir)Engine\core\h\Window;$(ProjectDir)Engine\core\h\Device;$(ProjectDir)Engine\core\h\Input;$(ProjectDir)Engine\core\h\Audio;$(ProjectDir)Engine\core\h\Time;$(ProjectDir)Engine\core\h\App;$(ProjectDir)Engine\core\h\Util;$(ProjectDir)Engine\core\h\Object;$(ProjectDir)Engine\core\h\Collision;$(ProjectDir)Engine\graphics\h\2D;$(ProjectDir)Engine\graphics\h\3D;$(ProjectDir)Engine\graphics\h\Camera;$(ProjectDir)Engine\graphics\h\Diagnostics;$(ProjectDir)Engine\graphics\h\Effect;$(ProjectDir)Engine\graphics\h\ImGui;$(ProjectDir)Engine\graphics\h\Light;$(ProjectDir)Engine\graphics\h\Manager;$(ProjectDir)Engine\graphics\h\Offscreen;$(ProjectDir)Engine\graphics\h\Particle;$(ProjectDir)Engine\graphics\h\Skeleton;$(ProjectDir)Engine\graphics\h\Text;$(ProjectDir)Engine\graphics\h\UI;$(ProjectDir)Engine\scripting\h;$(ProjectDir)Engine\editor\h;$(ProjectDir)Resources\shaders\lighting;$(ProjectDir)Resources\shaders\object3d;$(SolutionDir)..\externals\imgui;$(SolutionDir)..\externals\DirectXTex;$(SolutionDir)..\externals\assimp\include;$(SolutionDir)..\externals\json;$(ProjectDir)Resources\shaders\Particle;$(ProjectDir)Resources;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(EngineIncludeDirs);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PrecompiledHeader>Use</PrecompiledHeader>
+      <PrecompiledHeaderFile>EnginePch.h</PrecompiledHeaderFile>
+      <ForcedIncludeFiles>EnginePch.h;%(ForcedIncludeFiles)</ForcedIncludeFiles>
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Development|x64'">
@@ -116,10 +125,24 @@
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <Optimization>Disabled</Optimization>
-      <AdditionalIncludeDirectories>$(ProjectDir)Engine\math\h;$(ProjectDir)Engine\graphics\cpp;$(ProjectDir)Engine\graphics\h;$(ProjectDir)Engine\core\h;$(ProjectDir)Engine\core\h\Window;$(ProjectDir)Engine\core\h\Device;$(ProjectDir)Engine\core\h\Input;$(ProjectDir)Engine\core\h\Audio;$(ProjectDir)Engine\core\h\Time;$(ProjectDir)Engine\core\h\App;$(ProjectDir)Engine\core\h\Util;$(ProjectDir)Engine\core\h\Object;$(ProjectDir)Engine\core\h\Collision;$(ProjectDir)Engine\graphics\h\2D;$(ProjectDir)Engine\graphics\h\3D;$(ProjectDir)Engine\graphics\h\Camera;$(ProjectDir)Engine\graphics\h\Diagnostics;$(ProjectDir)Engine\graphics\h\Effect;$(ProjectDir)Engine\graphics\h\ImGui;$(ProjectDir)Engine\graphics\h\Light;$(ProjectDir)Engine\graphics\h\Manager;$(ProjectDir)Engine\graphics\h\Offscreen;$(ProjectDir)Engine\graphics\h\Particle;$(ProjectDir)Engine\graphics\h\Skeleton;$(ProjectDir)Engine\graphics\h\Text;$(ProjectDir)Engine\graphics\h\UI;$(ProjectDir)Engine\scripting\h;$(ProjectDir)Engine\editor\h;$(ProjectDir)Resources\shaders\lighting;$(ProjectDir)Resources\shaders\object3d;$(SolutionDir)..\externals\imgui;$(SolutionDir)..\externals\DirectXTex;$(SolutionDir)..\externals\assimp\include;$(SolutionDir)..\externals\json;$(ProjectDir)Resources\shaders\Particle;$(ProjectDir)Resources;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(EngineIncludeDirs);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PrecompiledHeader>Use</PrecompiledHeader>
+      <PrecompiledHeaderFile>EnginePch.h</PrecompiledHeaderFile>
+      <ForcedIncludeFiles>EnginePch.h;%(ForcedIncludeFiles)</ForcedIncludeFiles>
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="Engine\core\cpp\AutoTest\BugHuntChanges.cpp" />
+    <ClCompile Include="Engine\core\cpp\AutoTest\SmokeTestFingerprint.cpp" />
+    <ClCompile Include="Engine\core\cpp\AutoTest\SmokeTestMonitors.cpp" />
+    <ClCompile Include="Engine\core\cpp\AutoTest\SmokeTestReplay.cpp" />
+    <ClCompile Include="Engine\core\cpp\AutoTest\SmokeTestRunner.cpp" />
+    <ClCompile Include="Engine\core\cpp\AutoTest\SmokeTestRunnerMonkey.cpp" />
+    <ClCompile Include="Engine\core\cpp\AutoTest\SmokeTestRunnerReport.cpp" />
+    <ClCompile Include="Engine\core\cpp\AutoTest\TestCoverage.cpp" />
+    <ClCompile Include="Engine\core\cpp\Util\EnginePch.cpp">
+      <PrecompiledHeader>Create</PrecompiledHeader>
+    </ClCompile>
     <ClCompile Include="Engine\editor\cpp\PostProcessOrderEditor.cpp" />
     <ClCompile Include="Engine\graphics\cpp\Manager\AssetReferenceScanner.cpp" />
     <ClCompile Include="Engine\graphics\cpp\Effect\PostProcessStack.cpp" />
@@ -221,6 +244,15 @@
     <ClCompile Include="Engine\graphics\cpp\ImGui\ImGuiControlSceneSettings.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Engine\core\h\AutoTest\BugHuntChanges.h" />
+    <ClInclude Include="Engine\core\h\AutoTest\SmokeTestGame.h" />
+    <ClInclude Include="Engine\core\h\AutoTest\SmokeTestFingerprint.h" />
+    <ClInclude Include="Engine\core\h\AutoTest\SmokeTestMonitors.h" />
+    <ClInclude Include="Engine\core\h\AutoTest\SmokeTestReplay.h" />
+    <ClInclude Include="Engine\core\h\AutoTest\SmokeTestRunner.h" />
+    <ClInclude Include="Engine\core\h\AutoTest\SmokeTestStep.h" />
+    <ClInclude Include="Engine\core\h\AutoTest\TestCoverage.h" />
+    <ClInclude Include="Engine\core\h\Util\EnginePch.h" />
     <ClInclude Include="Engine\editor\h\PostProcessOrderEditor.h" />
     <ClInclude Include="Engine\graphics\h\Manager\AssetReferenceScanner.h" />
     <ClInclude Include="Engine\graphics\h\Effect\PostProcessStack.h" />

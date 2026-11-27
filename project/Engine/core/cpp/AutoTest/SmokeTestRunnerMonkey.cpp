@@ -7,14 +7,14 @@
  *       SmokeTestRunner のでたらめ操作だけを SmokeTestRunner.cpp から分けて置いている（クラスは SmokeTestRunner のまま）
  */
 #include "SmokeTestRunner.h"
-#include "GameConstants.h"
+#include "EngineConstants.h"
 #include "Input.h"
 #include "Logger.h"
 #include "TestCoverage.h"
 #include <algorithm>
 #include <cmath>
 
-namespace engine::game {
+namespace engine {
 
 namespace {
 constexpr const char* kMonkeyCoverageCategory = "monkey_move"; // 網羅のまとめに出す、でたらめ操作の技の種類の名前
@@ -56,7 +56,7 @@ void SmokeTestRunner::LoadMonkeyMoves(const nlohmann::json& moves) {
 }
 
 /** @brief monkey で次の技を選ぶ */
-void SmokeTestRunner::PickMonkeyMove(const Step& step) {
+void SmokeTestRunner::PickMonkeyMove(const SmokeTestStep& step) {
     monkeyMoveIndex_ = -1;
     monkeySequenceIndex_ = 0;
     monkeySequenceFrame_ = 0;
@@ -81,17 +81,17 @@ void SmokeTestRunner::PickMonkeyMove(const Step& step) {
     testCoverage::Cover(kMonkeyCoverageCategory, monkeyMoves_[static_cast<size_t>(monkeyMoveIndex_)].name);
 }
 
-/** @brief monkey の手順を1フレーム進める */
-bool SmokeTestRunner::UpdateMonkey(const Step& step) {
+/** @brief 技を重みつきで選んで押し、左右の向きも時々変える */
+void SmokeTestRunner::AdvanceMonkey(const SmokeTestStep& step) {
     // 押し続けるキー（右へ進みながら暴れる、など）は毎フレーム押す
     for (const uint8_t key : step.holdKeys) {
-        input_->InjectKey(key, true);
+        InjectKey(key, true);
     }
     // 押し続けるキーが無ければ、時々 止まる・左・右 を選び直して歩き回る
     if (step.holdKeys.empty()) {
         if (--monkeyDirectionFrames_ <= 0) {
             if (monkeyDirectionKey_ != 0) {
-                input_->InjectKey(monkeyDirectionKey_, false);
+                InjectKey(monkeyDirectionKey_, false);
             }
             const std::vector<uint8_t> left = ParseKeys(kLeftKeyName);
             const std::vector<uint8_t> right = ParseKeys(kRightKeyName);
@@ -99,10 +99,10 @@ bool SmokeTestRunner::UpdateMonkey(const Step& step) {
             const int choice = direction(rng_);
             monkeyDirectionKey_ = choice == 1 && !left.empty() ? left.front() : (choice == 2 && !right.empty() ? right.front() : uint8_t { 0 });
             std::uniform_real_distribution<float> seconds(kDirectionMinSeconds, kDirectionMaxSeconds);
-            monkeyDirectionFrames_ = static_cast<int>(std::lround(seconds(rng_) / gameConstants::kFrameDeltaTime));
+            monkeyDirectionFrames_ = static_cast<int>(std::lround(seconds(rng_) / engineConstants::kFrameDeltaTime));
         }
         if (monkeyDirectionKey_ != 0) {
-            input_->InjectKey(monkeyDirectionKey_, true);
+            InjectKey(monkeyDirectionKey_, true);
         }
     }
     // 技が終わっていれば次の技を選ぶ
@@ -116,7 +116,7 @@ bool SmokeTestRunner::UpdateMonkey(const Step& step) {
         for (const uint8_t key : move.sequence[monkeySequenceIndex_]) {
             const bool held = std::find(step.holdKeys.begin(), step.holdKeys.end(), key) != step.holdKeys.end() || key == monkeyDirectionKey_;
             if (!held) {
-                input_->InjectKey(key, down);
+                InjectKey(key, down);
             }
         }
         ++monkeySequenceFrame_;
@@ -128,16 +128,26 @@ bool SmokeTestRunner::UpdateMonkey(const Step& step) {
             }
         }
     }
+}
+
+/** @brief monkey の手順を1フレーム進める */
+bool SmokeTestRunner::UpdateMonkey(const SmokeTestStep& step) {
+    AdvanceMonkey(step);
     const bool done = stepFrame_ + 1 >= step.frames;
     // 手順を終える時は、次の monkey の手順が最初から始まるように戻す
     if (done) {
-        monkeyMoveIndex_ = -1;
-        monkeySequenceIndex_ = 0;
-        monkeySequenceFrame_ = 0;
-        monkeyDirectionKey_ = 0;
-        monkeyDirectionFrames_ = 0;
+        ResetMonkeyState();
     }
     return done;
 }
 
-} // namespace engine::game
+/** @brief でたらめ操作の途中の状態を消す（次の monkey が最初から始まるように） */
+void SmokeTestRunner::ResetMonkeyState() {
+    monkeyMoveIndex_ = -1;
+    monkeySequenceIndex_ = 0;
+    monkeySequenceFrame_ = 0;
+    monkeyDirectionKey_ = 0;
+    monkeyDirectionFrames_ = 0;
+}
+
+} // namespace engine

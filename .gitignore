@@ -13,7 +13,8 @@
 # User-specific files (MonoDevelop/Xamarin Studio)
 *.userprefs
 
-# Mono auto generated filesmono_crash.*
+# Mono auto generated files
+mono_crash.*
 
 # Build results
 generated/
@@ -21,8 +22,6 @@ generated/
 # Visual Studio 2015/2017 cache/options directory
 .vs/
 
-# Visual Studio 拡張機能のパッケージ
-*.vsix
 # Uncomment if you have tasks that create the project's static files in wwwroot
 #wwwroot/
 
@@ -314,43 +313,26 @@ MigrationBackup/
 
 # Ionide (cross platform F# VS Code tools) working folder
 .ionide/
-DirectXGame/DirectXGame.exe
-DirectXGame/imgui.ini
 
-# DirectXTex Compiled Shaders
-**/DirectXTex/Shaders/Compiled/
-project/Resources/axis.blend
-project/Resources/fence.png
-project/Resources/multiMaterial.blend
+# ======================================================================
+# ここから下はこのプロジェクト独自の設定
+# （上は Visual Studio 向けの標準の設定。generated/ と Generated Files/ は上の Build results などにある）
+# ======================================================================
 
+# ---- Visual Studio ----
+# 拡張機能のパッケージ
+*.vsix
+# ImGui のウィンドウ配置（起動するたびに書き換わる）
+imgui.ini
+
+# ---- ビルドの出力・中間ファイル ----
 x64/
 Debug/
 Release/
-AppPackages/
-Generated Files/
-generated/
-
 Dumps/
-logs/
-generated/
-save/
-log/
-MY/
-crash/
-# 起動を速くするために保存したパイプライン（GPU とドライバごとに違う）
-cache/pipeline_cache.bin
-
-externals/DirectXTex/Bin/
-externals/DirectXTex/x64/
-
-DirectXGame/DirectXGame.exe
-DirectXGame/imgui.ini
-
-imgui.ini
 *.exe
 *.dll
 *.pdb
-
 #*.obj
 *.tlog
 *.idb
@@ -359,19 +341,31 @@ imgui.ini
 *.iobj
 *.sbr
 
-Idid.md
-
-externals/**/x64/
-externals/**/Debug/
-externals/**/Release/
-
-# assimpのlibはCIビルドに必要なため追跡対象にする
+# ---- 外部ライブラリ ----
+externals/DirectXTex/Bin/
+**/DirectXTex/Shaders/Compiled/
+# assimp の lib は CI のビルドに必要なので、上の Debug/ Release/ の除外から外して追跡する
 !externals/assimp/lib/Debug/
 !externals/assimp/lib/Release/
 
-# ログとスコアファイルの除外
+# ---- ゲームを動かすと作られるファイル ----
+logs/
+log/
+save/
+crash/
+MY/
+# 起動を速くするために保存したパイプライン（GPU とドライバごとに違う）
+cache/pipeline_cache.bin
+project/cache
 project/log.txt
 project/scores.txt
 project/playtest_log.csv
 project/smoke_test
-project/cache
+# ステージエディタの自動保存（作業中の復旧用）
+*.autosave.json
+
+# ---- 使っていない素材・作業メモ ----
+project/Resources/axis.blend
+project/Resources/fence.png
+project/Resources/multiMaterial.blend
+Idid.md

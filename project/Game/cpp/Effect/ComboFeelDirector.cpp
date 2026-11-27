@@ -3,6 +3,7 @@
  * @brief ComboFeelDirectorの刃の軌跡サンプリング、締め演出の時間管理、斬撃線の向きの決定を実装するファイル（調整パネルは ComboFeelDirectorPanel.cpp）
  */
 #include "ComboFeelDirector.h"
+#include "EngineContext.h"
 #include "Camera.h"
 #include "GameConstants.h"
 #include "JsonFieldTable.h"
@@ -331,11 +332,11 @@ void ComboFeelDirector::TriggerFinisherImpact(const Vector3& worldPos) {
     const WeaponFeel& feel = CurrentFeel();
     impactScale_ = awakenScale * feel.impactScale;
     if (settings_.slowEnabled) {
-        TimeManager::GetInstance()->RequestSlowMotion(settings_.slowSeconds * awakenScale * feel.slowSecondsScale, settings_.slowScale);
+        engine::Services().time->RequestSlowMotion(settings_.slowSeconds * awakenScale * feel.slowSecondsScale, settings_.slowScale);
     }
     // 武器によっては、ヒットストップが明けた後も敵だけを止めて、斬り終えた後の間を作る
     if (feel.finisherEnemyStopFrames > 0) {
-        TimeManager::GetInstance()->RequestChannelStop(timeChannel::kEnemies, feel.finisherEnemyStopFrames);
+        engine::Services().time->RequestChannelStop(timeChannel::kEnemies, feel.finisherEnemyStopFrames);
     }
 }
 
@@ -543,7 +544,7 @@ void ComboFeelDirector::LoadSettings() {
 }
 
 /** @brief 編集した演出設定をJSONファイルへ保存する */
-void ComboFeelDirector::SaveSettings() const {
+bool ComboFeelDirector::SaveSettings() const {
     const ComboFeelSettings& s = settings_;
     nlohmann::json blades = nlohmann::json::object();
     for (size_t i = 0; i < kBladeWeaponNames.size(); ++i) {
@@ -559,7 +560,8 @@ void ComboFeelDirector::SaveSettings() const {
         feels[kBladeWeaponNames[i]] = feel;
     }
     j["weaponFeel"] = feels;
-    JsonHelper::Save(kSettingsPath, j);
+    // 書き込めたかを呼び出し側へ返す（失敗した時は保存済みの扱いにしない）
+    return JsonHelper::Save(kSettingsPath, j);
 }
 
 } // namespace engine::game

@@ -1,8 +1,9 @@
 /** @file main.cpp
- * @brief バグ探しの起動役（Game.exe を --bug-hunt で立ち上げ、終わるまで待って、見つけたおかしな所を一覧にして出す）
- * @note 遊んでいる間の見張りはゲームの中身を直接見る必要があるので、ゲーム側（GamePlaySceneBugChecks.cpp）にある。
+ * @brief バグ探しの起動役（ゲームを --bug-hunt で立ち上げ、終わるまで待って、見つけたおかしな所を一覧にして出す）
+ * @note 共通の進行と見張りはエンジンが、ステージや武器の操作と検査はゲームが受け持つ。
  *       このプロジェクトは起動と結果の読み取りだけを受け持つ。手順の表は同じフォルダの bug_hunt.json
  *       使い方: BugHunt をスタートアッププロジェクトにして実行する（先に Game をビルドしておく）。
+ *       --exe <名前> で同じフォルダの起動先を選べる。省略すると Game.exe を使う。
  *       引数に --realtime を付けると、人が見られるふだんの速さで遊ぶ。--runs N で N 回続けて回す（付けなければ起動した時に聞く）
  *       通常は前回の記録から変わった所を回し、--all を付けると全部回す。記録が無い時は全部回す。
  *       おかしな所が見つかると smoke_test/replay_～.json に再生ファイルが書かれる。--replay <ファイル> を付けて実行するか、
@@ -25,6 +26,7 @@ namespace {
 namespace fs = std::filesystem;
 using engine::tests::testReport::Print;
 
+constexpr const wchar_t* kExeFlag = L"--exe";
 constexpr const wchar_t* kGameExeName = L"Game.exe";
 constexpr const wchar_t* kBugHuntFlag = L"--bug-hunt";
 constexpr const wchar_t* kRealtimeFlag = L"--realtime";
@@ -209,7 +211,7 @@ int PrintReport(const fs::path& reportPath) {
 }
 
 /**
- * @brief Game.exe を --bug-hunt（再生の時は --replay）で起動し、終わるまで待つ（起動できなければ false）
+ * @brief ゲームを --bug-hunt（再生の時は --replay）で起動し、終わるまで待つ（起動できなければ false）
  * @param replayPath 再生ファイルの場所（空ならふつうのバグ探し）
  */
 bool RunGame(const fs::path& gameExe, const fs::path& projectDirectory, bool realtime, bool all, const std::wstring& replayPath,
@@ -334,7 +336,8 @@ RunResult RunOnce(const fs::path& gameExe, const fs::path& projectDirectory, boo
     const fs::file_time_type startTime = fs::file_time_type::clock::now();
     DWORD exitCode = 0;
     if (!RunGame(gameExe, projectDirectory, realtime, all, replayPath, exitCode)) {
-        Print("Game.exe を起動できませんでした（エラー %lu）\n", GetLastError());
+        const DWORD launchError = GetLastError();
+        Print("%s を起動できませんでした（エラー %lu）\n", ToUtf8(gameExe.filename()).c_str(), launchError);
         return result;
     }
 
@@ -364,13 +367,25 @@ RunResult RunOnce(const fs::path& gameExe, const fs::path& projectDirectory, boo
 } // namespace
 
 /** @brief バグ探しを決めた回数だけ回し、回ごとの結果と合計を出す */
-int main() {
+int wmain(int argc, wchar_t* argv[]) {
     const fs::path exeDirectory = ExecutableDirectory();
-    const fs::path gameExe = exeDirectory / kGameExeName;
+    // 起動先の名前は空白や日本語を含めて引数ひとつとして受け取る
+    const wchar_t* exeName = kGameExeName;
+    for (int i = 1; i < argc; ++i) {
+        if (std::wcscmp(argv[i], kExeFlag) == 0) {
+            if (++i >= argc || !*argv[i]) {
+                Print("--exe の後に起動するファイル名を指定してください\n");
+                return 1;
+            }
+            exeName = argv[i];
+            break;
+        }
+    }
+    const fs::path gameExe = exeDirectory / exeName;
     const fs::path projectDirectory = FindProjectDirectory(exeDirectory);
     std::error_code error;
     if (!fs::exists(gameExe, error)) {
-        Print("Game.exe が見つかりません: %s（先に Game をビルドしてください）\n", ToUtf8(gameExe).c_str());
+        Print("%s が見つかりません: %s（先に Game をビルドしてください）\n", ToUtf8(gameExe.filename()).c_str(), ToUtf8(gameExe).c_str());
         WaitForEnterIfInteractive();
         return kExitFailed;
     }

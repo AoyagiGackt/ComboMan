@@ -3,6 +3,7 @@
  * @brief コンボ練習（ComboTrial）の手順の判定・札の表示と、combo_trials.json の読み込み
  */
 #include "ComboTrial.h"
+#include "EngineContext.h"
 #include "FontRenderer.h"
 #include "GameConstants.h"
 #include "Input.h"
@@ -207,7 +208,7 @@ void ComboTrial::ResetProgress() {
 
 /** @brief プレイヤーのこのフレームの行動を見て手順を進める */
 void ComboTrial::Observe(const Player& player) {
-    if (!active_ || TimeManager::GetInstance()->IsHitStopped()) {
+    if (!active_ || engine::Services().time->IsHitStopped()) {
         return;
     }
     pulseTimer_ += gameConstants::kFrameDeltaTime;

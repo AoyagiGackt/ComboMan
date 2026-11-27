@@ -27,6 +27,8 @@ constexpr char kSettings[] = "Resources/Config/asset_check.json";
 constexpr char kPackSettings[] = "Resources/Config/asset_pack.json";
 /** @brief pak に入らなかった素材の一覧を書き出す先 */
 constexpr char kReport[] = "log/asset_check.txt";
+/** @brief エディタの自動保存のファイル名に入る印 */
+constexpr char kAutoSaveMarker[] = ".autosave.";
 /** @brief モデルだけを読み込む時に仮に貼るテクスチャ */
 constexpr char kModelTexture[] = "Resources/white.png";
 
@@ -165,7 +167,9 @@ References Scan() {
         const auto& file = it->path();
         if (IsExcluded(file, rules)) {
             it.disable_recursion_pending();
-        } else if (Lower(PathText(file.extension())) == ".json" && OnDisk(file)) {
+        } else if (Lower(PathText(file.extension())) == ".json" && OnDisk(file)
+            && PathText(file).find(kAutoSaveMarker) == std::string::npos) {
+            // エディタの自動保存は作業中の写しなので調べない（pak にも入らない）
             std::ifstream input(file);
             const auto document = nlohmann::json::parse(input, nullptr, false);
             if (document.is_discarded()) {

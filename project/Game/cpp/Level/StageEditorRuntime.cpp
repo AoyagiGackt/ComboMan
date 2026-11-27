@@ -56,7 +56,7 @@ void StageEditor::SetPlayTestMode(bool enabled) {
     }
 #endif
     playTestMode_ = enabled;
-    TimeManager::GetInstance()->SetTimeScale(enabled ? savedTimeScale_ : 0.0f);
+    engine::Services().time->SetTimeScale(enabled ? savedTimeScale_ : 0.0f);
 }
 
 /** @brief モデル+テクスチャの組み合わせをキャッシュから探し、無ければロードして登録する */
@@ -253,7 +253,7 @@ void StageEditor::UpdateObjects(ParticleManager* pm, const Vector3& playerPos) {
     // シーンが進行を止めている間（ポーズ・開始演出）は時間を進めず、動く仕掛けもその場で止める
     const float kRuntimeDeltaSeconds = ShouldPauseGame()
         ? kEditorPreviewDeltaSeconds
-        : (gameplayHeld_ ? 0.0f : TimeManager::GetInstance()->GetDeltaTime());
+        : (gameplayHeld_ ? 0.0f : engine::Services().time->GetDeltaTime());
 
     // 条件、接続先の有効化、実体の順で更新して同じフレーム内に結果を反映する
     EvaluateEventConditions(kRuntimeDeltaSeconds);

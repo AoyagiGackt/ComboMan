@@ -32,6 +32,8 @@ private:
     static void RenderCameraSection(StageEditor& editor);
     /** @brief レベルファイルの開く/保存、元に戻す/やり直す、スナップ、親子リンク等の操作行を描画する */
     static void RenderFileAndHistoryActions(StageEditor& editor);
+    /** @brief 土台のレベルをファイルに書き出し、書けたらそのファイルを開く（書けなければ知らせる） */
+    static void CreateAndOpenNewLevel(StageEditor& editor, const std::string& newPath);
     /** @brief 階層検索ボックスを描画し、小文字化した検索語を返す（空なら全件一致扱い） */
     static std::string RenderSearchBar(StageEditor& editor);
     /** @brief オブジェクトのツリー（新規追加ポップアップ・検索一致時のフラット表示・通常時の親子階層表示）を描画する */

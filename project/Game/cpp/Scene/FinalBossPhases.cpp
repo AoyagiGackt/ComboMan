@@ -4,6 +4,7 @@
  * @note 状態は FinalBossBattle が持ち、段階は時間の進め方と見せ方だけを決める
  */
 #include "FinalBossBattle.h"
+#include "EngineContext.h"
 #include "GameActions.h"
 #include "CharacterVisuals.h"
 #include "Easing.h"
@@ -205,7 +206,7 @@ public:
         battle.bossVanished_ = false;
         // 撃破後は実体の位置を合わせ直さないので、跳んでいる途中で倒しても奪う位置を床の高さにしておく
         battle.boss_->SetPosition({ battle.bossX_, battle.bossBaseY_, 0.0f });
-        TimeManager::GetInstance()->RequestSlowMotion(Tune().defeatSlowSeconds, Tune().defeatSlowScale);
+        engine::Services().time->RequestSlowMotion(Tune().defeatSlowSeconds, Tune().defeatSlowScale);
         ScreenFlash::GetInstance()->Request(kDefeatFlashColor, kDefeatFlashSeconds);
         const HitEffectPlayer fx(battle.links_.particles, battle.links_.shaker, battle.links_.rng);
         fx.Impact("lastboss_defeat");
@@ -465,7 +466,7 @@ void FinalBossBattle::UpdateCinematic() {
     }
     // 演出の間はプレイヤーを動かさないので、操作の差し替えも外しておく
     ClearInputOverrides();
-    const float dt = TimeManager::GetInstance()->GetDeltaTime();
+    const float dt = engine::Services().time->GetDeltaTime();
     telegraph_.BeginFrame();
     phase_->Update(*this, dt);
     UpdateCommon(dt);

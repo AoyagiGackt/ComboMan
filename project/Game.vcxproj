@@ -51,12 +51,15 @@
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="$(MSBuildThisFileDirectory)IncludeDirs.props" />
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="$(MSBuildThisFileDirectory)IncludeDirs.props" />
   </ImportGroup>
   <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Development|x64'" Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="$(MSBuildThisFileDirectory)IncludeDirs.props" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
@@ -85,7 +88,10 @@
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
       <TreatWarningAsError>true</TreatWarningAsError>
-      <AdditionalIncludeDirectories>$(ProjectDir)Engine\math\h;$(ProjectDir)Engine\graphics\cpp;$(ProjectDir)Engine\graphics\h;$(ProjectDir)Engine\core\h;$(ProjectDir)Engine\core\h\Window;$(ProjectDir)Engine\core\h\Device;$(ProjectDir)Engine\core\h\Input;$(ProjectDir)Engine\core\h\Audio;$(ProjectDir)Engine\core\h\Time;$(ProjectDir)Engine\core\h\App;$(ProjectDir)Engine\core\h\Util;$(ProjectDir)Engine\core\h\Object;$(ProjectDir)Engine\core\h\Collision;$(ProjectDir)Game\h;$(ProjectDir)Engine\graphics\h\2D;$(ProjectDir)Engine\graphics\h\3D;$(ProjectDir)Engine\graphics\h\Camera;$(ProjectDir)Engine\graphics\h\Diagnostics;$(ProjectDir)Engine\graphics\h\Effect;$(ProjectDir)Engine\graphics\h\ImGui;$(ProjectDir)Engine\graphics\h\Light;$(ProjectDir)Engine\graphics\h\Manager;$(ProjectDir)Engine\graphics\h\Offscreen;$(ProjectDir)Engine\graphics\h\Particle;$(ProjectDir)Engine\graphics\h\Skeleton;$(ProjectDir)Engine\graphics\h\Text;$(ProjectDir)Engine\graphics\h\UI;$(ProjectDir)Engine\scripting\h;$(ProjectDir)Engine\editor\h;$(ProjectDir)Game\h\Collision;$(ProjectDir)Game\h\Core;$(ProjectDir)Game\h\Core\App;$(ProjectDir)Game\h\Effect;$(ProjectDir)Game\h\Level;$(ProjectDir)Game\h\Player;$(ProjectDir)Game\h\Scene;$(ProjectDir)Game\h\UI;$(ProjectDir)Game\h\Util;$(ProjectDir)Game\h\Scripting;$(ProjectDir)Game\cpp;$(ProjectDir)Resources\shaders\lighting;$(ProjectDir)Resources\shaders\object3d;$(SolutionDir)..\externals\imgui;$(SolutionDir)..\externals\DirectXTex;$(SolutionDir)..\externals\assimp\include;$(SolutionDir)..\externals\json;$(ProjectDir)Resources\shaders\Particle;$(ProjectDir)Resources;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(EngineIncludeDirs);$(GameIncludeDirs);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PrecompiledHeader>Use</PrecompiledHeader>
+      <PrecompiledHeaderFile>GamePch.h</PrecompiledHeaderFile>
+      <ForcedIncludeFiles>GamePch.h;%(ForcedIncludeFiles)</ForcedIncludeFiles>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -109,7 +115,10 @@
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <Optimization>MinSpace</Optimization>
-      <AdditionalIncludeDirectories>$(ProjectDir)Engine\math\h;$(ProjectDir)Engine\graphics\cpp;$(ProjectDir)Engine\graphics\h;$(ProjectDir)Engine\core\h;$(ProjectDir)Engine\core\h\Window;$(ProjectDir)Engine\core\h\Device;$(ProjectDir)Engine\core\h\Input;$(ProjectDir)Engine\core\h\Audio;$(ProjectDir)Engine\core\h\Time;$(ProjectDir)Engine\core\h\App;$(ProjectDir)Engine\core\h\Util;$(ProjectDir)Engine\core\h\Object;$(ProjectDir)Engine\core\h\Collision;$(ProjectDir)Game\h;$(ProjectDir)Engine\graphics\h\2D;$(ProjectDir)Engine\graphics\h\3D;$(ProjectDir)Engine\graphics\h\Camera;$(ProjectDir)Engine\graphics\h\Diagnostics;$(ProjectDir)Engine\graphics\h\Effect;$(ProjectDir)Engine\graphics\h\ImGui;$(ProjectDir)Engine\graphics\h\Light;$(ProjectDir)Engine\graphics\h\Manager;$(ProjectDir)Engine\graphics\h\Offscreen;$(ProjectDir)Engine\graphics\h\Particle;$(ProjectDir)Engine\graphics\h\Skeleton;$(ProjectDir)Engine\graphics\h\Text;$(ProjectDir)Engine\graphics\h\UI;$(ProjectDir)Engine\scripting\h;$(ProjectDir)Engine\editor\h;$(ProjectDir)Game\h\Collision;$(ProjectDir)Game\h\Core;$(ProjectDir)Game\h\Core\App;$(ProjectDir)Game\h\Effect;$(ProjectDir)Game\h\Level;$(ProjectDir)Game\h\Player;$(ProjectDir)Game\h\Scene;$(ProjectDir)Game\h\UI;$(ProjectDir)Game\h\Util;$(ProjectDir)Game\h\Scripting;$(ProjectDir)Game\cpp;$(ProjectDir)Resources\shaders\lighting;$(ProjectDir)Resources\shaders\object3d;$(SolutionDir)..\externals\imgui;$(SolutionDir)..\externals\DirectXTex;$(SolutionDir)..\externals\assimp\include;$(SolutionDir)..\externals\json;$(ProjectDir)Resources\shaders\Particle;$(ProjectDir)Resources;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(EngineIncludeDirs);$(GameIncludeDirs);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PrecompiledHeader>Use</PrecompiledHeader>
+      <PrecompiledHeaderFile>GamePch.h</PrecompiledHeaderFile>
+      <ForcedIncludeFiles>GamePch.h;%(ForcedIncludeFiles)</ForcedIncludeFiles>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -133,7 +142,10 @@
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <Optimization>Disabled</Optimization>
-      <AdditionalIncludeDirectories>$(ProjectDir)Engine\math\h;$(ProjectDir)Engine\graphics\cpp;$(ProjectDir)Engine\graphics\h;$(ProjectDir)Engine\core\h;$(ProjectDir)Engine\core\h\Window;$(ProjectDir)Engine\core\h\Device;$(ProjectDir)Engine\core\h\Input;$(ProjectDir)Engine\core\h\Audio;$(ProjectDir)Engine\core\h\Time;$(ProjectDir)Engine\core\h\App;$(ProjectDir)Engine\core\h\Util;$(ProjectDir)Engine\core\h\Object;$(ProjectDir)Engine\core\h\Collision;$(ProjectDir)Game\h;$(ProjectDir)Engine\graphics\h\2D;$(ProjectDir)Engine\graphics\h\3D;$(ProjectDir)Engine\graphics\h\Camera;$(ProjectDir)Engine\graphics\h\Diagnostics;$(ProjectDir)Engine\graphics\h\Effect;$(ProjectDir)Engine\graphics\h\ImGui;$(ProjectDir)Engine\graphics\h\Light;$(ProjectDir)Engine\graphics\h\Manager;$(ProjectDir)Engine\graphics\h\Offscreen;$(ProjectDir)Engine\graphics\h\Particle;$(ProjectDir)Engine\graphics\h\Skeleton;$(ProjectDir)Engine\graphics\h\Text;$(ProjectDir)Engine\graphics\h\UI;$(ProjectDir)Engine\scripting\h;$(ProjectDir)Engine\editor\h;$(ProjectDir)Game\h\Collision;$(ProjectDir)Game\h\Core;$(ProjectDir)Game\h\Core\App;$(ProjectDir)Game\h\Effect;$(ProjectDir)Game\h\Level;$(ProjectDir)Game\h\Player;$(ProjectDir)Game\h\Scene;$(ProjectDir)Game\h\UI;$(ProjectDir)Game\h\Util;$(ProjectDir)Game\h\Scripting;$(ProjectDir)Game\cpp;$(ProjectDir)Resources\shaders\lighting;$(ProjectDir)Resources\shaders\object3d;$(SolutionDir)..\externals\imgui;$(SolutionDir)..\externals\DirectXTex;$(SolutionDir)..\externals\assimp\include;$(SolutionDir)..\externals\json;$(ProjectDir)Resources\shaders\Particle;$(ProjectDir)Resources;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(EngineIncludeDirs);$(GameIncludeDirs);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PrecompiledHeader>Use</PrecompiledHeader>
+      <PrecompiledHeaderFile>GamePch.h</PrecompiledHeaderFile>
+      <ForcedIncludeFiles>GamePch.h;%(ForcedIncludeFiles)</ForcedIncludeFiles>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -146,21 +158,20 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="Game\cpp\Core\GamePch.cpp">
+      <PrecompiledHeader>Create</PrecompiledHeader>
+    </ClCompile>
     <ClCompile Include="Game\cpp\Scene\ClearScene.cpp" />
     <ClCompile Include="Game\cpp\Scene\GameOverScene.cpp" />
     <ClCompile Include="Game\cpp\UI\ScoreDisplay.cpp" />
     <ClCompile Include="Game\cpp\Collision\Collision.cpp" />
     <ClCompile Include="Game\cpp\Core\GameActions.cpp" />
     <ClCompile Include="Game\cpp\Core\App\GameAudio.cpp" />
+    <ClCompile Include="Game\cpp\Core\App\GameSmokeTest.cpp" />
+    <ClCompile Include="Game\cpp\Core\App\GameSmokeTestCoverage.cpp" />
+    <ClCompile Include="Game\cpp\Core\App\GameSmokeTestReplay.cpp" />
+    <ClCompile Include="Game\cpp\Core\App\GameSmokeTestVisit.cpp" />
     <ClCompile Include="Game\cpp\Core\App\MyGame.cpp" />
-    <ClCompile Include="Game\cpp\Core\App\SmokeTestRunner.cpp" />
-    <ClCompile Include="Game\cpp\Core\App\SmokeTestRunnerVisit.cpp" />
-    <ClCompile Include="Game\cpp\Core\App\SmokeTestRunnerMonkey.cpp" />
-    <ClCompile Include="Game\cpp\Core\App\SmokeTestRunnerReport.cpp" />
-    <ClCompile Include="Game\cpp\Core\App\SmokeTestMonitors.cpp" />
-    <ClCompile Include="Game\cpp\Core\App\SmokeTestReplay.cpp" />
-    <ClCompile Include="Game\cpp\Core\App\TestCoverage.cpp" />
-    <ClCompile Include="Game\cpp\Core\App\BugHuntChanges.cpp" />
     <ClCompile Include="Game\cpp\Effect\AfterImageRenderer.cpp" />
     <ClCompile Include="Game\cpp\Scene\BattleTestScene.cpp" />
     <ClCompile Include="Game\cpp\Scene\BattleTestSceneCombat.cpp" />
@@ -774,6 +785,7 @@
     </FxCompile>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Game\h\Core\GamePch.h" />
     <ClInclude Include="Game\h\Scene\AbstractSceneFactory.h" />
     <ClInclude Include="Game\h\Scene\BaseScene.h" />
     <ClInclude Include="Game\h\Scene\ClearScene.h" />
@@ -782,12 +794,8 @@
     <ClInclude Include="Game\h\Collision\CombatDepth.h" />
     <ClInclude Include="Game\h\Core\GameActions.h" />
     <ClInclude Include="Game\h\Core\App\GameAudio.h" />
+    <ClInclude Include="Game\h\Core\App\GameSmokeTest.h" />
     <ClInclude Include="Game\h\Core\App\MyGame.h" />
-    <ClInclude Include="Game\h\Core\App\SmokeTestRunner.h" />
-    <ClInclude Include="Game\h\Core\App\SmokeTestMonitors.h" />
-    <ClInclude Include="Game\h\Core\App\SmokeTestReplay.h" />
-    <ClInclude Include="Game\h\Core\App\TestCoverage.h" />
-    <ClInclude Include="Game\h\Core\App\BugHuntChanges.h" />
     <ClInclude Include="Game\h\Util\GameConstants.h" />
     <ClInclude Include="Game\h\Util\GravityBody.h" />
     <ClInclude Include="Game\h\Util\BorderBlockBuilder.h" />

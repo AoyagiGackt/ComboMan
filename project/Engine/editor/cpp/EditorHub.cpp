@@ -6,6 +6,8 @@
 #include "EditorHub.h"
 #include "EditorUI.h"
 #include <imgui.h>
+#include <algorithm>
+#include <iterator>
 #include <string>
 #include <utility>
 
@@ -26,6 +28,17 @@ EditorHub* EditorHub::GetInstance() {
 /** @brief このフレームの一覧に載せ、前のフレームで押された開閉の頼みがあれば受け取る */
 bool EditorHub::Offer(const char* id, const char* title, const char* key, const char* help, bool open) {
     entries_.push_back({ id, title, key != nullptr ? key : "", help != nullptr ? help : "", open });
+    // どの場面で使えたかを覚えておく（ほかの場面にいる時に、どこへ行けば使えるかを出すため）
+    auto known = std::find_if(known_.begin(), known_.end(), [id](const KnownEntry& entry) {
+        return entry.id == id;
+    });
+    if (known == known_.end()) {
+        known_.push_back({ id, title, {} });
+        known = std::prev(known_.end());
+    }
+    if (!placeLabel_.empty() && std::find(known->places.begin(), known->places.end(), placeLabel_) == known->places.end()) {
+        known->places.push_back(placeLabel_);
+    }
     // 頼みは1回受け取ったら消す
     return pendingToggles_.erase(id) > 0;
 }
@@ -34,7 +47,6 @@ bool EditorHub::Offer(const char* id, const char* title, const char* key, const 
 void EditorHub::DrawList() {
     if (entries_.empty()) {
         ImGui::TextDisabled("このシーンで使えるエディタはありません");
-        return;
     }
     for (const Entry& entry : entries_) {
         ImGui::PushID(entry.id.c_str());
@@ -56,6 +68,30 @@ void EditorHub::DrawList() {
             graphics::editorUI::TextDisabledWrapped("%s", entry.help.c_str());
         }
         ImGui::PopID();
+    }
+    DrawUnavailableList();
+}
+
+/** @brief 前に知らせがあったのに今の場面に無いエディタを、使える場面の名前と一緒に薄く出す */
+void EditorHub::DrawUnavailableList() const {
+    bool headerShown = false;
+    for (const KnownEntry& known : known_) {
+        const bool offered = std::any_of(entries_.begin(), entries_.end(), [&known](const Entry& entry) {
+            return entry.id == known.id;
+        });
+        if (offered) {
+            continue;
+        }
+        if (!headerShown) {
+            graphics::editorUI::TextDisabledWrapped("ほかの場面で使えるエディタ（この起動で入った場面の物だけ出ます）");
+            headerShown = true;
+        }
+        // 使える場面の名前を「、」でつなぐ
+        std::string places;
+        for (const std::string& place : known.places) {
+            places += (places.empty() ? "" : "、") + place;
+        }
+        graphics::editorUI::TextDisabledWrapped("・%s（%sで使えます）", known.title.c_str(), places.empty() ? "ほかの場面" : places.c_str());
     }
 }
 

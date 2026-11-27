@@ -64,6 +64,9 @@
     <Filter Include="ソースファイル\Engine\core\cpp\Time">
       <UniqueIdentifier>{6e3bc207-d4d1-4ca5-aab1-d7dbca387463}</UniqueIdentifier>
     </Filter>
+    <Filter Include="ソースファイル\Engine\core\cpp\AutoTest">
+      <UniqueIdentifier>{5dc652f8-b56b-446d-989c-f480becd9b03}</UniqueIdentifier>
+    </Filter>
     <Filter Include="ソースファイル\Engine\core\cpp\Util">
       <UniqueIdentifier>{e3b116a3-5066-4fb6-b590-7c324f786847}</UniqueIdentifier>
     </Filter>
@@ -90,6 +93,9 @@
     </Filter>
     <Filter Include="ヘッダーファイル\Engine\core\h\Time">
       <UniqueIdentifier>{fb4f09af-4108-4322-a116-d7fb2e8325a4}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ヘッダーファイル\Engine\core\h\AutoTest">
+      <UniqueIdentifier>{f831af5a-e653-4398-8b73-1d619af2a0b7}</UniqueIdentifier>
     </Filter>
     <Filter Include="ヘッダーファイル\Engine\core\h\Util">
       <UniqueIdentifier>{6e7e859e-3d28-420a-8545-0fbe28842c35}</UniqueIdentifier>
@@ -213,6 +219,33 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="Engine\core\cpp\AutoTest\BugHuntChanges.cpp">
+      <Filter>ソースファイル\Engine\core\cpp\AutoTest</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\core\cpp\AutoTest\SmokeTestFingerprint.cpp">
+      <Filter>ソースファイル\Engine\core\cpp\AutoTest</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\core\cpp\AutoTest\SmokeTestMonitors.cpp">
+      <Filter>ソースファイル\Engine\core\cpp\AutoTest</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\core\cpp\AutoTest\SmokeTestReplay.cpp">
+      <Filter>ソースファイル\Engine\core\cpp\AutoTest</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\core\cpp\AutoTest\SmokeTestRunner.cpp">
+      <Filter>ソースファイル\Engine\core\cpp\AutoTest</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\core\cpp\AutoTest\SmokeTestRunnerMonkey.cpp">
+      <Filter>ソースファイル\Engine\core\cpp\AutoTest</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\core\cpp\AutoTest\SmokeTestRunnerReport.cpp">
+      <Filter>ソースファイル\Engine\core\cpp\AutoTest</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\core\cpp\AutoTest\TestCoverage.cpp">
+      <Filter>ソースファイル\Engine\core\cpp\AutoTest</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\core\cpp\Util\EnginePch.cpp">
+      <Filter>ソースファイル\Engine\core\cpp\Util</Filter>
+    </ClCompile>
     <ClCompile Include="Engine\editor\cpp\PostProcessOrderEditor.cpp">
       <Filter>ソースファイル\Engine\editor\cpp</Filter>
     </ClCompile>
@@ -511,6 +544,33 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Engine\core\h\AutoTest\BugHuntChanges.h">
+      <Filter>ヘッダーファイル\Engine\core\h\AutoTest</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\core\h\AutoTest\SmokeTestGame.h">
+      <Filter>ヘッダーファイル\Engine\core\h\AutoTest</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\core\h\AutoTest\SmokeTestFingerprint.h">
+      <Filter>ヘッダーファイル\Engine\core\h\AutoTest</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\core\h\AutoTest\SmokeTestMonitors.h">
+      <Filter>ヘッダーファイル\Engine\core\h\AutoTest</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\core\h\AutoTest\SmokeTestReplay.h">
+      <Filter>ヘッダーファイル\Engine\core\h\AutoTest</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\core\h\AutoTest\SmokeTestRunner.h">
+      <Filter>ヘッダーファイル\Engine\core\h\AutoTest</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\core\h\AutoTest\SmokeTestStep.h">
+      <Filter>ヘッダーファイル\Engine\core\h\AutoTest</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\core\h\AutoTest\TestCoverage.h">
+      <Filter>ヘッダーファイル\Engine\core\h\AutoTest</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\core\h\Util\EnginePch.h">
+      <Filter>ヘッダーファイル\Engine\core\h\Util</Filter>
+    </ClInclude>
     <ClInclude Include="Engine\editor\h\PostProcessOrderEditor.h">
       <Filter>ヘッダーファイル\Engine\editor\h</Filter>
     </ClInclude>

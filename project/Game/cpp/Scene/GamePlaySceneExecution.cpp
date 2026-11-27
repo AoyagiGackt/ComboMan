@@ -4,6 +4,7 @@
  * @note 分割ファイル。クラスは GamePlayScene のまま、とどめまわりの定義だけをここに置く
  */
 #include "GamePlayScene.h"
+#include "EngineContext.h"
 #include "BossExecutionTuning.h"
 #include "FinisherEffects.h"
 #include "GameFlags.h"
@@ -11,6 +12,7 @@
 #include "HitEffectLibrary.h"
 #include "RunData.h"
 #include "SlashMark.h"
+#include "SmokeTestRunner.h"
 #include "StageEditor.h"
 #include "TimeManager.h"
 #include "WeaponManager.h"
@@ -20,12 +22,37 @@ namespace {
 constexpr Vector3 kSliceScale = { 1.0f, 1.0f, 1.0f }; ///< ボスを切り分ける時の破片の倍率
 constexpr float kHalf = 0.5f;
 constexpr float kFallbackBombRadius = 2.5f; ///< めり込んだ爆弾が見つからない時に、ボスの所で出す爆発の大きさ
+constexpr float kTestDuelDistance = 1.5f; ///< 自動テストでボスと向き合う時に、プレイヤーを置くボスの手前の距離
+constexpr float kTestDuelLift = 1.0f; ///< 自動テストでプレイヤーを置く時に、床を探し始める高さ（床にめり込ませないため）
 } // namespace
+
+/** @brief 自動テストでボスと向き合う準備ができるか（まだ倒していないステージのボスだけ。ラスボス戦ととどめの途中は除く） */
+bool GamePlayScene::CanPrepareBossDuelForTest() const {
+    return enemy_ != nullptr && !enemy_->IsDefeated() && !IsFinalBossMode() && !bossExecution_.IsActive();
+}
+
+/** @brief 自動テストの頼みで、ステージのボスの体力を1にしてプレイヤーをボスの手前へ移す */
+void GamePlayScene::PrepareBossDuelForTest() {
+    if (!CanPrepareBossDuelForTest()) {
+        return;
+    }
+    // 倒す処理はふつうに攻撃が当たった時の流れに任せるため、ここでは倒さずに体力を1まで減らす
+    enemy_->TakeStatusDamage(static_cast<float>(enemy_->GetHp()));
+    const Vector3 bossPosition = enemy_->GetPosition();
+    const Vector3 standFrom = { bossPosition.x - kTestDuelDistance, bossPosition.y + kTestDuelLift, player_->GetPosition().z };
+    player_->SetPosition(player_->FindStandingPosition(standFrom, GetStageEditor().GetTerrainColliders()));
+    SmokeTestRunner::NoteTeleport();
+}
 
 /** @brief 膝をついたボスへのとどめの演出を始める（始められない時は false） */
 bool GamePlayScene::TryStartBossExecution() {
     // 膝をついて見えているステージのボスだけ（ラスボス戦は専用の演出がある）
     if (enemy_ == nullptr || !enemy_->IsKneeling() || !enemy_->IsVisible() || IsFinalBossMode()) {
+        return false;
+    }
+    // 壁や閉じた扉の向こうで膝をついたボスには歩み寄らない（演出の歩み寄りは地形の当たり判定を通らないので、壁をすり抜けてしまう）。
+    // その時は従来の吸い寄せで、壁のこちら側から武器を奪う
+    if (DidPlayerCrossWall(player_->GetPosition(), enemy_->GetPosition())) {
         return false;
     }
     // 銃で倒した時は銃で撃ち抜く型にする（クリアの決め演出も弾痕のまま）。
@@ -162,7 +189,7 @@ void GamePlayScene::UpdateBossExecution() {
     // HUDは出さない（文字コマンドの破棄はふだんDrawStyleUI()が行うのでここで代わりに行う）
     fontRenderer_.Reset();
     GetStageEditor().SetGameplayHeld(true);
-    const float dt = TimeManager::GetInstance()->GetDeltaTime();
+    const float dt = engine::Services().time->GetDeltaTime();
     bossExecution_.Update(dt);
     if (enemy_ != nullptr) {
         // 武器を抜き取ったら、ボスが突き立てていた武器を消す

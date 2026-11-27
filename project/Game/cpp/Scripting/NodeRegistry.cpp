@@ -281,7 +281,7 @@ NodeResult ExecScreenFlash(GraphRuntime& rt, const GraphNode& node, std::string&
 // framesフレームぶんゲーム内時間を止める演出用（Wait秒数指定とは別物、TimeManagerのヒットストップ機構を使う）
 NodeResult ExecHitStop(GraphRuntime& rt, const GraphNode& node, std::string& outNextId) {
     int frames = static_cast<int>(AsFloat(rt.ResolveParam(node, "frames", GraphValue { graphNodeDefaults::kHitStopFrames })));
-    TimeManager::GetInstance()->RequestHitStop(frames);
+    engine::Services().time->RequestHitStop(frames);
     outNextId = node.next;
     return NodeResult::kContinue;
 }

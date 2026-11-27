@@ -248,7 +248,7 @@ private:
      * @brief カメラの目標位置・角度・スムージングフレーム数をJSONへ書き出す
      * @param ctx カメラパラメータへのポインタを持つ編集対象
      */
-    void SaveCameraParams(const EditContext& ctx);
+    bool SaveCameraParams(const EditContext& ctx);
     /**
      * @brief 保存済みのカメラ目標位置・角度・スムージングフレーム数をJSONから読み込む（ファイルが無ければ何もしない）
      * @param ctx 読み込み結果を書き込む編集対象
@@ -258,6 +258,10 @@ private:
     // "Resources/Config/editor_ui.json" に UI スプライトのレイアウトを保存/読込する
     /** @brief uiElements_の各スプライトの位置・サイズ・回転・色・テクスチャをJSONへ書き出す */
     void SaveUILayout();
+    /** @brief 保存の成否と保存先を画面に伝える */
+    bool SetSaveResult(bool saved, const char* path);
+    /** @brief 最後に保存した結果を表示する */
+    void DrawSaveResult() const;
     /**
      * @brief 保存済みのUIスプライト一覧をJSONから読み込み、uiElements_を再構築する
      * @param ctx スプライト生成に使うSpriteCommon等を持つ編集対象
@@ -292,7 +296,8 @@ private:
     std::unique_ptr<IEditorState> currentState_; // 現在アクティブな State
 
     std::vector<UIEntry> uiElements_; // Hierarchy に追加した UI スプライト一覧
-    float savedTimer_ = 0.0f; // "Saved!" メッセージを表示するための残り時間
+    std::string saveError_;
+    float savedTimer_ = 0.0f; // 保存成功を表示する残り時間
     static constexpr int kNoEditedUiIndex = -1; // 名前の入力欄がどの UI 要素も指していない時の値
     int uiNameEditIndex_ = kNoEditedUiIndex; // 名前の入力欄に読み込んである UI 要素の番号
     char uiNameBuffer_[textBufferCapacity::kIdentifier] = { }; // UI 要素の名前の入力欄

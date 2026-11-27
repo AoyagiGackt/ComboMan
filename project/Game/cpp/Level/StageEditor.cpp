@@ -3,6 +3,7 @@
  * @brief ステージ配置の実体管理と実行時編集ワークフローを実装するファイル
  */
 #include "StageEditor.h"
+#include "EngineContext.h"
 #include "StageEditorPlaytest.h"
 #include "Camera.h"
 #include "DiagnosticsDraw.h"
@@ -71,6 +72,10 @@ void StageEditor::Open(const std::string& levelPath, ModelCommon* modelCommon, C
     ReleaseLevelResources(false);
 
     levelPath_ = levelPath;
+#ifdef USE_IMGUI
+    // 開くパスの入力欄も、開いたレベルに合わせる（入力欄はエディタがある構成だけ）
+    openPathInput_ = levelPath;
+#endif
     modelCommon_ = modelCommon;
     camera_ = camera;
     viewport_.SetCamera(camera);
@@ -175,7 +180,7 @@ StageEditor::~StageEditor() {
 /** @brief GPUの使用完了を待ってからレベル実体と外部参照を破棄する */
 void StageEditor::Finalize() {
     if (visible_) {
-        TimeManager::GetInstance()->SetTimeScale(savedTimeScale_);
+        engine::Services().time->SetTimeScale(savedTimeScale_);
     }
 #ifdef USE_IMGUI
     stagePlaytest::End(*this);
@@ -459,13 +464,13 @@ void StageEditor::UpdateEditorVisibility(Input* input) {
         return;
     }
     if (visible_) {
-        savedTimeScale_ = TimeManager::GetInstance()->GetTimeScale();
-        TimeManager::GetInstance()->SetTimeScale(0.0f);
+        savedTimeScale_ = engine::Services().time->GetTimeScale();
+        engine::Services().time->SetTimeScale(0.0f);
         return;
     }
     stagePlaytest::End(*this);
     playTestMode_ = false;
-    TimeManager::GetInstance()->SetTimeScale(savedTimeScale_);
+    engine::Services().time->SetTimeScale(savedTimeScale_);
 }
 
 /** @brief 編集操作のキーボードショートカットを処理する */

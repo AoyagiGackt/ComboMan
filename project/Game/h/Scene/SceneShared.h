@@ -274,11 +274,12 @@ namespace sceneShared {
      * @brief 3D の後・UI の前に掛ける画面全体のエフェクトを、場面の列に登録する（順番は post_process.json）
      * @param stack 登録先の列
      * @param stackName post_process.json の stacks の下の名前
+     * @param stackDisplayName エディタに出す場面の名前（本編・訓練場など）
      * @param srvManager ブルームが使うデスクリプタの管理
      * @param spaceWarp 空間のゆがみ
      * @param comboFeel 締めの放射ブラーを持つ、近接コンボの手応え演出
      */
-    void SetupScenePostProcess(engine::graphics::PostProcessStack& stack, const std::string& stackName,
+    void SetupScenePostProcess(engine::graphics::PostProcessStack& stack, const std::string& stackName, const std::string& stackDisplayName,
         engine::graphics::SrvManager* srvManager, engine::graphics::SpaceDistortionEffect& spaceWarp, ComboFeelDirector& comboFeel);
 
 } // namespace sceneShared

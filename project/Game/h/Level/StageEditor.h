@@ -1051,6 +1051,9 @@ private:
     bool showGrid_ = true; // スナップON時にグリッド線を描くか
     int levelFileIndex_ = -1; // レベル切替コンボの選択位置（-1は未選択）
     char newLevelName_[textBufferCapacity::kIdentifier] = "level03";
+    std::string openPathInput_; ///< 開くレベルのパスの入力欄（入力しただけでは保存先は変わらない）
+    std::string pendingOpenPath_; ///< 未保存の確認の後に開くレベルのパス
+    std::string pendingNewLevelPath_; ///< 未保存の確認の後に作る新しいレベルのパス
     char templateGuideText_[textBufferCapacity::kLabel] = "案内文をここに";
     char templateDoorCondition_[textBufferCapacity::kName] = "condition_room_clear";
     bool showWavePanel_ = false;

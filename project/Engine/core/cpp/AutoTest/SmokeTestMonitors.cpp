@@ -12,7 +12,7 @@
 #include <algorithm>
 #include <cstdio>
 
-namespace engine::game {
+namespace engine {
 
 namespace {
 constexpr double kBytesPerMb = 1024.0 * 1024.0; // バイトを MB に直す割り算の数
@@ -179,4 +179,4 @@ void SmokeTestMonitors::WriteSummary(std::ostream& out) const {
     }
 }
 
-} // namespace engine::game
+} // namespace engine

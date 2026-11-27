@@ -24,12 +24,35 @@ struct SharedConfig {
     uint32_t version = 1; ///< 差し替えるたびに増やす（列はこれが変わったら読み直す）
     std::vector<std::string> knownNames; ///< 一度でも登録された名前（登録した順）
     std::vector<std::pair<std::string, std::string>> displayNames; ///< 名前と、エディタに出す名前
+    std::vector<std::pair<std::string, std::string>> stackDisplayNames; ///< 場面の列の名前と、エディタに出す名前
+    std::string activeStackName; ///< 一番最近に掛けた場面の列の名前
 };
 
 /** @brief 共通の設定を返す */
 SharedConfig& Shared() {
     static SharedConfig sShared;
     return sShared;
+}
+
+/** @brief 名前と表示名の表へ、表示名を付ける（同じ名前があれば付け替える） */
+void SetNamedLabel(std::vector<std::pair<std::string, std::string>>& labels, const std::string& name, const std::string& label) {
+    for (auto& [key, value] : labels) {
+        if (key == name) {
+            value = label;
+            return;
+        }
+    }
+    labels.emplace_back(name, label);
+}
+
+/** @brief 名前と表示名の表から表示名を引く（無ければ名前のまま） */
+std::string FindNamedLabel(const std::vector<std::pair<std::string, std::string>>& labels, const std::string& name) {
+    for (const auto& [key, value] : labels) {
+        if (key == name) {
+            return value;
+        }
+    }
+    return name;
 }
 
 /** @brief JSON の文字列の配列を読む（文字列でない要素は飛ばす） */
@@ -92,6 +115,8 @@ void PostProcessStack::RegisterBuiltins(SrvManager* srvManager) {
 
 /** @brief 決めた順番で、止めていなくて今掛ける物だけを掛ける */
 void PostProcessStack::Execute(const std::function<void()>& restoreTarget) {
+    // エディタで今の画面がどの場面かを見せるため、掛けた場面を覚えておく
+    Shared().activeStackName = stackName_;
     // エディタで順番が変わっていたら、掛ける前に読み直す
     if (loadedConfigVersion_ != Shared().version) {
         ReloadOrder();
@@ -174,23 +199,27 @@ void PostProcessStack::ClearConfigOverride() {
 
 /** @brief 表示名を付ける（同じ名前があれば付け替える） */
 void PostProcessStack::SetDisplayName(const std::string& name, const std::string& displayName) {
-    for (auto& [key, value] : Shared().displayNames) {
-        if (key == name) {
-            value = displayName;
-            return;
-        }
-    }
-    Shared().displayNames.emplace_back(name, displayName);
+    SetNamedLabel(Shared().displayNames, name, displayName);
 }
 
 /** @brief 表示名を引く（無ければ名前のまま） */
 std::string PostProcessStack::GetDisplayName(const std::string& name) {
-    for (const auto& [key, value] : Shared().displayNames) {
-        if (key == name) {
-            return value;
-        }
-    }
-    return name;
+    return FindNamedLabel(Shared().displayNames, name);
+}
+
+/** @brief 場面の列の表示名を付ける */
+void PostProcessStack::SetStackDisplayName(const std::string& stackName, const std::string& displayName) {
+    SetNamedLabel(Shared().stackDisplayNames, stackName, displayName);
+}
+
+/** @brief 場面の列の表示名を引く（無ければ名前のまま） */
+std::string PostProcessStack::GetStackDisplayName(const std::string& stackName) {
+    return FindNamedLabel(Shared().stackDisplayNames, stackName);
+}
+
+/** @brief 一番最近に掛けた場面の列の名前を返す */
+std::string PostProcessStack::GetActiveStackName() {
+    return Shared().activeStackName;
 }
 
 /** @brief 登録された名前の一覧を返す */

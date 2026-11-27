@@ -4,6 +4,7 @@
  * @note GamePlayScene の戦闘の更新だけを GamePlayScene.cpp から分けて置いている（クラスは GamePlayScene のまま）
  */
 #include "GamePlayScene.h"
+#include "EngineContext.h"
 #include "CombatDepth.h"
 #include "GameActions.h"
 #include "TestCoverage.h"
@@ -350,7 +351,7 @@ void GamePlayScene::RequestMeleeHitStopAndShake(const MeleeAttackDef* attack, bo
     if (finisher) {
         hitStopFrames = (std::max)(hitStopFrames, CombatTune().finisherMinHitStopFrames);
     }
-    TimeManager::GetInstance()->RequestHitStop(hitStopFrames);
+    engine::Services().time->RequestHitStop(hitStopFrames);
     const float frames = static_cast<float>(hitStopFrames);
     cameraShaker_.Request((finisher ? CombatTune().finisherShakePerFrame : CombatTune().midStepShakePerFrame) * frames,
         CombatTune().hitShakeDurationBase + CombatTune().hitShakeDurationPerFrame * frames);
@@ -521,7 +522,7 @@ bool GamePlayScene::TryJustDodge(const Vector3& hitPos) {
     styleMeter_ = std::clamp(styleMeter_ + CombatTune().justDodgeStyleGain, 0.0f, 1.0f);
     ChargeAwakenGaugeByStyle(CombatTune().justDodgeGaugeGain);
     player_->BeginJustDodgeWindow(CombatTune().justDodgeBonusSeconds); // 直後の攻撃を強化し、回避を攻めの起点にする
-    TimeManager::GetInstance()->RequestHitStop(CombatTune().justDodgeHitStopFrames);
+    engine::Services().time->RequestHitStop(CombatTune().justDodgeHitStopFrames);
     const HitEffectPlayer fx(pm_, &cameraShaker_, &rng_);
     fx.Impact("just_dodge");
     fx.Ring("just_dodge", hitPos);
@@ -575,7 +576,7 @@ void GamePlayScene::UpdateParticles(float dt) {
         ParticleFieldLibrary::Emit(pm_, "greatsword_vortex", player_->GetGreatswordThrowPos());
     }
     // 敵の時間の通り道が止まっている間（斬った後の間）は、敵の攻撃とボスの技も進めない（体だけ止まって技が進むと食い違う）
-    const bool enemiesStopped = TimeManager::GetInstance()->IsChannelStopped(timeChannel::kEnemies);
+    const bool enemiesStopped = engine::Services().time->IsChannelStopped(timeChannel::kEnemies);
     if (!enemiesStopped) {
         UpdateEnemyAttackOnPlayer(dt);
     }
@@ -598,7 +599,7 @@ void GamePlayScene::UpdateParticles(float dt) {
         // 倒した瞬間だけ時間を少しゆっくりにして、とどめの手応えを残す（ラスボスは専用の撃破演出に任せる）
         if (!finalBoss_.IsActive()) {
             const auto& visuals = HitEffectLibrary::GetInstance()->SceneParticles();
-            TimeManager::GetInstance()->RequestSlowMotion(visuals.defeatSlowSeconds, visuals.defeatSlowScale);
+            engine::Services().time->RequestSlowMotion(visuals.defeatSlowSeconds, visuals.defeatSlowScale);
         }
         const HitEffectPlayer fx(pm_, &cameraShaker_, &rng_);
         fx.Sparks("defeat_shards", pos);

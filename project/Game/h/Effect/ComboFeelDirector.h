@@ -193,7 +193,7 @@ private:
     Vector2 DecideSlashDirection(const MeleeAttackDef* attack, float facingX) const;
 
     void LoadSettings();
-    void SaveSettings() const;
+    bool SaveSettings() const;
 
     /** @brief 今持っている（最後に振った）武器の手応え */
     const WeaponFeel& CurrentFeel() const;
@@ -229,6 +229,7 @@ private:
     bool showPanel_ = false;
 #ifdef USE_IMGUI
     engine::editor::PanelEditSession<ComboFeelSettings> panelSession_; ///< パネルの元に戻す・戻す操作・説明
+    std::string saveStatus_; ///< 保存・読み直しの結果の知らせ（パネルに出す）
 #endif
 };
 

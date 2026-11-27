@@ -19,6 +19,7 @@
 #include "GameSounds.h"
 #include "HitEffectLibrary.h"
 #include "JsonConfigEditor.h"
+#include "EditorUI.h"
 #include "KickedBombPool.h"
 #include "MonsterTraitTuning.h"
 #include "WeaponFinisherTuning.h"
@@ -54,6 +55,7 @@
 #include "TimeManager.h"
 #include "TitleScene.h"
 #include "VignetteEffect.h"
+#include <format>
 #include <SrvManager.h>
 #ifdef USE_IMGUI
 #include "EditorFlowRow.h"
@@ -79,8 +81,8 @@ double MillisecondsSinceProcessStart() {
 
 /** @brief ロード時間の比較用に、目印付きでログへ出す（素材の読み方のモードも添える） */
 void LogLoadProfile(const std::string& label) {
-    const char* mode = AssetPack::GetInstance()->GetMode() == AssetPack::Mode::kUse ? "use"
-        : AssetPack::GetInstance()->IsCooking() ? "cook" : "off";
+    const char* mode = engine::Services().assetPack->GetMode() == AssetPack::Mode::kUse ? "use"
+        : engine::Services().assetPack->IsCooking() ? "cook" : "off";
     Logger::Log("[LoadProfile] " + label + ": " + std::to_string(static_cast<int>(MillisecondsSinceProcessStart()))
         + " ms（exe起動から, pak=" + mode + "）");
 }
@@ -136,6 +138,21 @@ void DrawSceneNavigation() {
     }
 }
 
+/** @brief 場面の名前を、F8 の一覧に出す日本語の名前にする（表に無ければそのまま） */
+std::string ScenePlaceLabel(const std::string& sceneName) {
+    // 場面の名前と、一覧に出す名前
+    static constexpr std::pair<const char*, const char*> kPlaceLabels[] = {
+        { "TITLE", "タイトル" }, { "MAP", "ステージ選択" }, { "GAMEPLAY", "本編" }, { "TRAINING", "トレーニング" },
+        { "BATTLETEST", "戦闘テスト" }, { "OPTIONS", "オプション" }, { "CLEAR", "クリア" }, { "GAMEOVER", "ゲームオーバー" },
+    };
+    for (const auto& [name, label] : kPlaceLabels) {
+        if (sceneName == name) {
+            return label;
+        }
+    }
+    return sceneName;
+}
+
 /** @brief 調整値エディタの対象フォルダと、保存したらすぐ読み直す設定ファイルを登録する */
 void SetupConfigEditor() {
     auto* editor = JsonConfigEditor::GetInstance();
@@ -174,7 +191,7 @@ using namespace engine::game;
 /** @brief ゲーム固有の初期化処理 */
 void MyGame::Initialize() {
     // 自動テストで起動していれば、乱数を作る物より先に乱数の元の種を決める（同じ種なら同じ動きになる）
-    SmokeTestRunner::ApplySeedFromCommandLine();
+    SmokeTestRunner::ApplySeedFromCommandLine(gameSmokeTest_);
 
     // 基盤の初期化
     Framework::Initialize();
@@ -216,9 +233,7 @@ void MyGame::Initialize() {
 
     // --smoke-test で起動したら自動テストプレイを始める（画面の更新を待たずに速く回すため VSync は切る）
     // --realtime も付けた時は、人が画面を見ながら確かめられるよう、ふだんの速さのまま進める
-    constexpr const wchar_t* kRealtimeFlag = L"--realtime";
-    const bool realtime = std::wstring(GetCommandLineW()).find(kRealtimeFlag) != std::wstring::npos;
-    if (smokeTest_.StartIfRequested(input_.get(), dxCommon_.get()) && !realtime) {
+    if (smokeTest_.StartIfRequested(input_.get(), dxCommon_.get(), gameSmokeTest_) && !smokeTest_.WantsRealtime()) {
         dxCommon_->SetVSyncEnabled(false);
         // 1秒60フレームで待つのもやめ、手順の表の speed の回数だけ1回の描画の間にゲームを進める
         dxCommon_->SetFrameLimitEnabled(false);
@@ -260,11 +275,18 @@ void MyGame::UpdateOnce() {
     // 基盤の更新
     Framework::Update();
 
+#ifdef USE_IMGUI
+    // F8 の一覧で、ほかの場面にあるエディタの使い道を出すため、今の場面の名前を渡す
+    {
+        editor::EditorHub::GetInstance()->SetPlaceLabel(ScenePlaceLabel(SceneManager::GetInstance()->GetCurrentSceneName()));
+    }
+#endif
+
     // 入力バッファ更新（Input::Update() の直後）
     InputBuffer::GetInstance()->Update(input_.get());
 
     // 時間管理・オーディオフェードを毎フレーム更新
-    TimeManager::GetInstance()->Update();
+    engine::Services().time->Update();
     audio_->Update(gameConstants::kFrameDeltaTime);
 
     // 遅延コールバック・スクリーンフラッシュを毎フレーム更新
@@ -308,6 +330,20 @@ void MyGame::UpdateOnce() {
             DrawSceneNavigation();
             ImGui::SeparatorText("エディタ");
             editorHub->DrawList();
+            // 調整値の JSON をテキストエディタなどで直した時に、起動し直さずにまとめて反映する
+            if (ImGui::Button("実行中に反映できる設定を読み直す")) {
+                const JsonConfigEditor::ReloadAllResult reloaded = JsonConfigEditor::GetInstance()->ReloadAll();
+                configReloadStatus_ = std::format("ゲームへ {} 個読み直しました。ほかの設定ファイルは、次の起動から反映されます", reloaded.gameReloaded);
+                if (reloaded.keptUnsaved > 0) {
+                    configReloadStatus_ += std::format("（調整値エディタで保存していない {} 個は、変更を残すため表示をそのままにしました）", reloaded.keptUnsaved);
+                }
+            }
+            if (ImGui::IsItemHovered()) {
+                graphics::editorUI::TooltipWrapped("途中で読み直しても安全な設定ファイルだけが対象です。敵の数や部品の数など、起動の時に決まる物は次の起動から反映されます");
+            }
+            if (!configReloadStatus_.empty()) {
+                graphics::editorUI::TextDisabledWrapped("%s", configReloadStatus_.c_str());
+            }
             ImGui::SeparatorText("エンジンの状態");
             auto* profiler = FrameProfiler::GetInstance();
             ImGui::Text("CPU %.2f ms  %.1f FPS", profiler->GetMs(), profiler->GetFPS());

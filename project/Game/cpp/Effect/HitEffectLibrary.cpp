@@ -3,6 +3,7 @@
  * @brief 演出レシピの読み込みと、レシピどおりに演出を出す処理を実装するファイル
  */
 #include "HitEffectLibrary.h"
+#include "EngineContext.h"
 #include "ActionFeelTuning.h"
 #include "CameraShaker.h"
 #include "GamepadRumble.h"
@@ -389,7 +390,7 @@ HitEffectPlayer::HitEffectPlayer(ParticleManager* particles, CameraShaker* shake
 void HitEffectPlayer::Impact(const std::string& name, const EffectStyle& style) const {
     const ImpactDef& def = HitEffectLibrary::GetInstance()->Impact(name);
     if (def.hitStopFrames > 0) {
-        TimeManager::GetInstance()->RequestHitStop(def.hitStopFrames);
+        engine::Services().time->RequestHitStop(def.hitStopFrames);
     }
     if (shaker_ && def.shakeAmount > 0.0f) {
         shaker_->Request(def.shakeAmount * style.scale, def.shakeSeconds);

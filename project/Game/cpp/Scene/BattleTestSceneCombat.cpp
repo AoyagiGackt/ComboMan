@@ -4,6 +4,7 @@
  * @note BattleTestScene の戦闘判定だけを BattleTestScene.cpp から分けて置いている（クラスは BattleTestScene のまま）
  */
 #include "BattleTestScene.h"
+#include "EngineContext.h"
 #include "SceneVisualTuning.h"
 #include "HitEffectLibrary.h"
 #include "CombatTuning.h"
@@ -167,7 +168,7 @@ bool BattleTestScene::UpdateWeaponSkillHits() {
             }
         }
         if (skill.screenImpact) {
-            TimeManager::GetInstance()->RequestHitStop(HitEffectLibrary::GetInstance()->SceneParticles().hitStopLaunch);
+            engine::Services().time->RequestHitStop(HitEffectLibrary::GetInstance()->SceneParticles().hitStopLaunch);
             ScreenFlash::GetInstance()->Request(SceneVisualTuning::BattleCombat().slamFlashColor, SceneVisualTuning::BattleCombat().slamFlashDuration);
         }
     }
@@ -244,7 +245,7 @@ bool BattleTestScene::UpdateGunShotHit() {
         return false;
     }
 
-    auto* tm = TimeManager::GetInstance();
+    auto* tm = engine::Services().time;
     const Vector3& pp = player_->GetPosition();
     const float atkMult = ComputeAttackMult();
 
@@ -313,7 +314,7 @@ bool BattleTestScene::UpdateRampageHit() {
         return false;
     }
 
-    auto* tm = TimeManager::GetInstance();
+    auto* tm = engine::Services().time;
     const AttackFrame attack = CaptureAttackFrame();
 
     bool hitConfirmed = false;
@@ -352,7 +353,7 @@ void BattleTestScene::UpdateSpinShotFire() {
 /** @brief 弾丸の移動と衝突判定を処理する命中があれば true を返す */
 bool BattleTestScene::UpdateBulletHits() {
     // ── 弾丸の移動・衝突判定 ────────────────────────────────────────
-    auto* tm = TimeManager::GetInstance();
+    auto* tm = engine::Services().time;
     const WeaponData& weapon = weaponManager_->GetCurrent();
 
     bool hitConfirmed = false;
@@ -411,7 +412,7 @@ bool BattleTestScene::UpdateCombat() {
 
 /** @brief ダミー1体への近接ヒット処理（ノックバック・打ち上げ・演出・スタイル加点） */
 void BattleTestScene::ApplyMeleeHitToDummy(Dummy& d, const MeleeAttackDef* atk, float atkMult) {
-    auto* tm = TimeManager::GetInstance();
+    auto* tm = engine::Services().time;
     const WeaponData& weapon = weaponManager_->GetCurrent();
 
     d.hp = d.maxHp;
@@ -527,7 +528,7 @@ void BattleTestScene::UpdatePlacedKnights() {
         return;
     }
 
-    auto* tm = TimeManager::GetInstance();
+    auto* tm = engine::Services().time;
     const WeaponData& weapon = weaponManager_->GetCurrent();
     const Vector3& pp = player_->GetPosition();
     std::vector<AABB> solids = GetStageEditor().GetSolidColliders();

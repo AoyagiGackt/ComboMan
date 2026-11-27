@@ -43,7 +43,7 @@ private:
     /** @brief Resources からモデルとテクスチャの候補を集め直す */
     void ScanAssets();
     /** @brief 見た目を enemy_params.json に書き足し、敵の調整値を読み直す */
-    bool SaveNewLook(const NewLook& look);
+    bool SaveNewLook(const NewLook& look, bool overwrite);
     /** @brief 一覧の中で使われていない id を作る */
     std::string MakeUniqueId() const;
 

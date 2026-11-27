@@ -4,6 +4,7 @@
  * @note 分割ファイル。クラスは GamePlayScene のまま、ラスボス戦まわりの定義だけをここに置く
  */
 #include "GamePlayScene.h"
+#include "EngineContext.h"
 #include "StageEditorPlaytest.h"
 #include "CrashBreadcrumbs.h"
 #include "GameConstants.h"
@@ -126,7 +127,7 @@ bool GamePlayScene::UpdateFinalBossCinematic() {
     UpdateCamera();
     player_->RefreshVisualTransforms();
     // フィニッシャーで段階が変わって演出に入った時も、切断の演出を進めて本体を戻す（戻さないと演出の間ボスが消えたままになる）
-    const float dt = TimeManager::GetInstance()->GetDeltaTime();
+    const float dt = engine::Services().time->GetDeltaTime();
     enemySlice_.Update(dt, camera_.get());
     RestoreEnemyAfterSlice();
     SlashMark::GetInstance()->Update(dt);

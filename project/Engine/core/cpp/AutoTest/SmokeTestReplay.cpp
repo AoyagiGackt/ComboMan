@@ -3,117 +3,27 @@
  * @brief 自動テストプレイの再生ファイルの読み書きと、ゲームの状態の指紋を実装するファイル
  */
 #include "SmokeTestReplay.h"
-#include "EnemyEntity.h"
+#include "SmokeTestGame.h"
 #include "JsonHelper.h"
-#include "Player.h"
-#include "PlayerBridge.h"
-#include "RunData.h"
-#include "SceneManager.h"
-#include "StageEditor.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
 
-namespace engine::game {
+namespace engine {
 
 namespace {
 constexpr int kReplayVersion = 1; // 再生ファイルの書き方の番号（変えたら古いファイルは読まない）
 constexpr int kJsonIndent = 1; // 再生ファイルの字下げ（人が開いても読めるように少しだけ）
-constexpr float kPositionQuantize = 1000.0f; // 位置を指紋に入れる時に、この分の1の細かさで丸める
-constexpr uint64_t kFnvOffset = 1469598103934665603ull; // 指紋を作る計算の始まりの値
-constexpr uint64_t kFnvPrime = 1099511628211ull; // 指紋を作る計算の掛け数
-constexpr size_t kSummaryTextCapacity = 96; // 位置を文字にする時の入れ物の大きさ
-constexpr const char* kGameplaySceneName = "GAMEPLAY"; // プレイヤーと敵を読んでよい画面（ほかの画面では消えた物を指していることがある）
-
-/** @brief 指紋を作る途中の値へ、バイト列を混ぜる */
-void MixBytes(uint64_t& hash, const void* data, size_t size) {
-    const auto* bytes = static_cast<const unsigned char*>(data);
-    for (size_t i = 0; i < size; ++i) {
-        hash ^= bytes[i];
-        hash *= kFnvPrime;
-    }
-}
-
-/** @brief 指紋へ整数を混ぜる */
-void MixInt(uint64_t& hash, int64_t value) {
-    MixBytes(hash, &value, sizeof(value));
-}
-
-/** @brief 指紋へ文字を混ぜる */
-void MixText(uint64_t& hash, const std::string& text) {
-    MixBytes(hash, text.data(), text.size());
-}
-
-/** @brief 指紋へ位置を混ぜる（とても小さな差で別の指紋にならないよう丸める） */
-void MixPosition(uint64_t& hash, const Vector3& position) {
-    MixInt(hash, std::llround(position.x * kPositionQuantize));
-    MixInt(hash, std::llround(position.y * kPositionQuantize));
-    MixInt(hash, std::llround(position.z * kPositionQuantize));
-}
-
-/** @brief 位置を報告用の短い文字にする */
-std::string FormatPosition(const Vector3& position) {
-    char text[kSummaryTextCapacity];
-    std::snprintf(text, sizeof(text), "(%.2f, %.2f)", position.x, position.y);
-    return text;
-}
 } // namespace
 
-/** @brief 今のゲームの状態から指紋を作る */
-SmokeTestReplay::Checkpoint SmokeTestReplay::Capture(uint64_t frame) {
-    Checkpoint checkpoint;
-    checkpoint.frame = frame;
-    uint64_t hash = kFnvOffset;
-    // 画面と、何回切り替わったか
-    const SceneManager* scenes = SceneManager::GetInstance();
-    MixText(hash, scenes->GetCurrentSceneName());
-    MixInt(hash, scenes->GetSceneSwitchCount());
-    checkpoint.summary = scenes->GetCurrentSceneName();
-    // ランの体力と進み具合
-    const RunData* runData = RunData::GetInstance();
-    MixInt(hash, runData->GetHp());
-    MixInt(hash, runData->GetFloor());
-    checkpoint.summary += " 体力 " + std::to_string(runData->GetHp());
-    // プレイヤーと敵は、戦う画面が落ち着いている時だけ読む（切り替えの途中やほかの画面では、もう消えた物を指していることがある）
-    if (scenes->GetCurrentSceneName() != kGameplaySceneName || scenes->IsChangingScene()) {
-        checkpoint.hash = hash;
-        return checkpoint;
-    }
-    // プレイヤーの位置
-    if (const Player* player = PlayerBridge::GetInstance()->Get()) {
-        MixPosition(hash, player->GetPosition());
-        checkpoint.summary += " プレイヤー " + FormatPosition(player->GetPosition());
-    }
-    // 戦っている敵の位置と体力（名前の順に混ぜる）
-    if (const StageEditor* editor = StageEditor::GetActive()) {
-        std::vector<CombatEnemyRef> enemies = editor->GetCombatEnemies();
-        std::sort(enemies.begin(), enemies.end(), [](const CombatEnemyRef& a, const CombatEnemyRef& b) {
-            return a.name < b.name;
-        });
-        int alive = 0;
-        for (const CombatEnemyRef& ref : enemies) {
-            if (ref.enemy == nullptr) {
-                continue;
-            }
-            MixText(hash, ref.name);
-            MixInt(hash, ref.enemy->GetHp());
-            MixPosition(hash, ref.enemy->GetPosition());
-            alive += ref.enemy->IsDefeated() ? 0 : 1;
-        }
-        checkpoint.summary += " 生きている敵 " + std::to_string(alive);
-    }
-    checkpoint.hash = hash;
-    return checkpoint;
-}
-
 /** @brief 決まった間隔のフレームなら、今のゲームの状態の指紋を取って残す */
-void SmokeTestReplay::RecordCheckpoint(uint64_t frame) {
+void SmokeTestReplay::RecordCheckpoint(uint64_t frame, const SmokeTestGame& game) {
     if (frame % kCheckpointIntervalFrames != 0) {
         return;
     }
-    recorded_.push_back(Capture(frame));
+    recorded_.push_back(game.Capture(frame));
 }
 
 /** @brief 再生ファイルを書き出す */
@@ -194,12 +104,12 @@ uint64_t SmokeTestReplay::TargetFrame() const {
 }
 
 /** @brief 決まった間隔のフレームなら、今の状態の指紋を記録した物と比べる */
-std::optional<std::string> SmokeTestReplay::VerifyCheckpoint(uint64_t frame) {
+std::optional<std::string> SmokeTestReplay::VerifyCheckpoint(uint64_t frame, const SmokeTestGame& game) {
     if (!playing_ || diverged_ || nextExpected_ >= expected_.size() || expected_[nextExpected_].frame != frame) {
         return std::nullopt;
     }
     const Checkpoint& expected = expected_[nextExpected_++];
-    const Checkpoint actual = Capture(frame);
+    const Checkpoint actual = game.Capture(frame);
     if (actual.hash == expected.hash) {
         return std::nullopt;
     }
@@ -208,4 +118,4 @@ std::optional<std::string> SmokeTestReplay::VerifyCheckpoint(uint64_t frame) {
     return "frame " + std::to_string(frame) + " で記録とずれた。記録: " + expected.summary + " / 今: " + actual.summary;
 }
 
-} // namespace engine::game
+} // namespace engine

@@ -219,7 +219,7 @@ void EnemyEntity::Update(float playerX) {
     previousX_ = pos_.x;
     // ヒットストップ中はプレイヤーと同じく世界ごと止める（止めないと吹き飛びだけが先に進んで手応えが薄れる）
     // 敵の時間の通り道だけが止まっている間（斬った後の間）も、同じように止まった見た目にする
-    if (TimeManager::GetInstance()->IsChannelStopped(timeChannel::kEnemies)) {
+    if (engine::Services().time->IsChannelStopped(timeChannel::kEnemies)) {
         UpdateDuringHitStop();
         return;
     }
@@ -545,9 +545,12 @@ void EnemyEntity::PushHoverOutOfBlocksVertically(const std::vector<engine::AABB>
         if (!overlaps) {
             continue;
         }
-        const float verticalDepth = (std::min)(bodyTop, block.max.y) - (std::max)(bodyBottom, block.min.y);
+        // 横から入ったかどうかは、壁からの押し出し（EnemySeparation）と同じ体の範囲（足元を wallBandBottom だけ空ける）で決める。
+        // 違う範囲で決めると、どちらも相手が押し出すとみなして、足場の中に残ってしまう
+        const float sideBodyBottom = pos_.y + separation.wallBandBottom;
+        const float sideVerticalDepth = (std::min)(bodyTop, block.max.y) - (std::max)(sideBodyBottom, block.min.y);
         const float horizontalDepth = (std::min)(pos_.x + halfWidth - block.min.x, block.max.x - (pos_.x - halfWidth));
-        if (verticalDepth >= horizontalDepth) {
+        if (sideVerticalDepth >= horizontalDepth) {
             continue;
         }
         // 体の真ん中が足場の真ん中より上なら上へ、下なら下へ出す

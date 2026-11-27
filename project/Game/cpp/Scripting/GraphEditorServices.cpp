@@ -4,6 +4,7 @@
  */
 #ifdef USE_IMGUI
 #include "GraphEditorServices.h"
+#include "EngineContext.h"
 #include "TextBufferCapacity.h"
 #include "EditorHub.h"
 #include "EditorUI.h"
@@ -207,10 +208,10 @@ bool GraphEditorInteraction::PrepareFrame(GraphEditor& editor, engine::Input* in
             // 開くたびに日本語の表示名を読み直す（node_labels.json の書き換えを再起動せずに見られる）
             GraphNodeLabels::Reload();
             // 開いている間は背後のゲームを止める（TimeManager のタイムスケールを流用する）
-            editor.savedTimeScale_ = TimeManager::GetInstance()->GetTimeScale();
-            TimeManager::GetInstance()->SetTimeScale(0.0f);
+            editor.savedTimeScale_ = engine::Services().time->GetTimeScale();
+            engine::Services().time->SetTimeScale(0.0f);
         } else {
-            TimeManager::GetInstance()->SetTimeScale(editor.savedTimeScale_);
+            engine::Services().time->SetTimeScale(editor.savedTimeScale_);
         }
     }
     if (!editor.visible_) {
@@ -351,22 +352,23 @@ void GraphEditorInteraction::DrawGuidance(GraphEditor& editor) {
 
 /** @brief ツールバーを出す */
 void GraphEditorInteraction::DrawToolbar(GraphEditor& editor) {
-    // 編集中のグラフのパスと、開く・保存
+    // 今どのグラフを編集しているか（保存はここへ書く）
+    graphics::editorUI::TextDisabledWrapped("編集中: %s", editor.graphPath_.c_str());
+    // 開くグラフのパス（入力しただけでは保存先は変わらない。開くボタンで読み込んだ時に切り替わる）
     char pathBuf[textBufferCapacity::kPath];
-    strncpy_s(pathBuf, editor.graphPath_.c_str(), _TRUNCATE);
+    strncpy_s(pathBuf, editor.openPathInput_.c_str(), _TRUNCATE);
     ImGui::SetNextItemWidth(GraphEditorDrawingStyle::kGraphPathFieldWidth);
-    // パスは入力した時点で書き換え、開くボタンで読み込む
-    if (ImGui::InputText("##path", pathBuf, sizeof(pathBuf))) {
-        editor.graphPath_ = pathBuf;
+    if (ImGui::InputTextWithHint("##path", "開くグラフのパス", pathBuf, sizeof(pathBuf))) {
+        editor.openPathInput_ = pathBuf;
     }
     ImGui::SameLine();
     if (ImGui::Button("開く")) {
         // 未保存の編集がある時は黙って破棄せず、確認モーダルを挟む
         if (editor.dirty_) {
-            editor.pendingConfirmOpenPath_ = editor.graphPath_;
+            editor.pendingConfirmOpenPath_ = editor.openPathInput_;
             editor.requestConfirmOpen_ = true;
         } else {
-            editor.Open(editor.graphPath_);
+            editor.Open(editor.openPathInput_);
         }
     }
     ImGui::SameLine();

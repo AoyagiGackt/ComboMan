@@ -6,7 +6,7 @@
 #include "SmokeTestRunner.h"
 #include <map>
 
-namespace engine::game::testCoverage {
+namespace engine::testCoverage {
 
 namespace {
 /** @brief 種類1つぶんの数え */
@@ -51,4 +51,4 @@ void ForEach(const std::function<void(const std::string& category, const std::se
     }
 }
 
-} // namespace engine::game::testCoverage
+} // namespace engine::testCoverage

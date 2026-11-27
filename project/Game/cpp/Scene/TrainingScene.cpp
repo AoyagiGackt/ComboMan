@@ -201,7 +201,7 @@ void TrainingScene::Update() {
     UpdateWeaponSlotHud();
 
 #ifdef _DEBUG
-    testGraphRuntime_.Update(TimeManager::GetInstance()->GetDeltaTime());
+    testGraphRuntime_.Update(engine::Services().time->GetDeltaTime());
 #endif
 
     bool nearWarp = sceneShared::UpdatePortalTransition(input_, player_->GetPosition(), CombatTune().trainingWarpX, CombatTune().trainingWarpProximity, "TRAINING", "battle_test", "BATTLETEST", audio_);
@@ -248,7 +248,7 @@ void TrainingScene::UpdatePlayerAndBullets() {
 
     // ── フィニッシャースラッシュ（ゲージ満タン消費）───────────────────
     if (player_->JustFinisherSlash()) {
-        TimeManager::GetInstance()->RequestHitStop(HitEffectLibrary::GetInstance()->SceneParticles().hitStopFinisherSlash);
+        engine::Services().time->RequestHitStop(HitEffectLibrary::GetInstance()->SceneParticles().hitStopFinisherSlash);
         ScreenFlash::GetInstance()->Request(SceneVisualTuning::Training().finisherFlashColor, HitEffectLibrary::GetInstance()->SceneParticles().shakeFinisherSlashDur);
 
         static std::mt19937 sRng { engine::randomSeed::Next() };

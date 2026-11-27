@@ -4,6 +4,7 @@
  * @note GamePlayScene の演出と描画だけを GamePlayScene.cpp から分けて置いている（クラスは GamePlayScene のまま）
  */
 #include "GamePlayScene.h"
+#include "EngineContext.h"
 #include "GameActions.h"
 #include "GameSounds.h"
 #include "HitEffectLibrary.h"
@@ -108,7 +109,7 @@ void GamePlayScene::UpdateFinisherSlash(float dt) {
         return;
     }
 
-    auto* tm = TimeManager::GetInstance();
+    auto* tm = engine::Services().time;
     const Vector3 epos = enemy_ ? enemy_->GetPosition() : player_->GetPosition();
 
     if (finisherLineIdx_ < CombatTune().finisherSlashLines) {
