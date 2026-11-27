@@ -6,13 +6,18 @@
 #include "JsonConfigEditor.h"
 #include "JsonConfigEditorShared.h"
 #include "EditorUI.h"
+#include "EditorFlowRow.h"
 #include "JsonHelper.h"
 #include <algorithm>
 #include <array>
 #include <cctype>
 #include <cfloat>
 #include <filesystem>
+#include <fstream>
+#include <optional>
+#include <set>
 #include <imgui.h>
+#include <Windows.h>
 #include <iterator>
 
 namespace engine::graphics {
@@ -29,6 +34,10 @@ using jsonConfigEditorShared::kLiveColor;
 using jsonConfigEditorShared::kNextBootColor;
 using jsonConfigEditorShared::SavedChild;
 using jsonConfigEditorShared::SavedElement;
+/** @brief UTF-8 の文字列からパスを作る（C++20 で非推奨になった u8path の代わり） */
+std::filesystem::path Utf8Path(const std::string& text) {
+    return std::filesystem::path(std::u8string(text.begin(), text.end()));
+}
 constexpr const char* kNoFileLabel = "（なし）";
 constexpr const char* kNumberFormat = "%.4g"; ///< 小数の表示の書式（単位はこの後ろに付ける）
 constexpr ImGuiColorEditFlags kColorFlags = ImGuiColorEditFlags_Float | ImGuiColorEditFlags_AlphaBar
@@ -81,6 +90,76 @@ bool LooksLikeAssetPath(const std::string& text) {
 /** @brief "グループ.キー" の形で子の場所を作る */
 std::string JoinPath(const std::string& parent, const std::string& key) {
     return parent.empty() ? key : parent + "." + key;
+}
+
+using Json = nlohmann::json;
+constexpr const char* kConflictPopup = "ほかで変更された項目";
+constexpr float kConflictWidth = 430.0f;
+constexpr float kConflictListHeight = 150.0f;
+
+/** @brief 同じフォルダに書き終えてから日本語名の保存先に移す。別名保存では既存ファイルを保護する */
+bool WriteConfig(const std::filesystem::path& path, const Json& data, const Json* expected) {
+    constexpr int kIndent = 2;
+    wchar_t temporary[MAX_PATH] = {};
+    if (!GetTempFileNameW(path.parent_path().c_str(), L"cfg", 0, temporary)) {
+        return false;
+    }
+    bool saved = false;
+    try {
+        std::ofstream file(std::filesystem::path(temporary), std::ios::binary | std::ios::trunc);
+        file << data.dump(kIndent) << '\n';
+        file.close();
+        // 書き出し中にも別の保存が入ったら、次の保存操作であらためて比較する
+        bool current = true;
+        if (expected) {
+            std::ifstream latest(path, std::ios::binary);
+            current = latest && Json::parse(latest, nullptr, false) == *expected;
+        }
+        const DWORD flags = expected ? MOVEFILE_WRITE_THROUGH | MOVEFILE_REPLACE_EXISTING : MOVEFILE_WRITE_THROUGH;
+        saved = file && current && MoveFileExW(temporary, path.c_str(), flags);
+    } catch (const std::exception&) {
+        saved = false;
+    }
+    if (!saved) {
+        DeleteFileW(temporary);
+    }
+    return saved;
+}
+
+/** @brief 欠けている項目も区別して値を比較する */
+bool SameValue(const Json* a, const Json* b) {
+    return a && b ? *a == *b : a == b;
+}
+
+/** @brief 共通の元データを基準に双方の変更を統合し、異なる変更が重なった場所を集める */
+std::optional<Json> MergeValue(const Json* base, const Json* mine, const Json* disk, const std::string& path,
+    bool preferFile, std::vector<std::string>& conflicts) {
+    const Json* chosen = mine;
+    if (SameValue(base, mine)) {
+        chosen = disk;
+    } else if (!SameValue(base, disk) && !SameValue(mine, disk)) {
+        if (mine && mine->is_object() && disk && disk->is_object() && (!base || base->is_object())) {
+            // 双方が消したキーは結果に含めない
+            std::set<std::string> keys;
+            for (const Json* object : { mine, disk }) {
+                for (const auto& item : object->items()) {
+                    keys.insert(item.key());
+                }
+            }
+            Json merged = Json::object();
+            for (const auto& key : keys) {
+                auto child = MergeValue(SavedChild(base, key), SavedChild(mine, key), SavedChild(disk, key),
+                    JoinPath(path, key), preferFile, conflicts);
+                if (child) {
+                    merged[key] = std::move(*child);
+                }
+            }
+            return merged;
+        }
+        conflicts.push_back(path);
+        chosen = preferFile ? disk : mine;
+    }
+    return chosen ? std::optional<Json>(*chosen) : std::nullopt;
 }
 
 /** @brief 3つ・4つの数値だけの配列か */
@@ -138,6 +217,9 @@ void JsonConfigEditor::SetReloadCallback(const std::string& fileName, std::funct
 void JsonConfigEditor::ScanConfigFiles() {
     std::error_code error;
     if (!std::filesystem::is_directory(configDirectory_, error)) {
+        for (FileEntry& entry : files_) {
+            entry.missing = entry.dirty || entry.pendingEdit;
+        }
         return;
     }
     const nlohmann::json hidden = labels_.value("_hidden", nlohmann::json::array());
@@ -145,7 +227,7 @@ void JsonConfigEditor::ScanConfigFiles() {
     // 並びが変わっても同じファイルを選んだままにする
     const std::string selectedFile = selected_ >= 0 && selected_ < static_cast<int>(files_.size()) ? files_[selected_].fileName : std::string();
     std::vector<FileEntry> scanned;
-    for (const auto& item : std::filesystem::directory_iterator(configDirectory_, error)) {
+    for (const auto& item : std::filesystem::directory_iterator(Utf8Path(configDirectory_), error)) {
         if (!item.is_regular_file() || ToLower(ToUtf8(item.path().extension())) != ".json") {
             continue;
         }
@@ -156,8 +238,11 @@ void JsonConfigEditor::ScanConfigFiles() {
         // 開いたことのあるファイルは編集中の内容を引き継ぐ
         const auto existing = std::find_if(files_.begin(), files_.end(), [&](const FileEntry& e) { return e.fileName == fileName; });
         if (existing != files_.end()) {
+            existing->missing = false;
             existing->title = titles.value(fileName, fileName);
             scanned.push_back(std::move(*existing));
+            existing->dirty = false;
+            existing->pendingEdit = false;
             continue;
         }
         FileEntry entry;
@@ -165,6 +250,13 @@ void JsonConfigEditor::ScanConfigFiles() {
         entry.path = ToUtf8(item.path());
         entry.title = titles.value(fileName, fileName);
         scanned.push_back(std::move(entry));
+    }
+    // 見つからなかったファイルでも編集が残っていれば救出できるようにする
+    for (FileEntry& entry : files_) {
+        if (entry.dirty || entry.pendingEdit) {
+            entry.missing = !std::filesystem::exists(Utf8Path(entry.path), error);
+            scanned.push_back(std::move(entry));
+        }
     }
     // 日本語の名前があるファイルを先に、その中は名前順に並べる
     std::sort(scanned.begin(), scanned.end(), [&](const FileEntry& a, const FileEntry& b) {
@@ -210,7 +302,11 @@ void JsonConfigEditor::ScanAssets() {
 
 /** @brief ファイルを読み込んで編集を始める */
 void JsonConfigEditor::LoadEntry(FileEntry& entry) {
-    entry.data = JsonHelper::Load(entry.path);
+    std::ifstream file(Utf8Path(entry.path), std::ios::binary);
+    entry.data = file ? Json::parse(file, nullptr, false) : JsonHelper::Load(entry.path);
+    if (entry.data.is_discarded()) {
+        entry.data = nullptr;
+    }
     entry.saved = entry.data;
     entry.loaded = true;
     entry.dirty = false;
@@ -221,15 +317,90 @@ void JsonConfigEditor::LoadEntry(FileEntry& entry) {
     entry.pendingEdit = false;
 }
 
+/** @brief 登録した読み直しを全部呼び、開いているファイルの表示もファイルの中身に合わせ直す */
+JsonConfigEditor::ReloadAllResult JsonConfigEditor::ReloadAll() {
+    ReloadAllResult result;
+    // ゲームへ読み直させる（登録した物だけ）
+    for (const auto& [fileName, callback] : reloadCallbacks_) {
+        if (callback) {
+            callback();
+            ++result.gameReloaded;
+        }
+    }
+    // このエディタの表示を合わせ直す（保存していない変更があるファイルはそのまま残す）
+    for (FileEntry& entry : files_) {
+        if (!entry.loaded) {
+            continue;
+        }
+        if (entry.dirty || entry.pendingEdit) {
+            ++result.keptUnsaved;
+            continue;
+        }
+        LoadEntry(entry);
+        ++result.editorRefreshed;
+    }
+    status_ = "設定ファイルを読み直しました";
+    return result;
+}
+
 /** @brief 編集中の内容を書き出し、登録された読み直しを呼ぶ */
-void JsonConfigEditor::SaveEntry(FileEntry& entry) {
-    if (!JsonHelper::Save(entry.path, entry.data)) {
-        status_ = "保存に失敗しました: " + entry.path;
+void JsonConfigEditor::SaveEntry(FileEntry& entry, bool resolved, bool preferFile) {
+    const auto path = Utf8Path(entry.path);
+    std::ifstream file(path, std::ios::binary);
+    if (!file) {
+        std::error_code error;
+        entry.missing = !std::filesystem::exists(path, error) && !error;
+        status_ = "ファイルを読み込めませんでした: " + entry.path;
         return;
     }
+    const Json disk = Json::parse(file, nullptr, false);
+    file.close();
+    if (disk.is_discarded()) {
+        status_ = "ファイルの内容を読み取れないため、保存を中止しました: " + entry.path;
+        return;
+    }
+    std::vector<std::string> conflicts;
+    const auto merged = MergeValue(&entry.saved, &entry.data, &disk, {}, preferFile, conflicts);
+    if (!conflicts.empty() && (!resolved || disk != entry.conflictDisk)) {
+        entry.conflictDisk = disk;
+        entry.conflictMessage = "ほかで変更された項目があります。";
+        for (const auto& pathName : conflicts) {
+            std::string caption;
+            size_t start = 0;
+            while (start < pathName.size()) {
+                const size_t end = pathName.find('.', start);
+                caption += (caption.empty() ? "" : " / ") + LabelFor(pathName.substr(0, end), pathName.substr(start, end - start));
+                if (end == std::string::npos) {
+                    break;
+                }
+                start = end + 1;
+            }
+            entry.conflictMessage += "\n・" + (caption.empty() ? entry.title : caption);
+        }
+        ImGui::OpenPopup(kConflictPopup);
+        return;
+    }
+    if (!WriteConfig(path, *merged, &disk)) {
+        status_ = "保存できませんでした。外部の変更と書き込み先を確認して、もう一度保存してください: " + entry.path;
+        return;
+    }
+    FinishSave(entry, *merged, disk != entry.saved);
+}
+
+/** @brief 保存された値を表示に戻し、古い外部値を含む履歴を消す */
+void JsonConfigEditor::FinishSave(FileEntry& entry, const Json& merged, bool resetHistory) {
     status_ = "保存しました: " + entry.fileName;
-    entry.saved = entry.data;
+    entry.data = merged;
+    entry.saved = merged;
+    if (resetHistory) {
+        entry.undoStack.clear();
+        entry.redoStack.clear();
+        entry.undoBase = merged;
+        entry.pendingEdit = false;
+    }
     entry.dirty = false;
+    entry.conflictDisk = nullptr;
+    entry.conflictMessage.clear();
     const auto callback = reloadCallbacks_.find(entry.fileName);
     if (callback != reloadCallbacks_.end() && callback->second) {
         callback->second();
@@ -294,7 +465,9 @@ void JsonConfigEditor::Draw() {
 
 /** @brief 左側のファイル一覧を描く */
 void JsonConfigEditor::DrawFileList() {
-    ImGui::BeginChild("##files", ImVec2(kFileListWidth, 0.0f), ImGuiChildFlags_Borders);
+    constexpr float kMaxListRatio = 0.4f;
+    const float listWidth = (std::min)(kFileListWidth, ImGui::GetContentRegionAvail().x * kMaxListRatio);
+    ImGui::BeginChild("##files", ImVec2(listWidth, 0.0f), ImGuiChildFlags_Borders);
     if (ImGui::Button("一覧を更新")) {
         labels_ = JsonHelper::Load(labelsPath_);
         ScanConfigFiles();
@@ -307,22 +480,88 @@ void JsonConfigEditor::DrawFileList() {
     ImGui::EndChild();
 }
 
+/** @brief 元のファイルがなくなった編集を別名保存するか、確認して破棄する */
+void JsonConfigEditor::DrawMissingFile(FileEntry& entry) {
+    editorUI::TextDisabledWrapped("元のファイルが見つかりません。変更を残すには、新しいファイル名を入力してください。");
+    ImGui::SetNextItemWidth(-FLT_MIN);
+    ImGui::InputTextWithHint("##newFileName", "新しいファイル名", entry.newName, sizeof(entry.newName));
+    const std::string name = entry.newName;
+    engine::editor::FlowRow actions;
+    if (actions.Button("別の名前で保存")) {
+        // フォルダの指定や機器名を受け付けず、新規ファイルだけに書く
+        const auto stem = ToLower(name.substr(0, name.find('.')));
+        constexpr size_t kDeviceNameLength = 4;
+        const bool numberedDevice = stem.size() == kDeviceNameLength && (stem.starts_with("com") || stem.starts_with("lpt"))
+            && std::isdigit(static_cast<unsigned char>(stem.back()));
+        const bool device = stem == "con" || stem == "nul" || stem == "prn" || stem == "aux"
+            || stem == "conin$" || stem == "conout$" || numberedDevice;
+        if (name.empty() || name.front() == '.' || name.back() == ' ' || name.back() == '.'
+            || name.find_first_of("/\\\\:\"<>|?*") != std::string::npos || device) {
+            status_ = "フォルダを含まない、有効なファイル名を入力してください。";
+        } else {
+            const std::string fileName = ToLower(name).ends_with(".json") ? name : name + ".json";
+            const auto destination = Utf8Path(configDirectory_) / Utf8Path(fileName);
+            // 別の未保存の編集が元の名前を保持している場合も、その名前を使わない
+            const auto used = std::ranges::any_of(files_, [&](const FileEntry& other) {
+                const auto otherName = Utf8Path(other.fileName);
+                return CompareStringOrdinal(destination.filename().c_str(), -1, otherName.c_str(), -1, TRUE) == CSTR_EQUAL;
+            });
+            if (!used && WriteConfig(destination, entry.data, nullptr)) {
+                entry.fileName = fileName;
+                entry.path = ToUtf8(destination);
+                entry.title = fileName;
+                entry.missing = false;
+                FinishSave(entry, entry.data, true);
+                return;
+            }
+            status_ = "保存に失敗しました: " + ToUtf8(destination) + "（使われていない名前を指定してください）";
+        }
+    }
+    constexpr const char* kDiscardPopup = "未保存の編集を捨てる確認";
+    if (actions.Button("変更を捨てる")) {
+        ImGui::OpenPopup(kDiscardPopup);
+    }
+    if (editorUI::ConfirmModal(kDiscardPopup, "このファイルの未保存の変更を捨てますか？", "捨てる") == editorUI::ConfirmResult::kOk) {
+        files_.erase(files_.begin() + selected_);
+        selected_ = (std::min)(selected_, static_cast<int>(files_.size()) - 1);
+        status_.clear();
+        return;
+    }
+    editorUI::TextDisabledWrapped("%s", status_.c_str());
+}
+
 /** @brief 保存・履歴・読み直しのボタンと、そのショートカットを処理する */
 void JsonConfigEditor::DrawFileToolbar(FileEntry& entry) {
     // 保存（変更が無い間は押せない）
+    engine::editor::FlowRow actions;
     ImGui::BeginDisabled(!entry.dirty);
-    if (ImGui::Button("保存 (Ctrl+S)")) {
+    if (actions.Button("保存 (Ctrl+S)")) {
         SaveEntry(entry);
     }
     ImGui::EndDisabled();
     if (entry.dirty && editorUI::CtrlShortcut(ImGuiKey_S, true)) {
         SaveEntry(entry);
     }
+    // 共通の確認小窓にファイル側の値を選ぶボタンと、スクロールできる項目一覧を添える
+    bool useFile = false;
+    if (ImGui::BeginPopupModal(kConflictPopup, nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::BeginChild("##conflictNames", ImVec2((std::min)(kConflictWidth, ImGui::GetMainViewport()->WorkSize.x), kConflictListHeight));
+        ImGui::TextWrapped("%s", entry.conflictMessage.c_str());
+        ImGui::EndChild();
+        if (ImGui::Button("ファイルの値を使う")) {
+            useFile = true;
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
+    const auto choice = editorUI::ConfirmModal(kConflictPopup, "競合した項目に使う値を選んでください。", "自分の値で上書き", "やめる");
+    if (useFile || choice == editorUI::ConfirmResult::kOk) {
+        SaveEntry(entry, true, useFile);
+    }
     // 元に戻す・やり直す（どちらもボタンとキーを受ける）
     const auto historyButton = [&](const char* label, ImGuiKey key, std::vector<nlohmann::json>& source, std::vector<nlohmann::json>& destination) {
-        ImGui::SameLine();
         ImGui::BeginDisabled(source.empty());
-        const bool pressed = ImGui::Button(label);
+        const bool pressed = actions.Button(label);
         ImGui::EndDisabled();
         if (pressed || editorUI::CtrlShortcut(key)) {
             StepHistory(entry, source, destination);
@@ -331,16 +570,15 @@ void JsonConfigEditor::DrawFileToolbar(FileEntry& entry) {
     historyButton("元に戻す (Ctrl+Z)", ImGuiKey_Z, entry.undoStack, entry.redoStack);
     historyButton("やり直す (Ctrl+Y)", ImGuiKey_Y, entry.redoStack, entry.undoStack);
     // 保存した時の内容へ戻す（これも1回の変更なので元に戻せる）
-    ImGui::SameLine();
     ImGui::BeginDisabled(!entry.dirty);
-    if (ImGui::Button("保存時の内容に戻す")) {
+    if (actions.Button("保存時の内容に戻す")) {
         entry.data = entry.saved;
         entry.pendingEdit = true;
     }
     ImGui::EndDisabled();
     // ファイルから読み直すと履歴も消えるので、未保存の変更がある時は確認する
-    ImGui::SameLine();
     const char* const reloadLabel = "ファイルから読み直す";
+    actions.Next(engine::editor::FlowRow::ButtonWidth(reloadLabel));
     if (entry.dirty ? editorUI::ConfirmButton(reloadLabel, "未保存の変更と履歴を捨てて読み直しますか？", "読み直す") : ImGui::Button(reloadLabel)) {
         LoadEntry(entry);
     }
@@ -350,13 +588,16 @@ void JsonConfigEditor::DrawFileToolbar(FileEntry& entry) {
         editorUI::DrawUnsavedMark();
     }
     if (!status_.empty()) {
-        ImGui::SameLine();
-        ImGui::TextDisabled("%s", status_.c_str());
+        editorUI::TextDisabledWrapped("%s", status_.c_str());
     }
 }
 
 /** @brief 右側に選んだファイルの中身を描く */
 void JsonConfigEditor::DrawFileContents(FileEntry& entry) {
+    if (entry.missing) {
+        DrawMissingFile(entry);
+        return;
+    }
     if (!entry.loaded) {
         LoadEntry(entry);
     }

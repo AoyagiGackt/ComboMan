@@ -11,7 +11,7 @@
 #include <set>
 #include <string>
 
-namespace engine::game::testCoverage {
+namespace engine::testCoverage {
 
 /**
  * @brief 試せる物を1つ知らせる（全部の数と、まだ試していない物を出すため）
@@ -34,4 +34,4 @@ bool IsEnabled();
 void ForEach(const std::function<void(const std::string& category, const std::set<std::string>& declared,
     const std::set<std::string>& covered)>& fn);
 
-} // namespace engine::game::testCoverage
+} // namespace engine::testCoverage

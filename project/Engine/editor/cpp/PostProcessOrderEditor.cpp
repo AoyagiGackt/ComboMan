@@ -17,6 +17,11 @@ namespace engine::editor {
 namespace {
 using graphics::PostProcessStack;
 
+/** @brief 保存していない変更を捨てる確認の小窓の名前 */
+constexpr const char* kDiscardPopupId = "画面の効果の変更を捨てる確認";
+/** @brief 今の画面の場面に付ける印 */
+constexpr const char* kPreviewMark = "（プレビュー中）";
+
 /** @brief 初めて開いた時のウィンドウの大きさ */
 constexpr ImVec2 kInitialWindowSize = { 460.0f, 420.0f };
 /** @brief 編集中で保存していない時の見出しの色 */
@@ -69,16 +74,39 @@ void PostProcessOrderEditor::Draw(bool* open) {
     FlowRow toolbar;
     ImGui::BeginDisabled(!hasChanges);
     bool saveRequested = toolbar.Button("保存 (Ctrl+S)");
-    if (toolbar.Button("元に戻す")) {
-        Reload();
-        PostProcessStack::ClearConfigOverride();
-        status_ = "設定ファイルの中身に戻しました";
+    ImGui::EndDisabled();
+    // 直前の1回だけを取り消す
+    ImGui::BeginDisabled(undoStack_.empty());
+    if (toolbar.Button("元に戻す (Ctrl+Z)") || (!undoStack_.empty() && graphics::editorUI::CtrlShortcut(ImGuiKey_Z))) {
+        edited_ = undoStack_.back();
+        undoStack_.pop_back();
+        ApplyPreview();
+        status_ = "1つ前に戻しました";
+    }
+    ImGui::EndDisabled();
+    // 全場面の保存していない変更を捨てる（確認してから）
+    ImGui::BeginDisabled(!hasChanges);
+    if (toolbar.Button("保存した状態に戻す")) {
+        ImGui::OpenPopup(kDiscardPopupId);
     }
     ImGui::EndDisabled();
     if (toolbar.Button("ファイルから読み直す")) {
+        // 保存していない変更がある時は、消えることを確かめてから読み直す
+        if (hasChanges) {
+            ImGui::OpenPopup(kDiscardPopupId);
+        } else {
+            Reload();
+            PostProcessStack::ClearConfigOverride();
+            status_ = "設定ファイルを読み直しました";
+        }
+    }
+    if (graphics::editorUI::ConfirmModal(kDiscardPopupId,
+            "全部の場面の、保存していない変更を捨てて、\n設定ファイルの中身に戻しますか？",
+            "捨てて戻す")
+        == graphics::editorUI::ConfirmResult::kOk) {
         Reload();
         PostProcessStack::ClearConfigOverride();
-        status_ = "設定ファイルを読み直しました";
+        status_ = "保存した状態に戻しました";
     }
     saveRequested |= hasChanges && graphics::editorUI::CtrlShortcut(ImGuiKey_S, true);
     if (saveRequested) {
@@ -117,11 +145,19 @@ void PostProcessOrderEditor::Reload() {
     }
     edited_ = saved_;
     loaded_ = true;
+    undoStack_.clear();
 }
 
 /** @brief 1つの場面の列を、有効のチェック・上へ・下へ・外すのボタンで編集する */
 bool PostProcessOrderEditor::DrawStack(const std::string& stackName, nlohmann::json& stack) {
-    if (!ImGui::CollapsingHeader(stackName.c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
+    const bool active = PostProcessStack::GetActiveStackName() == stackName;
+    const std::string header = PostProcessStack::GetStackDisplayName(stackName) + (active ? kPreviewMark : "") + "##" + stackName;
+    const bool openHeader = ImGui::CollapsingHeader(header.c_str(), ImGuiTreeNodeFlags_DefaultOpen);
+    if (ImGui::IsItemHovered()) {
+        graphics::editorUI::TooltipWrapped("設定ファイルでの名前: %s%s", stackName.c_str(),
+            active ? "（今の画面はこの場面の順番で掛けています）" : "（この場面に入ると、この順番で掛けます）");
+    }
+    if (!openHeader) {
         return false;
     }
     ImGui::PushID(stackName.c_str());
@@ -203,11 +239,22 @@ bool PostProcessOrderEditor::DrawStack(const std::string& stackName, nlohmann::j
     }
 
     if (changed) {
+        // 変える前の中身を、1回分の元に戻す履歴として覚えてから書き換える
+        PushUndo();
         stack["order"] = order;
         stack["disabled"] = disabled;
     }
     ImGui::PopID();
     return changed;
+}
+
+/** @brief 今の中身を元に戻す履歴に積む（古すぎる物は捨てる） */
+void PostProcessOrderEditor::PushUndo() {
+    constexpr size_t kMaxUndo = 64;
+    undoStack_.push_back(edited_);
+    if (undoStack_.size() > kMaxUndo) {
+        undoStack_.erase(undoStack_.begin());
+    }
 }
 
 /** @brief 編集中の中身を、保存の前からゲームの列に読み直させる */

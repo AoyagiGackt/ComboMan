@@ -3,6 +3,7 @@
  * @brief エンディング画面の演出・スコア確定・タイトルへの遷移（ClearScene）の実装
  */
 #include "ClearScene.h"
+#include "EngineContext.h"
 #include "GameAudio.h"
 #include "AssetPack.h"
 #include "GameConstants.h"
@@ -205,7 +206,7 @@ void ClearScene::Initialize(DirectXCommon* dxCommon, Input* input, Audio* audio)
     ranking_ = ScoreManager::GetInstance()->GetRankingSnapshot();
 
     // cook中（素材をpakへ記録するために画面を開いているだけ）はスコアや通算記録を書き換えない
-    if (AssetPack::GetInstance()->IsCooking()) {
+    if (engine::Services().assetPack->IsCooking()) {
         return;
     }
 

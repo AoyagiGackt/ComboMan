@@ -70,6 +70,37 @@ constexpr float kFileButtonWidth = 80.0f; // 開く・保存・元に戻す・�
 constexpr Vector3 kNewLevelPlayerSpawn = { 4.0f, 0.4f, 0.0f };
 constexpr int kNewLevelLeftColumn = 2; // 新規レベルの床・天井・左壁を並べ始める列
 
+/** @brief 床・左右の壁・天井だけの土台のレベルを作る（真っ白なレベルだと足場が無く落ちて始まらない） */
+LevelData BuildNewLevelData() {
+    constexpr int kNewLevelWidth = 40;
+    constexpr int kNewLevelHeight = 13;
+    constexpr float kFloorY = -0.98f;
+    constexpr float kCeilingY = 13.0f;
+    LevelData data;
+    data.playerSpawn = kNewLevelPlayerSpawn;
+    // 当たり判定つきのブロックを指定の軸に並べた列配置を1つ作る
+    auto makeRow = [](const char* name, char axis, int count, const Vector3& position) {
+        ObjectDesc row;
+        row.name = name;
+        row.type = PlacementType::kRow;
+        row.kind = "prop";
+        row.axis = axis;
+        row.count = count;
+        row.model = "Resources/block/block.obj";
+        row.texture = "Resources/block/block.png";
+        row.position = position;
+        row.lighting = false;
+        row.solid = true;
+        return row;
+    };
+    // 床・天井は横一列、左右の壁は縦一列に並べる（右の壁は床の高さから1段多く積む）
+    data.objects.push_back(makeRow("floor", 'x', kNewLevelWidth, { static_cast<float>(kNewLevelLeftColumn), kFloorY, 0.0f }));
+    data.objects.push_back(makeRow("ceiling", 'x', kNewLevelWidth, { static_cast<float>(kNewLevelLeftColumn), kCeilingY, 0.0f }));
+    data.objects.push_back(makeRow("wall_left", 'y', kNewLevelHeight, { static_cast<float>(kNewLevelLeftColumn), 0.0f, 0.0f }));
+    data.objects.push_back(makeRow("wall_right", 'y', kNewLevelHeight + 1, { static_cast<float>(kNewLevelWidth + kNewLevelLeftColumn), kFloorY, 0.0f }));
+    return data;
+}
+
 /** @brief 検索語(小文字化済み)がtext(小文字化して比較)に部分一致するか。空検索語は常にtrue */
 bool MatchesSearch(const std::string& searchTextLower, const std::string& text) {
     if (searchTextLower.empty()) {
@@ -199,6 +230,16 @@ void StageEditorHierarchyPanel::RenderCameraSection(StageEditor& editor) {
         ImGui::TextDisabled("WASD: XY移動 / Q,E: 奥行き移動");
     }
 }
+/** @brief 土台のレベルをファイルに書き出し、書けたらそのファイルを開く */
+void StageEditorHierarchyPanel::CreateAndOpenNewLevel(StageEditor& editor, const std::string& newPath) {
+    if (levelLoader::Save(newPath, BuildNewLevelData())) {
+        editor.Open(newPath, editor.modelCommon_, editor.camera_);
+    } else {
+        editor.statusMessage_ = "レベルの保存に失敗しました: " + newPath;
+        editor.statusTimer_ = StageEditor::kStatusLongSeconds;
+    }
+}
+
 /** @brief レベルファイルの開く/保存、元に戻す/やり直す、スナップ、親子リンク等の操作行を描画する */
 void StageEditorHierarchyPanel::RenderFileAndHistoryActions(StageEditor& editor) {
     // レベル切替: Resources/Levels 直下のJSONを列挙して選ぶ（自動保存ファイルは除外）
@@ -206,7 +247,10 @@ void StageEditorHierarchyPanel::RenderFileAndHistoryActions(StageEditor& editor)
     constexpr const char* kLevelsDirectory = "Resources/Levels";
     constexpr const char* kAutoSaveSuffix = ".autosave.json";
     bool requestOpen = false;
+    std::string requestedPath;
     const std::string currentFile = std::filesystem::path(editor.levelPath_).filename().string();
+    // 今どのファイルを編集しているか（保存はここへ書く）
+    editorUI::TextDisabledWrapped("編集中: %s", editor.levelPath_.empty() ? "（まだ開いていません）" : editor.levelPath_.c_str());
     ImGui::SetNextItemWidth(-1.0f);
     if (ImGui::BeginCombo("##levelFile", currentFile.empty() ? "レベルを選択" : currentFile.c_str())) {
         // フォルダが無くても例外にせず、空の一覧として扱う
@@ -226,7 +270,8 @@ void StageEditorHierarchyPanel::RenderFileAndHistoryActions(StageEditor& editor)
             // 今開いているファイルを選び直した時は読み込み直さない
             const bool selected = name == currentFile;
             if (ImGui::Selectable(name.c_str(), selected) && !selected) {
-                editor.levelPath_ = std::string(kLevelsDirectory) + "/" + name;
+                // 保存先はまだ変えない（開けた時に初めて切り替える）
+                requestedPath = std::string(kLevelsDirectory) + "/" + name;
                 requestOpen = true;
             }
         }
@@ -239,71 +284,59 @@ void StageEditorHierarchyPanel::RenderFileAndHistoryActions(StageEditor& editor)
     ImGui::SameLine();
     ImGui::BeginDisabled(editor.newLevelName_[0] == '\0');
     if (ImGui::Button("新規作成")) {
-        // 床・左右の壁・天井だけの土台を書き出してから開く（真っ白なレベルだと足場が無く落ちて始まらない）
-        constexpr int kNewLevelWidth = 40;
-        constexpr int kNewLevelHeight = 13;
-        constexpr float kFloorY = -0.98f;
-        constexpr float kCeilingY = 13.0f;
-        LevelData data;
-        data.playerSpawn = kNewLevelPlayerSpawn;
-        // 当たり判定つきのブロックを指定の軸に並べた列配置を1つ作る
-        auto makeRow = [](const char* name, char axis, int count, const Vector3& position) {
-            ObjectDesc row;
-            row.name = name;
-            row.type = PlacementType::kRow;
-            row.kind = "prop";
-            row.axis = axis;
-            row.count = count;
-            row.model = "Resources/block/block.obj";
-            row.texture = "Resources/block/block.png";
-            row.position = position;
-            row.lighting = false;
-            row.solid = true;
-            return row;
-        };
-        // 床・天井は横一列、左右の壁は縦一列に並べる（右の壁は床の高さから1段多く積む）
-        data.objects.push_back(makeRow("floor", 'x', kNewLevelWidth, { static_cast<float>(kNewLevelLeftColumn), kFloorY, 0.0f }));
-        data.objects.push_back(makeRow("ceiling", 'x', kNewLevelWidth, { static_cast<float>(kNewLevelLeftColumn), kCeilingY, 0.0f }));
-        data.objects.push_back(makeRow("wall_left", 'y', kNewLevelHeight, { static_cast<float>(kNewLevelLeftColumn), 0.0f, 0.0f }));
-        data.objects.push_back(makeRow("wall_right", 'y', kNewLevelHeight + 1, { static_cast<float>(kNewLevelWidth + kNewLevelLeftColumn), kFloorY, 0.0f }));
-        // 土台をファイルに書き出し、そのファイルを開く
         const std::string newPath = std::string(kLevelsDirectory) + "/" + editor.newLevelName_ + ".json";
-        if (levelLoader::Save(newPath, data)) {
-            editor.levelPath_ = newPath;
-            requestOpen = true;
-        } else {
-            editor.statusMessage_ = "レベルの保存に失敗しました";
+        std::error_code existsError;
+        if (std::filesystem::exists(newPath, existsError)) {
+            // 同じ名前のレベルは上書きしない（作品を消さないため）
+            editor.statusMessage_ = "同じ名前のレベルがあります。別の名前にしてください: " + newPath;
             editor.statusTimer_ = StageEditor::kStatusLongSeconds;
+        } else if (editor.dirty_) {
+            // 今の編集を捨てるかを、ファイルを書く前に確かめる
+            editor.pendingNewLevelPath_ = newPath;
+            ImGui::OpenPopup("新規作成の確認");
+        } else {
+            CreateAndOpenNewLevel(editor, newPath);
         }
     }
     ImGui::EndDisabled();
-    // レベルのパスは直接入力でも指定できる
-    char pathBuf[textBufferCapacity::kPath];
-    strncpy_s(pathBuf, editor.levelPath_.c_str(), _TRUNCATE);
-    ImGui::SetNextItemWidth(-1.0f);
-    if (ImGui::InputText("##path", pathBuf, sizeof(pathBuf))) {
-        editor.levelPath_ = pathBuf;
+    // 確認で破棄を選んだ時だけ、新しいレベルを書き出して開く
+    if (editorUI::ConfirmModal("新規作成の確認",
+            "未保存の変更があります。\n変更を破棄して、新しいレベルを作りますか？",
+            "破棄して作る")
+        == editorUI::ConfirmResult::kOk) {
+        CreateAndOpenNewLevel(editor, editor.pendingNewLevelPath_);
     }
-    // 未保存の編集がある時は黙って破棄せず、確認モーダルを挟んでから開く
-    auto openOrConfirm = [&editor]() {
+    // ほかのレベルのパスは直接入力でも指定できる（入力しただけでは保存先は変わらない）
+    if (editor.openPathInput_.empty()) {
+        editor.openPathInput_ = editor.levelPath_;
+    }
+    char pathBuf[textBufferCapacity::kPath];
+    strncpy_s(pathBuf, editor.openPathInput_.c_str(), _TRUNCATE);
+    ImGui::SetNextItemWidth(-1.0f);
+    if (ImGui::InputTextWithHint("##path", "開くレベルのパス", pathBuf, sizeof(pathBuf))) {
+        editor.openPathInput_ = pathBuf;
+    }
+    // 一覧で選んだ・開くボタンを押した時に開く（ボタンは毎フレーム描くので、requestOpen より先に評価する）
+    const bool openPressed = ImGui::Button("開く", ImVec2(kFileButtonWidth, 0.0f));
+    if (openPressed) {
+        requestedPath = editor.openPathInput_;
+        requestOpen = true;
+    }
+    if (requestOpen) {
+        // 未保存の編集がある時は黙って破棄せず、確認してから開く
         if (editor.dirty_) {
+            editor.pendingOpenPath_ = requestedPath;
             ImGui::OpenPopup("開くの確認");
         } else {
-            editor.Open(editor.levelPath_, editor.modelCommon_, editor.camera_);
+            editor.Open(requestedPath, editor.modelCommon_, editor.camera_);
         }
-    };
-    // 一覧で選んだ・新規作成した時と、開くボタンを押した時に開く
-    // ボタンは毎フレーム描くので、requestOpen より先に評価する
-    const bool openPressed = ImGui::Button("開く", ImVec2(kFileButtonWidth, 0.0f));
-    if (requestOpen || openPressed) {
-        openOrConfirm();
     }
-    // 確認で破棄を選んだ時だけ開く
+    // 確認で破棄を選んだ時だけ開く（やめた時は、今のレベルと保存先がそのまま残る）
     if (editorUI::ConfirmModal("開くの確認",
             "未保存の変更があります。\n変更を破棄して読み込み直しますか？",
             "破棄して開く")
         == editorUI::ConfirmResult::kOk) {
-        editor.Open(editor.levelPath_, editor.modelCommon_, editor.camera_);
+        editor.Open(editor.pendingOpenPath_, editor.modelCommon_, editor.camera_);
     }
     ImGui::SameLine();
     // 保存と、未保存の表示

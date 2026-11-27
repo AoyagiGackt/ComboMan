@@ -16,7 +16,7 @@ namespace engine {
 class DirectXCommon;
 }
 
-namespace engine::game {
+namespace engine {
 
 /** @brief 自動テストプレイの見張り（ゲームの中身に関係しない物） */
 class SmokeTestMonitors {
@@ -94,4 +94,4 @@ private:
     bool running_ = false; ///< 見張っているか
 };
 
-} // namespace engine::game
+} // namespace engine

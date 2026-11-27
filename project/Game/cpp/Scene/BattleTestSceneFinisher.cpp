@@ -3,6 +3,7 @@
  * @brief バトルテストのフィニッシャー演出と判定
  */
 #include "BattleTestScene.h"
+#include "EngineContext.h"
 // 乱数の種を共通の窓口から取得する。
 #include "RandomSeed.h"
 #include "GameSounds.h"
@@ -44,7 +45,7 @@ void BattleTestScene::TriggerFinisherSlash() {
         return;
     }
 
-    auto* tm = TimeManager::GetInstance();
+    auto* tm = engine::Services().time;
     const Vector3& pp = player_->GetPosition();
 
     finisherActive_ = true;
@@ -85,7 +86,7 @@ bool BattleTestScene::UpdateFinisherSlash() {
 
 /** @brief UpdateFinisherSlash()の下請け 斬撃線を1本表示し、全マネキンに拘束ヒットを与える */
 void BattleTestScene::UpdateFinisherSlashLine() {
-    auto* tm = TimeManager::GetInstance();
+    auto* tm = engine::Services().time;
     // カメラ視界全体にランダムな位置を高速で斬り刻む
     static std::mt19937 sRng { engine::randomSeed::Next() };
     const finisherEffects::BeatSlash slash = finisherEffects::SpawnBeatSlash(sRng, camera_->GetTranslate(), finisherLineIdx_);
@@ -130,7 +131,7 @@ void BattleTestScene::ApplyFinisherHits(float hitFlash, float knockX, float knoc
 
 /** @brief UpdateFinisherSlash()の下請け 解放演出（斬撃線・画面フラッシュ・刃の放出・ダミー切断）を再生する */
 void BattleTestScene::PlayFinisherReleaseEffects() {
-    auto* tm = TimeManager::GetInstance();
+    auto* tm = engine::Services().time;
     const Vector3& pp = player_->GetPosition();
 
     // 溜めた斬撃線を一斉に白く光らせてから消し、太く短い閃光の斬撃線を重ねる

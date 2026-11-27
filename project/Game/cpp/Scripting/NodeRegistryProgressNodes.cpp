@@ -3,6 +3,7 @@
  * @brief 組み込みノードのうち、進行の流れ・演出の追加・プレイヤーの状態を扱うノードの実行関数と登録
  */
 #include "NodeRegistry.h"
+#include "EngineContext.h"
 #include "NodeParamHelpers.h"
 #include "AudioBridge.h"
 #include "EnemyEntity.h"
@@ -64,7 +65,7 @@ NodeResult ExecShowMessage(GraphRuntime& rt, const GraphNode& node, std::string&
 NodeResult ExecSlowMotion(GraphRuntime& rt, const GraphNode& node, std::string& outNextId) {
     const float scale = AsFloat(rt.ResolveParam(node, "scale", GraphValue { kDefaultSlowScale }));
     const float seconds = AsFloat(rt.ResolveParam(node, "seconds", GraphValue { kDefaultSlowSeconds }));
-    TimeManager::GetInstance()->RequestSlowMotion(seconds, scale);
+    engine::Services().time->RequestSlowMotion(seconds, scale);
     outNextId = node.next;
     return NodeResult::kContinue;
 }

@@ -5,6 +5,7 @@
 #include "EnemyTypeEditor.h"
 #ifdef USE_IMGUI
 #include "EditorUI.h"
+#include "EditorFlowRow.h"
 #include "EnemyTuning.h"
 #include "GameConstants.h"
 #include "JsonHelper.h"
@@ -33,7 +34,7 @@ constexpr float kMaxLookScale = 10.0f;
 constexpr float kYawDragStep = 1.0f;
 constexpr float kMaxYawDegrees = 180.0f;
 constexpr size_t kTextCapacity = 128;
-constexpr ImVec4 kDirtyColor = { 1.0f, 0.75f, 0.2f, 1.0f };
+constexpr const char* kOverwritePopup = "見た目の上書き確認";
 
 // 動き方（EnemyEntity の性格名）と表示名
 constexpr std::array<const char*, 3> kBehaviorValues = { "basic", "flying", "healer" };
@@ -129,8 +130,9 @@ void EnemyTypeEditor::Draw(bool* open, const PlaceCallback& place) {
     }
     auto& types = EnemyTypeLibrary::GetInstance()->MutableTypes();
     // 保存・元に戻すと状態の表示
+    engine::editor::FlowRow actions;
     ImGui::BeginDisabled(!dirty_);
-    if (ImGui::Button("保存")) {
+    if (actions.Button("保存")) {
         if (EnemyTypeLibrary::GetInstance()->Save()) {
             dirty_ = false;
             status_ = "保存しました（Resources/Config/enemy_types.json）";
@@ -138,7 +140,7 @@ void EnemyTypeEditor::Draw(bool* open, const PlaceCallback& place) {
             status_ = "保存に失敗しました";
         }
     }
-    ImGui::SameLine();
+    actions.Next(engine::editor::FlowRow::ButtonWidth("元に戻す"));
     if (editorUI::ConfirmButton("元に戻す", "未保存の変更を捨てて、保存した内容に戻しますか？", "戻す")) {
         EnemyTypeLibrary::GetInstance()->Reload();
         dirty_ = false;
@@ -149,8 +151,7 @@ void EnemyTypeEditor::Draw(bool* open, const PlaceCallback& place) {
         editorUI::DrawUnsavedMark();
     }
     if (!status_.empty()) {
-        ImGui::SameLine();
-        ImGui::TextDisabled("%s", status_.c_str());
+        editorUI::TextDisabledWrapped("%s", status_.c_str());
     }
     ImGui::Separator();
 
@@ -174,7 +175,8 @@ void EnemyTypeEditor::Draw(bool* open, const PlaceCallback& place) {
 void EnemyTypeEditor::DrawTypeList() {
     auto& types = EnemyTypeLibrary::GetInstance()->MutableTypes();
     ImGui::BeginChild("##typeList", ImVec2(kTypeListWidth, 0.0f), ImGuiChildFlags_Borders);
-    if (ImGui::Button("新しく作る")) {
+    engine::editor::FlowRow actions;
+    if (actions.Button("新しく作る")) {
         EnemyTypeDef type;
         type.id = MakeUniqueId();
         type.label = "新しい敵";
@@ -182,9 +184,8 @@ void EnemyTypeEditor::DrawTypeList() {
         selected_ = static_cast<int>(types.size()) - 1;
         dirty_ = true;
     }
-    ImGui::SameLine();
     ImGui::BeginDisabled(types.empty());
-    if (ImGui::Button("複製")) {
+    if (actions.Button("複製")) {
         EnemyTypeDef copy = types[selected_];
         copy.id = MakeUniqueId();
         copy.label += " のコピー";
@@ -192,7 +193,7 @@ void EnemyTypeEditor::DrawTypeList() {
         selected_ = static_cast<int>(types.size()) - 1;
         dirty_ = true;
     }
-    ImGui::SameLine();
+    actions.Next(engine::editor::FlowRow::ButtonWidth("削除"));
     if (editorUI::ConfirmButton("削除", "選んでいる敵の種類を消しますか？\nステージに置いた敵はそのまま残ります。") && !types.empty()) {
         types.erase(types.begin() + selected_);
         selected_ = (std::max)(selected_ - 1, 0);
@@ -230,10 +231,14 @@ void EnemyTypeEditor::DrawTypeFields(EnemyTypeDef& type, const PlaceCallback& pl
     ImGui::Separator();
     DrawLookFields(type);
     ImGui::Separator();
+    const bool flying = type.behavior == "flying";
+    ImGui::BeginDisabled(flying);
     dirty_ |= ComboFromArray("奪える武器", type.weapon, kWeaponValues, kWeaponLabels);
+    ImGui::EndDisabled();
     editorUI::HelpMarker("武器を持たせると、倒した後にその武器を奪えます。飛ぶ敵には持たせられません");
-    if (type.behavior == "flying" && !type.weapon.empty()) {
-        ImGui::TextColored(kDirtyColor, "飛ぶ敵は武器を持てません（ステージの検査で警告が出ます）");
+    if (flying) {
+        editorUI::TextDisabledWrapped("%s", type.weapon.empty() ? "飛ぶ敵は武器を持てないため、ここでは選べません。" :
+            "飛ぶ敵では設定済みの武器は使われません。外すには動き方を歩くに変え、武器で持たないを選んでから飛ぶに戻してください。");
     }
     dirty_ |= ImGui::DragFloat("HPの倍率", &type.hpScale, kStatDragStep, kMinStatScale, kMaxStatScale);
     dirty_ |= ImGui::DragFloat("攻撃力の倍率", &type.damageScale, kStatDragStep, kMinStatScale, kMaxStatScale);
@@ -290,18 +295,25 @@ void EnemyTypeEditor::DrawNewLookFields(EnemyTypeDef& type) {
         ScanAssets();
     }
     editorUI::HelpMarker("Resources フォルダにモデルや画像を置いたら、このボタンで候補に出せます");
-    ImGui::SameLine();
     const bool ready = newLook_.name[0] != '\0' && !newLook_.model.empty() && !newLook_.texture.empty();
     ImGui::BeginDisabled(!ready);
-    if (ImGui::Button("この見た目を追加して使う") && SaveNewLook(newLook_)) {
+    constexpr const char* kSaveLabel = "見た目を enemy_params.json に保存して使う";
+    const bool compact = engine::editor::FlowRow::ButtonWidth(kSaveLabel) > ImGui::GetContentRegionAvail().x;
+    if (compact) {
+        editorUI::TextDisabledWrapped("見た目を enemy_params.json に保存し、この敵に使います。");
+    }
+    const bool requested = ImGui::Button(compact ? "保存して使う" : kSaveLabel);
+    ImGui::EndDisabled();
+    const std::string message = std::string("見た目 ") + newLook_.name + " を上書きして enemy_params.json に保存します。";
+    const bool overwrite = editorUI::ConfirmModal(kOverwritePopup, message.c_str(), "上書きする") == editorUI::ConfirmResult::kOk;
+    if ((requested || overwrite) && SaveNewLook(newLook_, overwrite)) {
         type.look = newLook_.name;
         dirty_ = true;
-        status_ = std::string("見た目「") + newLook_.name + "」を追加しました（enemy_params.json）";
+        status_ = std::string("見た目 ") + newLook_.name + " を enemy_params.json に保存しました";
         newLook_ = NewLook {};
     }
-    ImGui::EndDisabled();
     if (!ready) {
-        ImGui::TextDisabled("名前・モデル・テクスチャを全部選ぶと追加できます");
+        editorUI::TextDisabledWrapped("名前・モデル・テクスチャを全部選ぶと追加できます");
     }
 }
 
@@ -338,7 +350,7 @@ void EnemyTypeEditor::ScanAssets() {
 }
 
 /** @brief 見た目を enemy_params.json に書き足し、敵の調整値を読み直す */
-bool EnemyTypeEditor::SaveNewLook(const NewLook& look) {
+bool EnemyTypeEditor::SaveNewLook(const NewLook& look, bool overwrite) {
     nlohmann::json root = JsonHelper::Load(kEnemyParamsPath);
     if (!root.is_object()) {
         status_ = std::string(kEnemyParamsPath) + " を読めませんでした";
@@ -347,6 +359,11 @@ bool EnemyTypeEditor::SaveNewLook(const NewLook& look) {
     if (!root.contains("visuals") || !root["visuals"].is_object()) {
         root["visuals"] = nlohmann::json::object();
     }
+    // 保存先に同名の見た目がある場合だけ確認を挟む
+    if (!overwrite && root["visuals"].contains(look.name)) {
+        ImGui::OpenPopup(kOverwritePopup);
+        return false;
+    }
     root["visuals"][look.name] = {
         { "model", look.model },
         { "texture", look.texture },
@@ -354,6 +371,7 @@ bool EnemyTypeEditor::SaveNewLook(const NewLook& look) {
         { "yawOffset", look.yawDegrees * gameConstants::kDegToRad },
     };
     if (!JsonHelper::Save(kEnemyParamsPath, root)) {
+        status_ = std::string("保存に失敗しました: ") + kEnemyParamsPath;
         return false;
     }
     EnemyTuning::GetInstance()->Reload();

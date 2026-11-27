@@ -21,7 +21,9 @@
 #include <vector>
 #ifdef USE_IMGUI
 #include "EditorHub.h"
+#include "StringUtility.h"
 #include "EditorUI.h"
+#include "EditorFlowRow.h"
 #include <imgui.h>
 #endif
 
@@ -84,17 +86,17 @@ std::vector<StepEntry> CollectSteps(WeaponType weaponType) {
     std::vector<StepEntry> steps;
     const MeleeComboSet& set = GetMeleeComboSet(weaponType);
     for (int i = 0; i < set.ground.count; ++i) {
-        steps.push_back({ "地上 " + std::to_string(i + 1) + " : " + set.ground[i].id, &set.ground[i] });
+        steps.push_back({ "地上 " + std::to_string(i + 1), &set.ground[i] });
     }
     for (int i = 0; i < set.air.count; ++i) {
-        steps.push_back({ "空中 " + std::to_string(i + 1) + " : " + set.air[i].id, &set.air[i] });
+        steps.push_back({ "空中 " + std::to_string(i + 1), &set.air[i] });
     }
     if (set.launcher != nullptr) {
-        steps.push_back({ std::string("打ち上げ : ") + set.launcher->id, set.launcher });
+        steps.push_back({ "打ち上げ", set.launcher });
     }
     const ComboArray<MeleeAttackDef>& skill = GetSkillSequence(weaponType);
     for (int i = 0; i < skill.count; ++i) {
-        steps.push_back({ "固有技 " + std::to_string(i + 1) + " : " + skill[i].id, &skill[i] });
+        steps.push_back({ "固有技 " + std::to_string(i + 1), &skill[i] });
     }
     return steps;
 }
@@ -107,6 +109,16 @@ const MeleeAttackDef* FindAttack(WeaponType weaponType, const std::string& id) {
         }
     }
     return nullptr;
+}
+
+/** @brief 段の全ボーンのキーが同じかを調べる */
+bool SameClip(const MotionClip& a, const MotionClip& b) {
+    const auto sameKey = [](const MotionKey& x, const MotionKey& y) {
+        return x.time == y.time && x.eulerDeg.x == y.eulerDeg.x && x.eulerDeg.y == y.eulerDeg.y && x.eulerDeg.z == y.eulerDeg.z;
+    };
+    return std::ranges::equal(a.tracks, b.tracks, [&](const MotionTrack& x, const MotionTrack& y) {
+        return x.bone == y.bone && std::ranges::equal(x.keys, y.keys, sameKey);
+    });
 }
 
 /** @brief 指の骨か（一覧が長くなりすぎるので既定では隠す） */
@@ -153,10 +165,10 @@ bool ComboMotionEditor::Update(Input* input, Player& player, WeaponType weaponTy
                 library->SetEnabled(enabled);
             }
             ShowItemHelp("作った動きを元の技の動きに足します。切ると元の動きだけになり、見比べられます");
-            ImGui::TextDisabled("武器はQ/Eで切り替え。角度を動かすと今の時刻にキーが打たれます");
-            ImGui::TextDisabled("Space: 再生/停止  左右キー: 時刻送り  時間軸の黄色いキーはドラッグで移動");
+            editorUI::TextDisabledWrapped("武器はQ/Eで切り替え。角度を動かすと今の時刻にキーが打たれます");
+            editorUI::TextDisabledWrapped("Space: 再生/停止  左右キー: 時刻送り  時間軸の黄色いキーはドラッグで移動");
             // 長い一覧に隠れないよう、保存は上に置く
-            ImGui::TextDisabled("Ctrl+C/V: 姿勢コピー/貼り付け  Ctrl+Z/Y: 元に戻す/やり直す  ,/.: 前後のキー");
+            editorUI::TextDisabledWrapped("Ctrl+C/V: 姿勢コピー/貼り付け  Ctrl+Z/Y: 元に戻す/やり直す  ,/.: 前後のキー");
             DrawFileControls();
 
             // 掛かり具合の確認（データが読めていない・ボーン名が合わない時はここが0になる）
@@ -173,11 +185,20 @@ bool ComboMotionEditor::Update(Input* input, Player& player, WeaponType weaponTy
             attack = DrawStepList(weaponType);
             if (attack != nullptr) {
                 library->EditClip(player.GetMotionRigId(), attack->id, [&](MotionClip& clip) {
+                    const MotionClip* before = library->Find(player.GetMotionRigId(), attack->id);
                     DrawClipHistoryControls(clip);
                     DrawMotionControls(clip);
                     DrawTimeline(*attack, clip);
                     DrawBoneList(player, clip);
                     DrawKeyEditor(clip);
+                    // 履歴で保存時の動きに戻った段は未保存の件数から外す
+                    if (before && !SameClip(*before, clip)) {
+                        const auto key = std::make_pair(std::string(player.GetMotionRigId()), selectedAttackId_);
+                        const auto base = unsavedBases_.try_emplace(key, *before).first;
+                        if (SameClip(base->second, clip)) {
+                            unsavedBases_.erase(base);
+                        }
+                    }
                 });
             }
         }
@@ -232,12 +253,14 @@ const MeleeAttackDef* ComboMotionEditor::DrawStepList(WeaponType weaponType) {
     if (ImGui::BeginListBox("##steps", { -FLT_MIN, kStepListHeight })) {
         for (const StepEntry& step : CollectSteps(weaponType)) {
             const bool isSelected = (selectedAttackId_ == step.attack->id);
-            if (ImGui::Selectable(step.label.c_str(), isSelected)) {
+            const std::string caption = step.label + " : " + step.attack->id;
+            if (ImGui::Selectable(caption.c_str(), isSelected)) {
                 selectedAttackId_ = step.attack->id;
                 time_ = 0.0f;
             }
             if (selectedAttackId_ == step.attack->id) {
                 selected = step.attack;
+                selectedStepLabel_ = StringUtility::ConvertString(WeaponTypeLabel(weaponType)) + "の" + step.label;
             }
         }
         ImGui::EndListBox();
@@ -261,17 +284,16 @@ void ComboMotionEditor::DrawClipHistoryControls(MotionClip& clip) {
     const auto apply = [&](std::optional<MotionClip> snapshot) {
         if (snapshot) {
             clip = std::move(*snapshot);
-            dirty_ = true;
             draggedKey_ = kNoDraggedKey;
         }
     };
     const bool canStep = !history.IsCapturing();
+    engine::editor::FlowRow controls;
     ImGui::BeginDisabled(!history.CanUndo() || !canStep);
-    const bool undoPressed = ImGui::Button("元に戻す (Ctrl+Z)");
+    const bool undoPressed = controls.Button("元に戻す (Ctrl+Z)");
     ImGui::EndDisabled();
-    ImGui::SameLine();
     ImGui::BeginDisabled(!history.CanRedo() || !canStep);
-    const bool redoPressed = ImGui::Button("やり直す (Ctrl+Y)");
+    const bool redoPressed = controls.Button("やり直す (Ctrl+Y)");
     ImGui::EndDisabled();
     if (canStep && (undoPressed || editorUI::CtrlShortcut(ImGuiKey_Z))) {
         apply(history.Undo(clip));
@@ -348,7 +370,6 @@ void ComboMotionEditor::UpdateTimelineDrag(MotionClip& clip, float mouseX, float
             const float upper = draggedKey_ + 1 < static_cast<int>(track->keys.size()) ? track->keys[draggedKey_ + 1].time - kKeySnap : 1.0f;
             track->keys[draggedKey_].time = std::clamp(ratio, lower, (std::max)(lower, upper));
             CurrentHistory().MarkChanged();
-            dirty_ = true;
         }
         time_ = track->keys[draggedKey_].time;
         return;
@@ -382,7 +403,7 @@ void ComboMotionEditor::PastePose(MotionClip& clip) {
     for (const auto& [bone, angle] : copiedPose_) {
         clip.SetBoneKey(bone, time_, angle, kKeySnap);
     }
-    dirty_ = true;
+
     playing_ = false;
 }
 
@@ -402,7 +423,7 @@ void ComboMotionEditor::MirrorPose(MotionClip& clip) {
             clip.SetBoneKey(track.bone, time_, Vector3 { }, kKeySnap);
         }
     }
-    dirty_ = true;
+
     playing_ = false;
 }
 
@@ -418,7 +439,7 @@ void ComboMotionEditor::MirrorClip(MotionClip& clip) {
             key.eulerDeg = MirrorAngle(key.eulerDeg);
         }
     }
-    dirty_ = true;
+
     playing_ = false;
 }
 
@@ -445,27 +466,26 @@ void ComboMotionEditor::MoveToKey(const MotionClip& clip, bool forward) {
 /** @brief 姿勢の複製操作を描く */
 void ComboMotionEditor::DrawPoseControls(MotionClip& clip, bool canEdit) {
 #ifdef USE_IMGUI
-    if (ImGui::Button("この時刻の姿勢をコピー") || (canEdit && editorUI::CtrlShortcut(ImGuiKey_C))) {
+    engine::editor::FlowRow pose;
+    if (pose.Button("この時刻の姿勢をコピー") || (canEdit && editorUI::CtrlShortcut(ImGuiKey_C))) {
         CopyPose(clip);
     }
-    ImGui::SameLine();
     const bool pasteShortcut = canEdit && editorUI::CtrlShortcut(ImGuiKey_V);
     ImGui::BeginDisabled(copiedPose_.empty());
-    if (ImGui::Button("姿勢を貼り付け") || (pasteShortcut && !copiedPose_.empty())) {
+    if (pose.Button("姿勢を貼り付け") || (pasteShortcut && !copiedPose_.empty())) {
         PastePose(clip);
     }
     ImGui::EndDisabled();
     ImGui::BeginDisabled(selectedBone_.empty());
-    if (ImGui::Button("選択ボーンの姿勢をコピー")) {
+    engine::editor::FlowRow bone;
+    if (bone.Button("選択ボーンの姿勢をコピー")) {
         const MotionTrack* track = clip.FindTrack(selectedBone_);
         copiedBone_ = track != nullptr ? track->EvaluateEuler(time_) : Vector3 { };
     }
-    ImGui::SameLine();
     ImGui::BeginDisabled(!copiedBone_);
-    if (ImGui::Button("選択ボーンに貼り付け")) {
+    if (bone.Button("選択ボーンに貼り付け")) {
         CurrentHistory().Record(clip);
         clip.SetBoneKey(selectedBone_, time_, *copiedBone_, kKeySnap);
-        dirty_ = true;
         playing_ = false;
     }
     ImGui::EndDisabled();
@@ -483,33 +503,41 @@ void ComboMotionEditor::DrawMotionControls(MotionClip& clip) {
     ImGui::SeparatorText("姿勢と段の操作");
     ImGui::BeginDisabled(!canEdit);
     DrawPoseControls(clip, canEdit);
-    if (ImGui::Button("この段の動きをコピー")) {
+    if (copiedClip_ && copiedAttackId_ != selectedAttackId_) {
+        editorUI::TextDisabledWrapped("%s の動きを %s に貼り付けます（上書き）。", copiedStepLabel_.c_str(), selectedStepLabel_.c_str());
+    }
+    engine::editor::FlowRow steps;
+    if (steps.Button("この段の動きをコピー")) {
         copiedClip_ = clip;
         copiedAttackId_ = selectedAttackId_;
+        copiedStepLabel_ = selectedStepLabel_;
     }
-    ImGui::SameLine();
+    constexpr const char* kPasteLabel = "この段に貼り付け（上書き）";
+    steps.Next(engine::editor::FlowRow::ButtonWidth(kPasteLabel));
     ImGui::BeginDisabled(!copiedClip_ || copiedAttackId_ == selectedAttackId_);
-    if (editorUI::ConfirmButton("ほかの段へ貼り付け（上書き）", "この段の動きを上書きしますか？\nCtrl+Z で元に戻せます。", "上書きする")) {
+    if (editorUI::ConfirmButton(kPasteLabel, "この段の動きを上書きしますか？\nCtrl+Z で元に戻せます。", "上書きする")) {
         CurrentHistory().Record(clip);
         clip = *copiedClip_;
-        dirty_ = true;
         playing_ = false;
         draggedKey_ = kNoDraggedKey;
     }
     ImGui::EndDisabled();
-    if (ImGui::Button("この時刻の姿勢を左右反転")) {
+    if (copiedClip_ && copiedAttackId_ == selectedAttackId_) {
+        editorUI::TextDisabledWrapped("貼り付け先の段を選んでください。");
+    }
+    engine::editor::FlowRow mirror;
+    if (mirror.Button("この時刻の姿勢を左右反転")) {
         MirrorPose(clip);
     }
-    ImGui::SameLine();
-    if (ImGui::Button("この段全体を左右反転")) {
+    if (mirror.Button("この段全体を左右反転")) {
         MirrorClip(clip);
     }
     ImGui::EndDisabled();
-    if (ImGui::Button("前のキーへ")) {
+    engine::editor::FlowRow keys;
+    if (keys.Button("前のキーへ")) {
         MoveToKey(clip, false);
     }
-    ImGui::SameLine();
-    if (ImGui::Button("次のキーへ")) {
+    if (keys.Button("次のキーへ")) {
         MoveToKey(clip, true);
     }
     if (!ImGui::GetIO().WantTextInput && ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows)) {
@@ -654,7 +682,6 @@ void ComboMotionEditor::DrawKeyEditor(MotionClip& clip) {
         // 動かした時点でこの時刻にキーを打つ（トラックが無ければ始端・終端が無回転のトラックを作る）
         clip.SetBoneKey(selectedBone_, time_, angle, kKeySnap);
         history.MarkChanged();
-        dirty_ = true;
         playing_ = false;
     }
     if (ImGui::IsItemDeactivated()) {
@@ -669,18 +696,18 @@ void ComboMotionEditor::DrawKeyEditor(MotionClip& clip) {
     if (track == nullptr) {
         return;
     }
+    engine::editor::FlowRow remove;
     if (keyHere != nullptr) {
-        if (ImGui::Button("この時刻のキーを消す")) {
+        if (remove.Button("この時刻のキーを消す")) {
             history.Record(clip);
             track->RemoveKey(time_, kKeySnap);
-            dirty_ = true;
         }
-        ImGui::SameLine();
     }
-    if (editorUI::ConfirmButton("このボーンのキーを全部消す", "このボーンのキーをすべて消しますか？\nCtrl+Z で元に戻せます。")) {
+    constexpr const char* kRemoveLabel = "このボーンのキーを全部消す";
+    remove.Next(engine::editor::FlowRow::ButtonWidth(kRemoveLabel));
+    if (editorUI::ConfirmButton(kRemoveLabel, "このボーンのキーをすべて消しますか？\nCtrl+Z で元に戻せます。")) {
         history.Record(clip);
         clip.RemoveTrack(selectedBone_);
-        dirty_ = true;
         return;
     }
 
@@ -706,7 +733,7 @@ void ComboMotionEditor::DrawKeyEditor(MotionClip& clip) {
 /** @brief 全クリップをファイルへ保存し、結果を表示する */
 void ComboMotionEditor::SaveClips() {
     if (ComboMotionLibrary::GetInstance()->Save()) {
-        dirty_ = false;
+        unsavedBases_.clear();
         status_ = "Resources/Config/combo_motion.json に保存しました";
     } else {
         status_ = "保存に失敗しました（ファイルが書き込めるか確認してください）";
@@ -717,27 +744,31 @@ void ComboMotionEditor::SaveClips() {
 void ComboMotionEditor::DrawFileControls() {
 #ifdef USE_IMGUI
     ImGui::Separator();
-    if (ImGui::Button("保存 (Ctrl+S)") || editorUI::CtrlShortcut(ImGuiKey_S, true)) {
+    engine::editor::FlowRow files;
+    if (files.Button("変更した全段を保存 (Ctrl+S)") || editorUI::CtrlShortcut(ImGuiKey_S, true)) {
         SaveClips();
     }
-    ImGui::SameLine();
     // 未保存の変更がある時は確認を挟む
     const char* const reloadLabel = "読み直し";
-    if (dirty_ ? editorUI::ConfirmButton(reloadLabel, "保存していない変更と履歴を捨てて読み直しますか？", "読み直す") : ImGui::Button(reloadLabel)) {
+    files.Next(engine::editor::FlowRow::ButtonWidth(reloadLabel));
+    if (!unsavedBases_.empty() ? editorUI::ConfirmButton(reloadLabel, "保存していない変更と履歴を捨てて読み直しますか？", "読み直す") : ImGui::Button(reloadLabel)) {
         if (ComboMotionLibrary::GetInstance()->Load()) {
             // 読み直した後は前の内容へ戻せないので履歴も消す
             histories_.clear();
-            dirty_ = false;
+            unsavedBases_.clear();
             status_ = "読み直しました（保存していない変更は消えました）";
         } else {
             status_ = "読み直せませんでした（ファイルが無いか形が違うため、今のデータを残しています）";
         }
     }
-    if (dirty_) {
-        editorUI::DrawUnsavedMark();
+    ImGui::Text("未保存の段　%zu 段", unsavedBases_.size());
+    if (!unsavedBases_.empty()) {
+        editorUI::TextDisabledWrapped("%s", ComboMotionLibrary::GetInstance()->IsEnabled()
+            ? "保存していない変更があります。変更した動きはゲームに反映されています。"
+            : "保存していない変更があります。加算モーションを掛けるとゲームに反映されます。");
     }
     if (!status_.empty()) {
-        ImGui::TextDisabled("%s", status_.c_str());
+        editorUI::TextDisabledWrapped("%s", status_.c_str());
     }
 #endif
 }

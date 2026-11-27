@@ -1,8 +1,6 @@
 /**
  * @file SmokeTestRunner.h
  * @brief 自動テストプレイ（--smoke-test で起動すると、手順の表のとおりにゲームを自分で遊び、落ちる・止まる所を見つける）
- * @note 手順は Resources/Config/smoke_test.json に書く（画面を待つ・キーを押す・押し続ける・ランダムに操作する・繰り返す）。
- *       --bug-hunt で起動すると、BugHunt/bug_hunt.json（--script で別の場所も指定できる）の手順で全ステージとラスボス戦をいろいろな遊び方で回す。
  *       操作は Input::InjectKey で本物のキーと同じ経路から流すので、ゲーム側のコードはテスト用に変えなくてよい。
  *       ゲーム側は遊んでいる間におかしな所を見つけたら ReportIssue で知らせる（止めずに記録だけして先へ進む）。
  *       結果は smoke_test フォルダに書き出す。途中で落ちた場合は CrashHandler の報告に、どの手順の途中だったかが残る
@@ -15,7 +13,7 @@
 #include "BugHuntChanges.h"
 #include "SmokeTestMonitors.h"
 #include "SmokeTestReplay.h"
-#include "Vector3.h"
+#include "SmokeTestGame.h"
 #include "json.hpp"
 #include <chrono>
 #include <mutex>
@@ -31,7 +29,7 @@ class DirectXCommon;
 class Input;
 }
 
-namespace engine::game {
+namespace engine {
 
 /** @brief 自動テストプレイの進行役 */
 class SmokeTestRunner {
@@ -40,19 +38,19 @@ public:
      * @brief コマンド引数に --smoke-test か --bug-hunt があれば手順を読み込んで始める
      * @return 自動テストを始めたら true
      */
-    bool StartIfRequested(engine::Input* input, engine::DirectXCommon* dxCommon);
+    bool StartIfRequested(engine::Input* input, engine::DirectXCommon* dxCommon, SmokeTestGame& game);
     /**
      * @brief 自動テストで起動していれば、乱数の元の種を決める（乱数を作る物より先、起動の最初に呼ぶ）
      * @note 種は 再生ファイル → 手順の表の seed → その場で決めた種 の順に決める。決めた種は報告と再生ファイルに残る
      */
-    static void ApplySeedFromCommandLine();
+    static void ApplySeedFromCommandLine(const SmokeTestGame& game);
     /** @brief ゲームを1回進める前に呼ぶ（1回の更新の重さを測る） */
     void BeginUpdate() {
         monitors_.BeginUpdate();
     }
-    /** @brief 再生で見つけた所が近づき、速回しをやめてふつうの速さで見せたいか */
+    /** @brief 起動引数か再生の進み具合に応じてふつうの速さで見せるか */
     bool WantsRealtime() const {
-        return replayRealtime_;
+        return realtimeRequested_ || replayRealtime_;
     }
 
     /** @brief 自動テスト中か */
@@ -65,7 +63,7 @@ public:
     }
     /** @brief 1回描くごとにゲームを何回進めるか（手順の表の speed。速回しにしない時は 1） */
     int GetUpdatesPerDraw() const {
-        return running_ && !finished_ && !replayRealtime_ ? updatesPerDraw_ : 1;
+        return running_ && !finished_ && !WantsRealtime() ? updatesPerDraw_ : 1;
     }
     /** @brief 今の手順が、先へ進む操作をしているか（進めない所を見張る目安。手順の expectProgress） */
     static bool IsExpectingProgress() {
@@ -74,6 +72,10 @@ public:
     /** @brief 手順がプレイヤーを離れた所へ移した回数（見張りが、移す前と後の位置を比べて壁抜けと間違えないように使う） */
     static uint32_t TeleportCount() {
         return sTeleportCount;
+    }
+    /** @brief ゲーム側がプレイヤーを離れた所へ移した事を知らせる（見張りが壁抜けと間違えないように） */
+    static void NoteTeleport() {
+        ++sTeleportCount;
     }
 
     /**
@@ -91,25 +93,57 @@ public:
      */
     bool Update();
 
-private:
-    /** @brief 手順1つ（手順の表の steps の1要素を、繰り返しを展開して平らにしたもの） */
-    struct Step {
-        std::string action; ///< waitScene / waitSceneChange / waitSettled / pressUntilScene / press / hold / wait / random / changeScene / enterNextStage / enterTutorial / enterFinalBoss / visitChanged / grantBossWeapon / mark
-        std::string weapon; ///< grantBossWeapon で渡す武器の種類の名前（空なら、今のボスの枠の主軸とも相棒とも違う種類を選ぶ）
-        std::string scene;
-        std::vector<uint8_t> keys;
-        std::vector<uint8_t> holdKeys; ///< random の間ずっと押し続けるキー（右へ歩きながら暴れる、など）
-        std::string label; ///< 報告に出す説明
-        int frames = 0; ///< 長さ（秒をフレームに直したもの）
-        int timeoutFrames = 0; ///< これを過ぎたら止まったとみなす
-        int intervalFrames = 0; ///< pressUntilScene でキーを押し直す間隔、random で押し直す間隔
-        float chance = 0.0f; ///< random でそれぞれのキーを押す確率
-        bool expectProgress = false; ///< この手順の間は先へ進めるはず（進めなければゲーム側が知らせる）
-        bool sameStage = false; ///< 入ったステージの中だけの手順（自分でクリアした・やられてリトライした等で画面が変わったら飛ばす）
-        bool makeMain = false; ///< grantBossWeapon で、渡した武器をその場で合体の主軸にするか（ボスの武器のコンボを順に試すため）
-        std::vector<std::string> moveNames; ///< monkey で使う技の名前（空なら手順の表の monkeyMoves の全部）
-    };
+    /** @brief random の手順を1フレーム進める（終わったら true） */
+    bool UpdateRandom(const SmokeTestStep& step);
+    /** @brief でたらめ操作の途中の状態を消す（次の monkey が最初から始まるように） */
+    void ResetMonkeyState();
+    /** @brief 残りの手順を飛ばし、成功として終える（変えた所を全部回り終えた時） */
+    void FinishEarly(const std::string& reason);
+    /** @brief 今の画面が scene で、切り替えも落ち着いているか */
+    bool IsSettledOn(const std::string& scene) const;
+    /** @brief 押したことにしているキーを全部離す */
+    void ReleaseKeys();
+    /** @brief 失敗として記録して終える */
+    void Fail(const std::string& reason);
+    /** @brief でたらめ操作の入力を1フレーム進める（長さは呼び出し元の手順が数える） */
+    void AdvanceMonkey(const SmokeTestStep& step);
+    /** @brief 指定したキーを押すか離す */
+    void InjectKey(uint8_t key, bool pressed);
+    /** @brief 手順の開始からのフレーム数 */
+    int GetStepFrame() const {
+        return stepFrame_;
+    }
+    /** @brief 全体のフレーム数 */
+    uint64_t GetTotalFrames() const {
+        return totalFrames_;
+    }
+    /** @brief 報告の記録を足す */
+    void AddLog(const std::string& line) {
+        log_.push_back(line);
+    }
+    /** @brief 手順と同じ乱数を使う */
+    std::mt19937& GetRandom() {
+        return rng_;
+    }
+    /** @brief 変更の記録を参照する */
+    const BugHuntChanges& GetChanges() const {
+        return changes_;
+    }
+    /** @brief ステージに入るための切り替えを覚える */
+    void MarkStageEntry() {
+        pendingStageEntry_ = true;
+        inStage_ = false;
+    }
+    /** @brief ステージの手順を飛ばすかを決める */
+    void SetSkippingStage(bool skip) {
+        skippingStage_ = skip;
+        if (skip) {
+            pendingStageEntry_ = false;
+            inStage_ = false;
+        }
+    }
 
+private:
     /** @brief でたらめ操作の技1つ（手順の表の monkeyMoves の1要素） */
     struct MonkeyMove {
         std::string name; ///< 技の名前（報告と網羅に出す）
@@ -117,13 +151,6 @@ private:
         std::vector<std::vector<uint8_t>> sequence; ///< 順に押すキーの組（1つの組の中は同時押し）
         int downFrames = 1; ///< 1つの組を押しておくフレーム数
         int gapFrames = 1; ///< 組と組の間に離しておくフレーム数
-    };
-
-    /** @brief 近くへ移って試す配置物1つ */
-    struct VisitTarget {
-        std::string name; ///< 配置物の名前
-        std::string kind; ///< 配置物の種類
-        Vector3 position {}; ///< ワールドの位置
     };
 
     /** @brief 見つけたおかしな所1件 */
@@ -138,61 +165,27 @@ private:
     };
 
     /** @brief 手順の表の場所をコマンド引数から決める */
-    static std::string ScriptPathFromCommandLine(const std::wstring& commandLine);
+    static std::string ScriptPathFromCommandLine(const std::wstring& commandLine, const SmokeTestConfig& config);
     /** @brief キーの名前の配列を、押せるキーの番号へ直す（Esc など押せないキーは飛ばす） */
     static std::vector<uint8_t> ParseKeys(const nlohmann::json& names);
     /** @brief JSON の手順の配列を、繰り返しを展開しながら steps_ へ積む */
     void AppendSteps(const nlohmann::json& steps, int depth);
     /** @brief 今の手順を1フレーム進める（終わったら true） */
-    bool UpdateStep(const Step& step);
-    /** @brief random の手順を1フレーム進める（終わったら true） */
-    bool UpdateRandom(const Step& step);
-    /** @brief 今のランで次に遊ぶステージ（最後のステージの後はラスボス戦）へ直接入る */
-    bool EnterNextStage();
-    /** @brief マップの入口と同じ準備をしてチュートリアルのステージへ直接入る（クリアやポーズで抜けるとマップへ戻る） */
-    bool EnterTutorial();
-    /**
-     * @brief ボスを倒さずにボスの武器を渡す（ボスの枠が埋まっていれば、主軸を選ぶ画面が出る）
-     * @param weaponName 武器の種類の名前（空なら今のボスの枠と違う種類を選ぶ）
-     * @param makeMain 主軸を選ぶ画面が出る時に、画面を通さずに渡した武器を主軸にするか
-     */
-    bool GrantBossWeapon(const std::string& weaponName, bool makeMain);
+    bool UpdateStep(const SmokeTestStep& step);
+    /** @brief monkey の手順を1フレーム進める（終わったら true） */
+    bool UpdateMonkey(const SmokeTestStep& step);
     /**
      * @brief 前回の記録と比べて、遊ぶステージと近くで試す配置物を決める（--bug-hunt の時だけ）
      * @param commandLine コマンド引数（--all を見る）
      * @param importedSelection 再生の時は、再生ファイルに入れておいた選び方（それをそのまま使う）。ふだんは nullptr
      */
     void PrepareChanges(const std::wstring& commandLine, const nlohmann::json* importedSelection);
-    /** @brief 変えていないステージを遊ばずに、クリアした扱いで進行度だけ進める */
-    void SkipFloor(int floor);
-    /** @brief 最後のステージの後にラスボス戦へ入る（変えていなければ、ここで手順を終える。終わったら true） */
-    bool EnterFinalBoss(const Step& step);
-    /** @brief visitChanged の手順を1フレーム進める（変えた配置物の近くへ1つずつ移り、決めた秒数だけ操作する。終わったら true） */
-    bool UpdateVisit(const Step& step);
-    /** @brief 練習場で武器を拾うか、装備と合体耐久の結果を検証する */
-    bool CheckTrainingWeapon(const Step& step);
-    /** @brief 今のステージで近くへ移って試す配置物を集める */
-    void BuildVisitTargets();
-    /** @brief プレイヤーを配置物の手前へ移す */
-    void TeleportTo(const VisitTarget& target);
-    /** @brief 残りの手順を飛ばし、成功として終える（変えた所を全部回り終えた時） */
-    void FinishEarly(const std::string& reason);
-    /** @brief 武器の交換や主軸を選ぶ画面が出ていたら、決まった間隔で決定（交換は1つ目の枠）を押して閉じる（手順が決定を押さない時に止まらないように） */
-    void AnswerWeaponChoice();
     /** @brief 前のフレームから実時間でかかりすぎていたら、固まりかけとして記録する */
     void CheckFrameHitch();
     /** @brief どの段階で時間がかかったかの文（前のフレームの更新・描画と、このフレームの始まりからの時間） */
     static std::string DescribeFramePhases();
-    /** @brief keepPlayerAlive の時、体力が減りすぎたら全快させて最後まで回れるようにする（ダメージ自体は受ける） */
-    void KeepPlayerAlive();
     /** @brief 入ったステージから画面が変わっていたら true（sameStage の手順を飛ばす目安） */
     bool HasLeftStage() const;
-    /** @brief 今の画面が scene で、切り替えも落ち着いているか */
-    bool IsSettledOn(const std::string& scene) const;
-    /** @brief 押したことにしているキーを全部離す */
-    void ReleaseKeys();
-    /** @brief 失敗として記録して終える */
-    void Fail(const std::string& reason);
     /**
      * @brief 今の時刻を入れた、報告のフォルダの中の場所を作る
      * @param prefix ファイル名の頭（result や replay）
@@ -211,11 +204,11 @@ private:
     bool UpdateReplay();
     /** @brief 手順の表の monkeyMoves を読む */
     void LoadMonkeyMoves(const nlohmann::json& moves);
-    /** @brief monkey の手順を1フレーム進める（技を重みつきで選んで押し、左右の向きも時々変える。終わったら true） */
-    bool UpdateMonkey(const Step& step);
     /** @brief monkey で次の技を選ぶ（step の moveNames に絞る） */
-    void PickMonkeyMove(const Step& step);
+    void PickMonkeyMove(const SmokeTestStep& step);
 
+    SmokeTestConfig config_; ///< 使用中の手順の場所とステージの画面名
+    SmokeTestGame* game_ = nullptr; ///< ゲーム本体が所有する窓口
     engine::Input* input_ = nullptr;
     engine::DirectXCommon* dxCommon_ = nullptr; ///< 描画の基盤（見張りと画面の保存に使う。借りもの）
     nlohmann::json script_; ///< 読んだ手順の表の中身（再生ファイルに入れる）
@@ -226,6 +219,7 @@ private:
     uint64_t replayTargetFrame_ = 0; ///< 再生で見せたいフレーム
     uint64_t replayLeadFrames_ = 0; ///< 見せたいフレームのどれだけ手前からふつうの速さにするか
     uint64_t replayAfterFrames_ = 0; ///< 見せたいフレームの後、どれだけ見せてから終えるか
+    bool realtimeRequested_ = false; ///< 起動時から通常の速さで遊ぶか
     bool replayRealtime_ = false; ///< 再生で、ふつうの速さに切り替えたか
     bool replayReachedTarget_ = false; ///< 再生で、見せたいフレームまで来たか
     std::vector<MonkeyMove> monkeyMoves_; ///< でたらめ操作の技の表
@@ -234,8 +228,7 @@ private:
     int monkeySequenceFrame_ = 0; ///< 今の組を押し始めてからのフレーム数
     uint8_t monkeyDirectionKey_ = 0; ///< でたらめ操作で押し続けている左右のキー（0 なら押していない）
     int monkeyDirectionFrames_ = 0; ///< 左右の向きを次に変えるまでのフレーム数
-    size_t grantRotation_ = 0; ///< grantBossWeapon の weapon が next の時に、次に渡す武器の一覧の番号
-    std::vector<Step> steps_;
+    std::vector<SmokeTestStep> steps_;
     std::vector<std::string> log_; ///< 報告に出す、終えた手順の記録
     std::mt19937 rng_ { std::random_device {}() };
     uint32_t seed_ = 0; ///< ランダム操作の種（報告に残し、同じ種でもう一度同じ動きを試せるようにする）
@@ -247,10 +240,9 @@ private:
     int framesSinceSwitch_ = 0; ///< 最後に画面が切り替わってからのフレーム数（切り替え直後の不安定な間は待つ）
     int settleFrames_ = 0; ///< 画面が切り替わってから落ち着いたとみなすまでのフレーム数
     uint64_t totalFrames_ = 0;
-    uint32_t stageSwitchCount_ = 0; ///< enterNextStage で入ったステージが落ち着いた時の画面の切り替え回数
-    bool inStage_ = false; ///< enterNextStage で入ったステージがまだ続いているとみなせるか
-    bool pendingStageEntry_ = false; ///< enterNextStage で切り替えを頼み、ステージが落ち着くのを待っているか
-    bool keepPlayerAlive_ = false; ///< 体力が減りすぎたら全快させるか（手順の表の keepPlayerAlive）
+    uint32_t stageSwitchCount_ = 0; ///< 手順で入ったステージが落ち着いた時の画面の切り替え回数
+    bool inStage_ = false; ///< 手順で入ったステージがまだ続いているとみなせるか
+    bool pendingStageEntry_ = false; ///< 手順で切り替えを頼み、ステージが落ち着くのを待っているか
     int updatesPerDraw_ = 1; ///< 1回描くごとにゲームを何回進めるか（手順の表の speed）
     std::chrono::steady_clock::time_point lastUpdateTime_; ///< 前のフレームの実時間（固まりかけを見張る）
     bool hasLastUpdateTime_ = false;
@@ -268,14 +260,7 @@ private:
     bool bugHunt_ = false; ///< --bug-hunt で起動したか（変えた所だけ遊ぶ仕組みを使う）
     BugHuntChanges changes_; ///< 前回の記録から変わった所
     bool skippingStage_ = false; ///< 変えていないステージを飛ばしている途中か（ステージの中の手順と、ステージに入るのを待つ手順を飛ばす）
-    std::vector<VisitTarget> visitTargets_; ///< 今の visitChanged で近くへ移って試す配置物
-    std::string visitLabel_; ///< 今試している配置物（記録に添える）
-    int visitedCount_ = 0; ///< 近くへ移って試した配置物の数（報告に出す）
-    int maxVisitsPerStage_ = 0; ///< 1つのステージで試す配置物の数の上限（手順の表の maxVisitsPerStage）
-    float visitOffset_ = 0.0f; ///< 配置物からどれだけ左に移るか（手順の表の visitOffset）
-    float visitRaise_ = 0.0f; ///< 配置物からどれだけ上に移るか（手順の表の visitRaise）
-    std::vector<std::string> visitSkipKinds_; ///< 近くで試さない種類（手順の表の visitSkipKinds）
     static inline uint32_t sTeleportCount = 0; ///< プレイヤーを離れた所へ移した回数
 };
 
-} // namespace engine::game
+} // namespace engine

@@ -5,6 +5,7 @@
 #pragma once
 #include "json.hpp"
 #include <string>
+#include <vector>
 namespace engine::editor {
 
 /**
@@ -29,11 +30,14 @@ private:
     void ApplyPreview();
     /** @brief 編集中の中身を設定ファイルに書く */
     void Save();
+    /** @brief 今の編集中の中身を、1回分の元に戻す履歴として覚える（変える直前に呼ぶ） */
+    void PushUndo();
 
     bool loaded_ = false; ///< 設定ファイルを読んだか
     nlohmann::json saved_; ///< 設定ファイルの中身（保存してあるもの）
     nlohmann::json edited_; ///< 編集中の中身
     std::string status_; ///< 保存の結果などの知らせ
+    std::vector<nlohmann::json> undoStack_; ///< 1回ずつ元に戻すための、変える前の中身
 };
 
 } // namespace engine::editor

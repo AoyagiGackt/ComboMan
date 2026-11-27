@@ -168,7 +168,7 @@ void JsonConfigEditor::DrawFileListRow(int index) {
     if (entry.dirty) {
         ImGui::PushStyleColor(ImGuiCol_Text, kModifiedColor);
     }
-    const std::string caption = (entry.dirty ? "* " : "") + entry.title + "##" + entry.fileName;
+    const std::string caption = (entry.dirty ? "* " : "") + entry.title + (entry.missing ? "（元のファイルが見つかりません）" : "") + "##" + entry.fileName;
     if (ImGui::Selectable(caption.c_str(), selected_ == index)) {
         selected_ = index;
     }

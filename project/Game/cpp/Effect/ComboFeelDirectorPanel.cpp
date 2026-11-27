@@ -8,12 +8,44 @@
 #include "EditorHub.h"
 #include "EditorUI.h"
 #include "Input.h"
+#include "WeaponTrailEffect.h"
 #include <algorithm>
+#include <filesystem>
+#include <string>
+#include <vector>
 #ifdef USE_IMGUI
 #include <imgui.h>
 #endif
 
 namespace engine::game {
+#ifdef USE_IMGUI
+namespace {
+/** @brief 保存していない変更がある時の知らせの色 */
+constexpr ImVec4 kUnsavedColor = { 1.0f, 0.8f, 0.3f, 1.0f };
+/** @brief 筋の画像を探すフォルダ */
+constexpr const char* kTrailTextureDirectory = "Resources/Effects/trails";
+/** @brief 筋の画像の欄の説明 */
+constexpr const char* kTrailTextureHelp = "刃の軌跡の帯に掛ける筋の画像です。Resources/Effects/trails に画像を足すと候補に出ます（候補はパネルを最初に開いた時に読みます）";
+
+/** @brief 筋の画像のフォルダにある画像の一覧（最初に呼んだ時だけ探す） */
+const std::vector<std::string>& TrailTextureCandidates() {
+    static const std::vector<std::string> kCandidates = [] {
+        std::vector<std::string> found;
+        std::error_code error;
+        for (const auto& entry : std::filesystem::directory_iterator(kTrailTextureDirectory, error)) {
+            const std::string extension = entry.path().extension().string();
+            if (entry.is_regular_file() && (extension == ".png" || extension == ".dds")) {
+                // 保存する名前は、ほかの設定と同じ / 区切りのパスにする
+                found.push_back(std::string(kTrailTextureDirectory) + "/" + entry.path().filename().string());
+            }
+        }
+        std::sort(found.begin(), found.end());
+        return found;
+    }();
+    return kCandidates;
+}
+} // namespace
+#endif
 
 /** @brief F6 か F8 のエディタ一覧でパネルを開閉し、開いていれば描画する（Update フェーズから呼ぶ） */
 void ComboFeelDirector::UpdateDebugPanel(Input* input) {
@@ -225,8 +257,26 @@ void ComboFeelDirector::UpdateDebugPanel(Input* input) {
             session.Item(s, "この武器の締めのぶれ・寄りを何倍にするかです", feelField(&WeaponFeel::impactScale));
             ImGui::DragFloat("スローの長さの倍率", &feel.slowSecondsScale, kFineDragStep, 0.0f, kMaxFeelScale);
             session.Item(s, "この武器の締めのスローを何倍長くするかです", feelField(&WeaponFeel::slowSecondsScale));
-            // 軌跡の筋の画像は名前の表示だけ（差し替えは combo_feel.json で）。明るさ・繰り返し・流れはその場で変えられる
-            ImGui::TextDisabled("筋の画像: %s", feel.trailTexture.empty() ? "なし" : feel.trailTexture.c_str());
+            // 軌跡の筋の画像は、筋の画像のフォルダから選ぶ（選んだ画像はその場で読み込み、保存すると残る）
+            const std::string currentTexture = feel.trailTexture.empty() ? std::string("なし")
+                : std::filesystem::path(feel.trailTexture).filename().string();
+            if (ImGui::BeginCombo("筋の画像", currentTexture.c_str())) {
+                if (ImGui::Selectable("なし", feel.trailTexture.empty()) && !feel.trailTexture.empty()) {
+                    session.RecordBeforeChange(s);
+                    feel.trailTexture.clear();
+                }
+                for (const std::string& candidate : TrailTextureCandidates()) {
+                    const std::string name = std::filesystem::path(candidate).filename().string();
+                    if (ImGui::Selectable(name.c_str(), candidate == feel.trailTexture) && candidate != feel.trailTexture) {
+                        session.RecordBeforeChange(s);
+                        // 振った瞬間に読み込みで止まらないよう、選んだ時に読んでおく
+                        engine::graphics::WeaponTrailEffect::PreloadTexture(candidate);
+                        feel.trailTexture = candidate;
+                    }
+                }
+                ImGui::EndCombo();
+            }
+            graphics::editorUI::HelpMarker(kTrailTextureHelp);
             ImGui::DragFloat("軌跡の明るさ", &feel.trailIntensity, kFineDragStep, 0.0f, kMaxTrailIntensity);
             session.Item(s, "帯の明るさです。1より上げると光ってにじみます", feelField(&WeaponFeel::trailIntensity));
             ImGui::DragFloat("筋の繰り返し", &feel.trailTextureRepeat, kFineDragStep, 0.0f, kMaxTextureRepeat);
@@ -244,13 +294,26 @@ void ComboFeelDirector::UpdateDebugPanel(Input* input) {
         engine::editor::FlowRow bottomRow;
         if (bottomRow.Button("保存")) {
             session.StopCompare(s);
-            SaveSettings();
-            session.MarkSaved(s);
+            // 書き込めた時だけ保存済みにする（失敗したら未保存のまま残し、知らせる）
+            if (SaveSettings()) {
+                session.MarkSaved(s);
+                saveStatus_ = "保存しました";
+            } else {
+                saveStatus_ = std::string("保存に失敗しました: ") + Settings::kFilePath;
+            }
         }
         if (bottomRow.Button("読み直し")) {
             session.StopCompare(s);
             session.RecordBeforeChange(s);
             LoadSettings();
+            saveStatus_ = "ファイルから読み直しました";
+        }
+        // 試している値は今ゲームに効いているが、保存するまでファイルには残らない
+        if (session.IsDirty()) {
+            ImGui::TextColored(kUnsavedColor, "保存していない変更があります（ゲームにはもう効いています）");
+        }
+        if (!saveStatus_.empty()) {
+            graphics::editorUI::TextDisabledWrapped("%s", saveStatus_.c_str());
         }
         // 保存先は長いので、ボタンの下に折り返して出す
         // 保存先のパスを薄く表示しておく

@@ -12,7 +12,7 @@
 #include <algorithm>
 #include <cctype>
 #include <filesystem>
-#include <set>
+#include "EditorFlowRow.h"
 #include <exception>
 #include <utility>
 
@@ -59,9 +59,9 @@ std::vector<std::string> FindFiles(const char* directory) {
     return files;
 }
 
-/** @brief オブジェクト・配列をたどり演出の音声パスと武器の種類を集める */
+/** @brief オブジェクト・配列をたどり演出の音声パスを集める */
 void Collect(const Json& value, const Json::json_pointer& pointer,
-    std::vector<std::string>& paths, std::set<std::string>& styles) {
+    std::vector<std::string>& paths) {
     if (value.is_string()) {
         if (value.get_ref<const std::string&>().find("Resources/SE/") == 0) {
             paths.push_back(pointer.to_string());
@@ -72,13 +72,7 @@ void Collect(const Json& value, const Json::json_pointer& pointer,
         return;
     }
     for (const auto& item : value.items()) {
-        if (item.key() == "hitStyle" && item.value().is_string()) {
-            const auto style = item.value().get<std::string>();
-            if (!style.empty()) {
-                styles.insert(style);
-            }
-        }
-        Collect(item.value(), pointer / item.key(), paths, styles);
+        Collect(item.value(), pointer / item.key(), paths);
     }
 }
 
@@ -203,17 +197,31 @@ void SoundAssignEditor::Draw(bool* open) {
         return;
     }
     if (!initialized_) {
-        std::set<std::string> styles;
-        std::set<std::string> unusedStyles;
-        std::vector<std::string> unused;
         for (const auto* path : kConfigPaths) {
             original_.push_back(JsonHelper::Load(path));
             std::vector<std::string> paths;
-            Collect(original_.back(), Json::json_pointer(), paths, unusedStyles);
+            Collect(original_.back(), Json::json_pointer(), paths);
             effectPaths_.push_back(std::move(paths));
         }
-        Collect(JsonHelper::Load("Resources/Config/weapons.json"), Json::json_pointer(), unused, styles);
-        styles_.assign(styles.begin(), styles.end());
+        const Json weapons = JsonHelper::Load("Resources/Config/weapons.json");
+        for (const auto& group : weapons) {
+            if (!group.is_array()) {
+                continue;
+            }
+            for (const auto& weapon : group) {
+                if (!weapon.is_object() || !weapon.contains("hitStyle") || !weapon["hitStyle"].is_string()) {
+                    continue;
+                }
+                const auto style = weapon["hitStyle"].get<std::string>();
+                if (!style.empty()) {
+                    auto& names = styles_[style];
+                    const std::string name = weapon.value("nameJp", weapon.value("name", std::string()));
+                    if (!name.empty()) {
+                        names += (names.empty() ? "" : "、") + name;
+                    }
+                }
+            }
+        }
         styleInput_.assign(kStyleCapacity, '\0');
         edited_ = original_;
         seFiles_ = FindFiles("Resources/SE");
@@ -222,11 +230,20 @@ void SoundAssignEditor::Draw(bool* open) {
     }
     const bool hasChanges = original_ != edited_;
     // 変更が無い間は保存を押せなくして、未保存かどうかを一目で分かるようにする
+    engine::editor::FlowRow actions;
     ImGui::BeginDisabled(!hasChanges);
-    bool saveRequested = ImGui::Button("保存 (Ctrl+S)");
+    bool saveRequested = actions.Button("保存 (Ctrl+S)");
     ImGui::EndDisabled();
     saveRequested |= hasChanges && editorUI::CtrlShortcut(ImGuiKey_S, true);
     if (saveRequested) {
+        saveResults_.resize(edited_.size(), "変更なし");
+        for (size_t i = 0; i < edited_.size(); ++i) {
+            if (original_[i] != edited_[i]) {
+                saveResults_[i] = "まだ保存していません";
+            } else if (saveResults_[i] != "保存しました") {
+                saveResults_[i] = "変更なし";
+            }
+        }
         bool success = true;
         for (size_t i = 0; i < edited_.size(); ++i) {
             if (original_[i] == edited_[i]) {
@@ -235,9 +252,11 @@ void SoundAssignEditor::Draw(bool* open) {
             try {
                 if (!SaveChanges(kConfigPaths[i], original_[i], edited_[i])) {
                     status_ = std::string("保存失敗（書き込み失敗または外部変更）: ") + kConfigPaths[i];
+                    saveResults_[i] = "保存に失敗しました";
                     success = false;
                     break;
                 }
+                saveResults_[i] = "保存しました";
                 original_[i] = edited_[i];
                 if (i == kSoundsIndex) {
                     gameSounds::Reload();
@@ -245,7 +264,10 @@ void SoundAssignEditor::Draw(bool* open) {
                     Audio::ReloadBGMConfig();
                 }
             } catch (const std::exception& error) {
-                status_ = std::string("保存失敗: ") + kConfigPaths[i] + " / " + error.what();
+                if (original_[i] != edited_[i]) {
+                    saveResults_[i] = "保存に失敗しました";
+                }
+                status_ = std::string("処理に失敗しました: ") + kConfigPaths[i] + " / " + error.what();
                 success = false;
                 break;
             }
@@ -256,19 +278,25 @@ void SoundAssignEditor::Draw(bool* open) {
     }
     if (hasChanges) {
         editorUI::DrawUnsavedMark();
-        ImGui::SameLine();
-        if (editorUI::ConfirmButton("変更を捨てる", "未保存の変更を捨てて、保存した内容に戻しますか？", "捨てる")) {
+        actions.Next(engine::editor::FlowRow::ButtonWidth("変更を捨てる"));
+        if (editorUI::ConfirmButton("変更を捨てる", "未保存の変更を捨てますか？\nすでに保存したファイルの内容は戻りません。", "捨てる")) {
             edited_ = original_;
             status_.clear();
+            saveResults_.clear();
         }
     }
-    ImGui::SameLine();
-    if (ImGui::Button("ファイル一覧を更新")) {
+    if (actions.Button("ファイル一覧を更新")) {
         seFiles_ = FindFiles("Resources/SE");
         bgmFiles_ = FindFiles("Resources/bgm");
     }
     if (!status_.empty()) {
         ImGui::TextWrapped("%s", status_.c_str());
+    }
+    if (!saveResults_.empty()) {
+        ImGui::SeparatorText("ファイルごとの保存結果");
+    }
+    for (size_t i = 0; i < saveResults_.size(); ++i) {
+        editorUI::TextDisabledWrapped("%s　%s", kConfigPaths[i], saveResults_[i].c_str());
     }
     ImGui::TextWrapped("試聴は現在のシーンの Audio を使用します。BGM の試聴は再生中の曲を置き換えます。");
     if (ImGui::BeginTabBar("SoundAssignTabs")) {
@@ -329,9 +357,12 @@ void SoundAssignEditor::Draw(bool* open) {
                 root.erase(removeKey);
             }
             if (root.is_object() && !root.empty() && ImGui::CollapsingHeader("武器ごとの音を追加")) {
-                if (ImGui::BeginCombo("hitStyle の候補", styleInput_.data())) {
-                    for (const auto& style : styles_) {
-                        if (ImGui::Selectable(style.c_str())) {
+                ImGui::TextWrapped("武器の打撃の種類の候補");
+                ImGui::SetNextItemWidth(-FLT_MIN);
+                if (ImGui::BeginCombo("##styleCandidates", styleInput_.data())) {
+                    for (const auto& [style, names] : styles_) {
+                        const std::string caption = names.empty() ? style : style + "（" + names + "）";
+                        if (ImGui::Selectable(caption.c_str())) {
                             const size_t length = (std::min)(style.size(), styleInput_.size() - 1);
                             std::copy_n(style.data(), length, styleInput_.data());
                             styleInput_[length] = '\0';
@@ -339,15 +370,22 @@ void SoundAssignEditor::Draw(bool* open) {
                     }
                     ImGui::EndCombo();
                 }
-                ImGui::InputText("hitStyle（手入力可）", styleInput_.data(), styleInput_.size());
+                ImGui::TextWrapped("武器の打撃の種類（手で入力もできる）");
+                ImGui::SetNextItemWidth(-FLT_MIN);
+                ImGui::InputText("##styleInput", styleInput_.data(), styleInput_.size());
                 for (const auto* base : kWeaponBases) {
                     ImGui::PushID(base);
+                    const std::string style(styleInput_.data());
+                    const std::string key = std::string(base) + "_" + style;
+                    const bool blank = style.find_first_not_of(" \t\r\n") == std::string::npos;
+                    const bool exists = root.contains(key);
+                    ImGui::BeginDisabled(blank || exists);
                     if (ImGui::Button((SceneName(base) + "を追加").c_str())) {
-                        const std::string style(styleInput_.data());
-                        const std::string key = std::string(base) + "_" + style;
-                        if (!style.empty() && !root.contains(key)) {
-                            root[key] = { { "path", "" }, { "volume", kDefaultVolume } };
-                        }
+                        root[key] = { { "path", "" }, { "volume", kDefaultVolume } };
+                    }
+                    ImGui::EndDisabled();
+                    if (blank || exists) {
+                        editorUI::TextDisabledWrapped("%s", blank ? "打撃の種類を選ぶか入力してください。" : "この場面にはすでに登録されています。");
                     }
                     ImGui::PopID();
                 }
@@ -378,11 +416,11 @@ void SoundAssignEditor::Draw(bool* open) {
                         item.value() = path;
                     }
                     ImGui::TableNextColumn();
-                    if (ImGui::Button("▶ 再生")) {
+                    engine::editor::FlowRow preview;
+                    if (preview.Button("▶ 再生")) {
                         Preview(path, kDefaultVolume, true);
                     }
-                    ImGui::SameLine();
-                    if (ImGui::Button("■ 停止")) {
+                    if (preview.Button("■ 停止")) {
                         AudioBridge::GetInstance()->StopBGM();
                     }
                     ImGui::PopID();

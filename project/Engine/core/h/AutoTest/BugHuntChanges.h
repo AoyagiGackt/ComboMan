@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-namespace engine::game {
+namespace engine {
 
 /**
  * @brief 前回のバグ探しの記録と今のファイルを比べ、遊ぶステージと近くで試す配置物を決める
@@ -74,4 +74,4 @@ private:
     std::map<std::string, std::vector<std::string>> importedChanges_; ///< 再生ファイルにあった、ステージごとの近くで試す配置物
 };
 
-} // namespace engine::game
+} // namespace engine

@@ -21,6 +21,7 @@
 #include "GameRules.h"
 #include "SceneEffectBridge.h"
 #include "SmokeTestRunner.h"
+#include "GameSmokeTest.h"
 #include "SceneFlow.h"
 #include "GrayscaleEffect.h"
 #include "HsvFilter.h"
@@ -196,7 +197,7 @@ void GamePlayScene::InitializeGhostEditorAndEffects() {
     comboFeel_.Initialize(dxCommon_, srvManager_);
     spaceWarp_.Initialize(dxCommon_, srvManager_);
     // 3D の後・UI の前に掛ける画面全体のエフェクト（順番は post_process.json の gameplay）
-    sceneShared::SetupScenePostProcess(postProcess_, "gameplay", srvManager_, spaceWarp_, comboFeel_);
+    sceneShared::SetupScenePostProcess(postProcess_, "gameplay", "本編", srvManager_, spaceWarp_, comboFeel_);
     finisherShatter_.Initialize(dxCommon_, srvManager_);
     finisherShatter_.SetDuration(SceneVisualTuning::Gameplay().finisherShatterSeconds);
 
@@ -422,6 +423,11 @@ void GamePlayScene::Update() {
 
     // 自動テストプレイの間だけ、遊んでいる様子からおかしな所を探して記録する（ふだんは何もしない）
     // クリアの演出とやられ演出の間は、止まって当然なので調べない
+    // 自動テストの頼みがあれば、見張りより先にボスと向き合う準備をする（移した位置を見張りが壁抜けと間違えないように）。
+    // ボスがまだ出ていない間は頼みを残し、出てきた所で受け取る
+    if (CanPrepareBossDuelForTest() && GameSmokeTest::ConsumeBossDuelRequest()) {
+        PrepareBossDuelForTest();
+    }
     if (!clearTriggered_ && !playerDefeat_.IsActive()) {
         bugWatcher_.Run({
             .player = player_.get(),
@@ -461,7 +467,7 @@ void GamePlayScene::Update() {
         return;
     }
 
-    auto* tm = TimeManager::GetInstance();
+    auto* tm = engine::Services().time;
     const float dt = tm->GetDeltaTime(); // ヒットストップ中 = 0、スロー時は比例値
     floorElapsedSeconds_ += gameConstants::kFrameDeltaTime; // プレイログ用。ヒットストップの影響を受けない実時間換算
 
@@ -624,7 +630,7 @@ void GamePlayScene::UpdatePlayerDefeat() {
 // 戦闘とカメラの更新
 // ══════════════════════════════════════════════════════
 void GamePlayScene::UpdateCombatEvents() {
-    auto* tm = TimeManager::GetInstance();
+    auto* tm = engine::Services().time;
     // 乱舞の打ち上げ・連撃・締めは乱舞の相手に向ける（道中の敵にも、ボスにも）。相手がいなければ演出だけその場に出す
     EnemyEntity* const rampageTarget = RampageTargetEnemy();
     const Vector3 rampagePos = rampageTarget != nullptr ? rampageTarget->GetPosition() : player_->GetPosition();
@@ -722,7 +728,7 @@ void GamePlayScene::UpdateCombatEvents() {
 }
 /** @brief 戦闘（攻撃の判定・敵の攻撃・演出）を1フレーム進める */
 void GamePlayScene::UpdateCombat() {
-    auto* tm = TimeManager::GetInstance();
+    auto* tm = engine::Services().time;
     // ヒットストップ中も回避ボタンの押下は記憶しておく（停止明けに回避へつなげ、押した感触が消えないように）
     player_->BufferDodgeInput(input_);
     // 奪う相手はここで1体だけ決め、道中の敵とボスの両方の回収で使う（ヒットストップ中も決め直す）

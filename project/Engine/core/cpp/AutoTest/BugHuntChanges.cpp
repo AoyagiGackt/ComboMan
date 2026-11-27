@@ -10,7 +10,7 @@
 #include <fstream>
 #include <functional>
 
-namespace engine::game {
+namespace engine {
 namespace {
 namespace fs = std::filesystem;
 
@@ -274,4 +274,4 @@ void BugHuntChanges::ImportSelection(const std::vector<Stage>& stages, const nlo
     imported_ = true;
 }
 
-} // namespace engine::game
+} // namespace engine

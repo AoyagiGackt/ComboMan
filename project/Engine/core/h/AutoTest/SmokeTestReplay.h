@@ -12,7 +12,8 @@
 #include <string>
 #include <vector>
 
-namespace engine::game {
+namespace engine {
+class SmokeTestGame;
 
 /** @brief 再生ファイルに残す、見つけたおかしな所1件 */
 struct ReplayIssue {
@@ -45,7 +46,7 @@ public:
      * @brief 決まった間隔のフレームなら、今のゲームの状態の指紋を取って残す（記録の時に毎フレーム呼ぶ）
      * @param frame 今のフレーム
      */
-    void RecordCheckpoint(uint64_t frame);
+    void RecordCheckpoint(uint64_t frame, const SmokeTestGame& game);
     /**
      * @brief 再生ファイルを書き出す
      * @param path 書き出す場所
@@ -75,18 +76,16 @@ public:
      * @param frame 今のフレーム
      * @return 初めてずれたフレームなら、ずれの様子（ずれていなければ空。一度ずれたら後は比べない）
      */
-    std::optional<std::string> VerifyCheckpoint(uint64_t frame);
+    std::optional<std::string> VerifyCheckpoint(uint64_t frame, const SmokeTestGame& game);
 
-private:
     /** @brief 状態の指紋1つ */
     struct Checkpoint {
         uint64_t frame = 0; ///< 取ったフレーム
         uint64_t hash = 0; ///< 指紋
         std::string summary; ///< 人が読む短い様子（ずれた時に、記録した時と今を並べて出す）
     };
-    /** @brief 今のゲームの状態から指紋を作る（画面・体力・プレイヤーと敵の位置と体力） */
-    static Checkpoint Capture(uint64_t frame);
 
+private:
     std::vector<Checkpoint> recorded_; ///< 記録の時に取った指紋
     ReplayData loaded_; ///< 読み込んだ中身
     std::vector<Checkpoint> expected_; ///< 読み込んだ指紋（再生の時に比べる）
@@ -95,4 +94,4 @@ private:
     bool diverged_ = false; ///< 一度ずれたか（ずれた後は比べない）
 };
 
-} // namespace engine::game
+} // namespace engine

@@ -4,6 +4,7 @@
  */
 #pragma once
 #include "json.hpp"
+#include <map>
 #include <string>
 #include <vector>
 
@@ -21,7 +22,8 @@ private:
     std::vector<std::vector<std::string>> effectPaths_;
     std::vector<std::string> seFiles_;
     std::vector<std::string> bgmFiles_;
-    std::vector<std::string> styles_;
+    std::map<std::string, std::string> styles_; ///< 打撃の種類ごとに使う武器の表示名
+    std::vector<std::string> saveResults_; ///< 直近の保存操作でのファイルごとの結果
     std::vector<char> styleInput_;
     std::string status_;
 };

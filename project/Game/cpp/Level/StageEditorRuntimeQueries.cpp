@@ -142,7 +142,7 @@ std::vector<engine::AABB> StageEditor::CollectSolidColliders(bool includeEnemyBo
             // このフレーム分をあらかじめ足した時刻で計算し、見た目（UpdateRuntimeEntry側）と揃える
             const float motionDelta = ShouldPauseGame()
                 ? gameConstants::kFrameDeltaTime
-                : (gameplayHeld_ ? 0.0f : TimeManager::GetInstance()->GetDeltaTime());
+                : (gameplayHeld_ ? 0.0f : engine::Services().time->GetDeltaTime());
             const GimmickPose pose = motion->Evaluate(desc, entry.runtimeTimer + motionDelta);
             if (!pose.solid) {
                 continue;

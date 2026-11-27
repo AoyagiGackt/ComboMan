@@ -326,14 +326,15 @@ void SceneEditor::UpdateUIGizmo() {
 }
 
 /** @brief カメラの目標位置・角度・スムージングフレーム数をJSONへ書き出す */
-void SceneEditor::SaveCameraParams(const EditContext& ctx) {
+bool SceneEditor::SaveCameraParams(const EditContext& ctx) {
     const Vector3& pos = *ctx.cameraTargetPos;
     const Vector3& rot = *ctx.cameraTargetRot;
     nlohmann::json j;
     j["camera_pos"] = { pos.x, pos.y, pos.z };
     j["camera_rot"] = { rot.x, rot.y, rot.z };
     j["camera_smooth_frames"] = *ctx.cameraSmoothFrames;
-    JsonHelper::Save("Resources/editor_camera.json", j);
+    constexpr const char* kPath = "Resources/editor_camera.json";
+    return SetSaveResult(JsonHelper::Save(kPath, j), kPath);
 }
 
 // カメラの位置・角度・スムージングフレーム数を JSON ファイルから読み込む
@@ -376,9 +377,8 @@ void SceneEditor::SaveUILayout() {
             { "rot", rot },
             { "color", { col.x, col.y, col.z, col.w } } });
     }
-    if (JsonHelper::Save("Resources/Config/editor_ui.json", arr)) {
-        uiDirty_ = false;
-    }
+    constexpr const char* kPath = "Resources/Config/editor_ui.json";
+    uiDirty_ = !SetSaveResult(JsonHelper::Save(kPath, arr), kPath);
 }
 
 // 起動時に1度だけ呼ばれ、カメラパラメータと UI レイアウトを一括で読み込む

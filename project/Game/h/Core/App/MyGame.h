@@ -10,8 +10,10 @@
 #include "Framework.h"
 #include "SceneFactory.h"
 #include "SmokeTestRunner.h"
+#include "GameSmokeTest.h"
 #include "SoundAssignEditor.h"
 #include "PostProcessOrderEditor.h"
+#include <string>
 #include <cstdint>
 #include <memory>
 namespace engine {
@@ -68,10 +70,12 @@ private:
     /** @brief 画面全体へ掛けるエフェクトの順番を変えるエディタ（post_process.json） */
     engine::editor::PostProcessOrderEditor postProcessEditor_;
     bool showPostProcessEditor_ = false; ///< 画面の効果の順番のエディタを開いているか
+    std::string configReloadStatus_; ///< 設定ファイルを全部読み直した結果の知らせ（F8 に出す）
     /** @brief 音の割り当て画面を表示しているか */
     bool showSoundAssignEditor_ = false;
     /** @brief 自動テストプレイ（--smoke-test で起動した時だけ動く） */
-    engine::game::SmokeTestRunner smokeTest_;
+    SmokeTestRunner smokeTest_;
+    game::GameSmokeTest gameSmokeTest_ { smokeTest_ }; ///< ゲーム固有のテスト手順
     /** @brief 描画が遅れた時に、遅れた分だけ更新を回すための時計 */
     engine::FixedStepClock frameClock_ { engine::engineConstants::kFrameDeltaTime };
 };

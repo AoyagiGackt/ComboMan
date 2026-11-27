@@ -5,6 +5,7 @@
  */
 #ifdef USE_IMGUI
 #include "GraphEditor.h"
+#include "EngineContext.h"
 #include "EditorFlowRow.h"
 #include "EditorUI.h"
 #include "EditorUiStyle.h"
@@ -155,7 +156,7 @@ void GraphEditor::DrawLevelLink() {
             }
             // エディタを閉じてゲームの時間を戻し、ステージエディタを開いていれば出る位置からテストを始める
             visible_ = false;
-            TimeManager::GetInstance()->SetTimeScale(savedTimeScale_);
+            engine::Services().time->SetTimeScale(savedTimeScale_);
             stage->PlayTestFromSpawn();
         }
     }

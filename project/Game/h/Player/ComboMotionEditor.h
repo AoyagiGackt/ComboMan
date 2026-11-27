@@ -93,7 +93,9 @@ private:
     std::string selectedAttackId_; ///< 選んでいる段の技ID
     std::string selectedBone_; ///< 選んでいるボーン名
     std::string status_; ///< 保存結果などの表示
-    bool dirty_ = false; ///< 最後の保存以降に編集があるか
+    std::map<std::pair<std::string, std::string>, MotionClip> unsavedBases_; ///< 変更した段の編集前の動き
+    std::string selectedStepLabel_;
+    std::string copiedStepLabel_;
     static constexpr int kNoDraggedKey = -1; ///< 時間軸のキーを掴んでいない時の値
     int draggedKey_ = kNoDraggedKey; ///< 時間軸で掴んでいるキーの番号
     static constexpr size_t kBoneFilterSize = 64;

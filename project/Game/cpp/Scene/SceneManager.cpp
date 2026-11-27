@@ -84,7 +84,7 @@ void SceneManager::Initialize(DirectXCommon* dxCommon, Input* input, Audio* audi
 
     // cook中は、遊ばなかった画面の素材もpakへ入るよう、起動シーンを作る前に全シーンを一度ずつ読み込む
     // （起動シーンより後に行うと、破棄したシーンのカメラ等が共通設定に残ってしまうため先に済ませる）
-    if (AssetPack::GetInstance()->IsCooking()) {
+    if (engine::Services().assetPack->IsCooking()) {
         CookAllScenes();
     }
 

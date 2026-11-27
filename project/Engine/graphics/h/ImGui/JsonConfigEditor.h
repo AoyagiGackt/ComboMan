@@ -34,6 +34,20 @@ public:
     /** @brief 指定ファイルを保存した直後に呼ぶ処理を登録する（登録が無いファイルは次回起動時の反映になる） */
     void SetReloadCallback(const std::string& fileName, std::function<void()> onSaved);
 
+    /** @brief ReloadAll で読み直した数 */
+    struct ReloadAllResult {
+        int gameReloaded = 0; ///< ゲームへ読み直させたファイルの数（SetReloadCallback で登録した物）
+        int editorRefreshed = 0; ///< このエディタで開いていて、ファイルの中身に合わせ直したファイルの数
+        int keptUnsaved = 0; ///< このエディタで保存していない変更があるので、そのまま残したファイルの数
+    };
+
+    /**
+     * @brief 登録してある設定ファイルを全部ゲームへ読み直させ、このエディタの表示もファイルに合わせ直す
+     * @note ゲームへ読み直させるのは SetReloadCallback で登録した物だけ（途中で読み直すと数が合わなくなる物は登録しない決まり）。
+     *       このエディタで保存していない変更があるファイルは、変更を消さないよう表示を合わせ直さない
+     */
+    ReloadAllResult ReloadAll();
+
     /** @brief 表示を切り替える */
     void Toggle() {
         open_ = !open_;
@@ -54,6 +68,11 @@ private:
         std::string title; ///< 一覧に出す名前（名前の表に無ければファイル名）
         nlohmann::json data; ///< 編集中の内容
         nlohmann::json saved; ///< 最後に読み込んだ・保存した内容（元に戻す用）
+        static constexpr size_t kFileNameCapacity = 256;
+        char newName[kFileNameCapacity] = {};
+        bool missing = false;
+        nlohmann::json conflictDisk; ///< 確認を開いた時のファイルの内容
+        std::string conflictMessage;
         bool loaded = false;
         bool dirty = false;
         std::vector<nlohmann::json> undoStack; ///< 元に戻す履歴（ドラッグや文字入力は離した時に1回分になる）
@@ -67,7 +86,12 @@ private:
     /** @brief 素材フォルダを調べてファイルの場所の候補を作り直す */
     void ScanAssets();
     void LoadEntry(FileEntry& entry);
-    void SaveEntry(FileEntry& entry);
+    /** @brief 外部変更を取り込み、競合時は値の選択を待つ */
+    void SaveEntry(FileEntry& entry, bool resolved = false, bool preferFile = false);
+    /** @brief 保存結果を表示と履歴に反映する */
+    void FinishSave(FileEntry& entry, const nlohmann::json& merged, bool resetHistory);
+    /** @brief 元のファイルがない時の保存と破棄を扱う */
+    void DrawMissingFile(FileEntry& entry);
     /** @brief 操作中の項目が無くなったら、溜めていた変更を1回分の履歴として確定する */
     void CommitPendingEdit(FileEntry& entry);
     /** @brief 片方の履歴の最新の内容へ移り、今の内容をもう片方の履歴へ積む（元に戻す・やり直すの共通処理） */

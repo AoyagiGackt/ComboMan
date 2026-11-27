@@ -12,6 +12,7 @@
 #include "Input.h"
 #include "Model.h"
 #include "ModelCommon.h"
+#include "PauseMenu.h"
 #include "Object3d.h"
 #include "Object3dCommon.h"
 #include "Player.h"
@@ -159,6 +160,7 @@ private:
 
     FontRenderer fontRenderer_;
     StageLiberation liberation_; ///< クリアして戻ってきた時の解放演出
+    PauseMenu pauseMenu_; ///< Pause キーで開く一時停止画面（音量・全画面の切り替えの案内・コマンド表。退出項目はタイトルへ戻る）
 
     // マップ定義  floors_[floor][col] = NodeType
     std::vector<std::vector<RunData::NodeType>> floors_;

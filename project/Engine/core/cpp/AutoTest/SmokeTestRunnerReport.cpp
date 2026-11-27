@@ -5,7 +5,7 @@
  */
 #include "SmokeTestRunner.h"
 #include "CrashBreadcrumbs.h"
-#include "GameConstants.h"
+#include "EngineConstants.h"
 #include "Input.h"
 #include "Logger.h"
 #include "TestCoverage.h"
@@ -15,7 +15,7 @@
 #include <filesystem>
 #include <fstream>
 
-namespace engine::game {
+namespace engine {
 
 namespace {
 constexpr const char* kReportDirectory = "smoke_test"; // 報告を書くフォルダ
@@ -168,7 +168,9 @@ void SmokeTestRunner::WriteReport(bool passed, const std::string& reason) const 
     }
     report << "手順の表: " << scriptPath_ << "  ランダムの種: " << seed_ << '\n';
     if (bugHunt_) {
-        report << "回した所: " << changes_.Summary() << "、近くで試した配置物 " << visitedCount_ << " 個\n";
+        report << "回した所: " << changes_.Summary();
+        game_->WriteChangesReport(report);
+        report << '\n';
         // 最後まで回った時だけ、次に比べる記録を書く（起動役が全部の回を終えてから置き換える）
         if (passed) {
             changes_.WriteNextState();
@@ -189,7 +191,7 @@ void SmokeTestRunner::WriteReport(bool passed, const std::string& reason) const 
                    << "（記録では frame " << recorded.frame << "）\n";
         }
     }
-    report << "かかったフレーム数: " << totalFrames_ << "（約 " << static_cast<int>(static_cast<float>(totalFrames_) * gameConstants::kFrameDeltaTime) << " 秒）\n";
+    report << "かかったフレーム数: " << totalFrames_ << "（約 " << static_cast<int>(static_cast<float>(totalFrames_) * engineConstants::kFrameDeltaTime) << " 秒）\n";
     report << "見つけたおかしな所: " << sIssues.size() << " 件\n";
     report << "--- 見つけたおかしな所（見つけた順） ---\n";
     for (const Issue& issue : sIssues) {
@@ -215,4 +217,4 @@ void SmokeTestRunner::WriteReport(bool passed, const std::string& reason) const 
     Logger::LogInfo("[SmokeTest] 結果を書き出しました: " + path);
 }
 
-} // namespace engine::game
+} // namespace engine

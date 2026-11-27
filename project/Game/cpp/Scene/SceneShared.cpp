@@ -3,6 +3,7 @@
  * @brief BattleTestScene/TrainingScene/GamePlayScene間で共通の武器切替・カメラ追従・HUD描画処理（SceneShared名前空間）の実装
  */
 #include "SceneShared.h"
+#include "EngineContext.h"
 #include "CombatDepth.h"
 #include "GameActions.h"
 // 乱数の種を共通の窓口から取得する。
@@ -247,7 +248,7 @@ void UpdateSpinShotFire(Player* player, BulletPool& bulletPool) {
             float angle = kBaseAngle + i * kSpread;
             bulletPool.Spawn(firePos, { std::cos(angle) * kBulletSpeed, std::sin(angle) * kBulletSpeed, 0.0f });
         }
-        TimeManager::GetInstance()->RequestHitStop(kUpsideDownHitStopFrames);
+        engine::Services().time->RequestHitStop(kUpsideDownHitStopFrames);
         ScreenFlash::GetInstance()->Request(kUpsideDownFlashColor, kUpsideDownFlashSeconds);
     } else {
         // 通常: 向いている方向に 1 発
@@ -762,8 +763,10 @@ bool IsMouseFreeForGame() {
 }
 
 /** @brief エンジンのブルーム・トーンマップと、ゲームの空間のゆがみ・締めの放射ブラーを列に登録する */
-void SetupScenePostProcess(PostProcessStack& stack, const std::string& stackName,
+void SetupScenePostProcess(PostProcessStack& stack, const std::string& stackName, const std::string& stackDisplayName,
     SrvManager* srvManager, SpaceDistortionEffect& spaceWarp, ComboFeelDirector& comboFeel) {
+    // エディタの見出しに出す場面の名前
+    PostProcessStack::SetStackDisplayName(stackName, stackDisplayName);
     // 先に順番を読み、順番に無い物を登録した時に知らせられるようにする
     stack.Initialize(stackName);
     stack.RegisterBuiltins(srvManager);

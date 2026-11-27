@@ -191,7 +191,7 @@ void BattleTestScene::InitializeEffects() {
     comboFeel_.Initialize(dxCommon_, srvManager_);
     spaceWarp_.Initialize(dxCommon_, srvManager_);
     // 3D の後・UI の前に掛ける画面全体のエフェクト（順番は post_process.json の training）
-    sceneShared::SetupScenePostProcess(postProcess_, "training", srvManager_, spaceWarp_, comboFeel_);
+    sceneShared::SetupScenePostProcess(postProcess_, "training", "訓練場", srvManager_, spaceWarp_, comboFeel_);
     dummySlice_.Initialize(dxCommon_);
     finisherShatter_.Initialize(dxCommon_, srvManager_);
     finisherShatter_.SetDuration(SceneVisualTuning::Battle().finisherShatterSeconds);

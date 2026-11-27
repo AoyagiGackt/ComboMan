@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  インクルードの場所をまとめたプロパティシート（EngineLib.vcxproj と Game.vcxproj が読む）
+  ・インクルードの場所はここ1か所にだけ書く（各 vcxproj には $(EngineIncludeDirs) と $(GameIncludeDirs) だけを書く）
+  ・新しいヘッダーのフォルダを作った時は、下の該当する行に足す
+  ・エンジンはゲームのフォルダを見ない（EngineIncludeDirs だけを使う）。ゲームは両方を使う
+  ・フォルダの名前の最後に \ を付けない（コマンドラインで引用符とつながって壊れることがある）
+-->
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <!-- 起点のフォルダ（このファイルがある project フォルダ。これだけは最後に \ が付いている） -->
+    <IncludeRootDir>$(MSBuildThisFileDirectory)</IncludeRootDir>
+    <EngineCoreH>$(IncludeRootDir)Engine\core\h</EngineCoreH>
+    <EngineGraphicsH>$(IncludeRootDir)Engine\graphics\h</EngineGraphicsH>
+    <GameH>$(IncludeRootDir)Game\h</GameH>
+    <ExternalsRootDir>$(IncludeRootDir)..\externals</ExternalsRootDir>
+
+    <!-- エンジン: 数学 -->
+    <EngineIncludeDirs>$(IncludeRootDir)Engine\math\h</EngineIncludeDirs>
+    <!-- エンジン: 基盤（ウィンドウ・デバイス・入力・音・時間など） -->
+    <EngineIncludeDirs>$(EngineIncludeDirs);$(EngineCoreH);$(EngineCoreH)\App;$(EngineCoreH)\Audio;$(EngineCoreH)\AutoTest;$(EngineCoreH)\Collision;$(EngineCoreH)\Device;$(EngineCoreH)\Input;$(EngineCoreH)\Object;$(EngineCoreH)\Time;$(EngineCoreH)\Util;$(EngineCoreH)\Window</EngineIncludeDirs>
+    <!-- エンジン: 描画 -->
+    <EngineIncludeDirs>$(EngineIncludeDirs);$(EngineGraphicsH);$(EngineGraphicsH)\2D;$(EngineGraphicsH)\3D;$(EngineGraphicsH)\Camera;$(EngineGraphicsH)\Diagnostics;$(EngineGraphicsH)\Effect;$(EngineGraphicsH)\ImGui;$(EngineGraphicsH)\Light;$(EngineGraphicsH)\Manager;$(EngineGraphicsH)\Offscreen;$(EngineGraphicsH)\Particle;$(EngineGraphicsH)\Skeleton;$(EngineGraphicsH)\Text;$(EngineGraphicsH)\UI</EngineIncludeDirs>
+    <!-- エンジン: スクリプトとエディタの共通部品。graphics の cpp の中にも、別の cpp から読むヘッダーが置いてある -->
+    <EngineIncludeDirs>$(EngineIncludeDirs);$(IncludeRootDir)Engine\scripting\h;$(IncludeRootDir)Engine\editor\h;$(IncludeRootDir)Engine\graphics\cpp</EngineIncludeDirs>
+    <!-- シェーダーと C++ で共有するヘッダーと、素材のフォルダ -->
+    <EngineIncludeDirs>$(EngineIncludeDirs);$(IncludeRootDir)Resources\shaders\lighting;$(IncludeRootDir)Resources\shaders\object3d;$(IncludeRootDir)Resources\shaders\Particle;$(IncludeRootDir)Resources</EngineIncludeDirs>
+    <!-- 外部ライブラリ -->
+    <EngineIncludeDirs>$(EngineIncludeDirs);$(ExternalsRootDir)\imgui;$(ExternalsRootDir)\DirectXTex;$(ExternalsRootDir)\assimp\include;$(ExternalsRootDir)\json</EngineIncludeDirs>
+
+    <!-- ゲーム: h フォルダとその下のフォルダ、cpp の中で共有しているヘッダー -->
+    <GameIncludeDirs>$(GameH);$(GameH)\Collision;$(GameH)\Core;$(GameH)\Core\App;$(GameH)\Effect;$(GameH)\Level;$(GameH)\Player;$(GameH)\Scene;$(GameH)\Scripting;$(GameH)\UI;$(GameH)\Util;$(IncludeRootDir)Game\cpp</GameIncludeDirs>
+  </PropertyGroup>
+</Project>

@@ -12,7 +12,9 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Game", "Game.vcxproj", "{6D
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "ソリューション項目", "ソリューション項目", "{2022CB0F-8BAF-F49E-0C48-8EF4C96EC109}"
 	ProjectSection(SolutionItems) = preProject
-		.editorconfig.txt = .editorconfig.txt
+		.clang-format = .clang-format
+		.editorconfig = .editorconfig
+		IncludeDirs.props = IncludeDirs.props
 	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "imgui", "..\externals\imgui\imgui.vcxproj", "{68E2707E-352E-4FBF-BCD6-D7839A8120C8}"

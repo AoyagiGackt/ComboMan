@@ -150,6 +150,8 @@ void MapScene::Initialize(DirectXCommon* dxCommon, Input* input, Audio* audio) {
     stageWorldX_ = GameRules::GetInstance()->Get().stagePortalXs;
     InitializeUiSprites();
     InitializeRenderFoundationAndPlayer();
+    // コマンド表の技の見本を描く準備（モデルの共通設定ができてから）
+    pauseMenu_.InitializeCommandPreview(modelCommon_.get());
     InitializeFloorsAndStartPosition(); // ポータルの本数がステージ数に依存するため先に決める
     InitializeStageObjects();
     InitializeTutorialPortal();
@@ -171,6 +173,13 @@ void MapScene::InitializeUiSprites() {
 
     fontRenderer_.Initialize(spriteCommon_.get());
     liberation_.Initialize(spriteCommon_.get());
+    // 一時停止画面（ほかの場面と同じく、音量やコマンド表を見られるようにする）
+    pauseMenu_.Initialize(spriteCommon_.get(), &fontRenderer_, audio_, kLayoutName,
+        {
+            "タイトルに戻る", [] {
+                SceneFlow::GetInstance()->Transition("MAP", "title", "TITLE");
+            }
+        });
 }
 
 /** @brief Initialize()の下請け 描画基盤(Common類・シャドウ・カメラ)とプレイヤーを初期化する */
@@ -265,6 +274,16 @@ void MapScene::Finalize() {
 
 /** @brief 入力によるノード選択と遷移判定を更新する */
 void MapScene::Update() {
+    // 一時停止（解放演出と入口の出入りの間は開かない）。戻るボタンでも閉じるので、タイトルへ戻る判定より先に見る
+    pauseMenu_.SetPreviewActor(player_.get()); // コマンド表の技の見本はこのプレイヤーが演じる
+    const bool canPause = !liberation_.IsPlaying() && portalMotion_ == PortalMotion::kNone;
+    const bool paused = pauseMenu_.Update(input_, canPause);
+    // 配置物は BaseScene が Update の後に更新するので、ポーズ中はそちらも止める
+    GetStageEditor().SetGameplayHeld(paused);
+    if (paused) {
+        return;
+    }
+
     // 戻る操作でタイトルへ
     if (!liberation_.IsPlaying() && portalMotion_ == PortalMotion::kNone && input_->TriggerMenuCancel()) {
         audio_->PlayMenuSelect();
@@ -556,6 +575,16 @@ void MapScene::Draw() {
     fontRenderer_.Reset();
     liberation_.QueueText(fontRenderer_, cameraX);
 
+    // 一時停止中は案内を隠して、一時停止画面とコマンド表の見本だけを見せる
+    if (pauseMenu_.IsPaused()) {
+        pauseMenu_.Draw(input_);
+        fontRenderer_.Draw();
+        pauseMenu_.DrawCommandPreview({ dxCommon_, modelCommon_.get(), objectCommon_.get(), shadowManager_.get(),
+            engine::Services().srvManager, dxCommon_->GetCurrentBackBufferHandle() });
+        spriteCommon_->CommonDrawSettings();
+        return;
+    }
+
     // 入口の上のステージ名と、選択中の入口の説明
     const int floor = rd->GetFloor();
     if (floor < static_cast<int>(floors_.size())) {
@@ -568,8 +597,8 @@ void MapScene::Draw() {
     const Vector2 helpPosition = layout.Pos("help.pos", kHelpTextPosition);
     const bool pad = input_->IsUsingGamepad();
     const std::wstring helpText = pad
-        ? L"左スティックで移動  入口の前でAボタン  Yボタンでトレーニング"
-        : L"A Dで移動  入口の前でEnter  Tでトレーニング";
+        ? L"左スティックで移動  入口の前でAボタン  Yボタンでトレーニング  STARTでポーズ"
+        : L"A Dで移動  入口の前でEnter  Tでトレーニング  Pでポーズ";
     const std::wstring backText = pad ? L"Bボタンでタイトルへ戻る" : L"Backspaceでタイトルへ戻る";
     const float helpScale = layout.Float("help.scale", kHelpTextScale);
     const float backScale = layout.Float("back_hint.scale", kHelpTextScale);

@@ -396,6 +396,10 @@ private:
     void UpdateBossExecution();
     /** @brief ボスに近接武器を当てた事を覚える（倒した後の当たりは数えない。とどめの型と姿勢をこの武器で決める） */
     void RecordBossMeleeHit(WeaponType weapon);
+    /** @brief 自動テストの頼みで、ステージのボスの体力を1にしてプレイヤーをボスの手前へ移す（とどめの型を武器ごとに試すため。ふだんは呼ばれない） */
+    void PrepareBossDuelForTest();
+    /** @brief 自動テストでボスと向き合う準備ができるか（まだ倒していないステージのボスが出ていて、とどめの途中でない） */
+    bool CanPrepareBossDuelForTest() const;
     /** @brief ボスの体の中に中心がめり込んでいる、まだ壊れていない爆弾の名前を返す（無ければ空） */
     std::string FindBombInsideBoss();
     /** @brief とどめの演出で、ボスにめり込んだ爆弾を壊して爆発を出す（プレイヤーと敵は巻き込まない） */

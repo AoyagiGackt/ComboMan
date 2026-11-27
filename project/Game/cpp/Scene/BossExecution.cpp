@@ -3,6 +3,7 @@
  * @brief ボスへのとどめの演出（BossExecution）の拍の進め方と、拍ごとの演出
  */
 #include "BossExecution.h"
+#include "EngineContext.h"
 #include "TestCoverage.h"
 
 #include "Camera.h"
@@ -377,7 +378,7 @@ void BossExecution::FireEffects(const ExecutionBeat& beat) {
             gameSounds::Play(entry.cue);
         }
     }
-    auto* time = TimeManager::GetInstance();
+    auto* time = engine::Services().time;
     if (beat.hitStop > 0) {
         time->RequestHitStop(beat.hitStop);
     }

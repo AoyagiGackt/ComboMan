@@ -215,6 +215,9 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="Game\cpp\Core\GamePch.cpp">
+      <Filter>ソースファイル\Game\cpp\Core</Filter>
+    </ClCompile>
     <ClCompile Include="Game\cpp\Scene\ClearScene.cpp">
       <Filter>ソースファイル\Game\cpp\Scene\画面</Filter>
     </ClCompile>
@@ -233,31 +236,19 @@
     <ClCompile Include="Game\cpp\Core\App\GameAudio.cpp">
       <Filter>ソースファイル\Game\cpp\Core\App</Filter>
     </ClCompile>
+    <ClCompile Include="Game\cpp\Core\App\GameSmokeTest.cpp">
+      <Filter>ソースファイル\Game\cpp\Core\App</Filter>
+    </ClCompile>
+    <ClCompile Include="Game\cpp\Core\App\GameSmokeTestCoverage.cpp">
+      <Filter>ソースファイル\Game\cpp\Core\App</Filter>
+    </ClCompile>
+    <ClCompile Include="Game\cpp\Core\App\GameSmokeTestReplay.cpp">
+      <Filter>ソースファイル\Game\cpp\Core\App</Filter>
+    </ClCompile>
+    <ClCompile Include="Game\cpp\Core\App\GameSmokeTestVisit.cpp">
+      <Filter>ソースファイル\Game\cpp\Core\App</Filter>
+    </ClCompile>
     <ClCompile Include="Game\cpp\Core\App\MyGame.cpp">
-      <Filter>ソースファイル\Game\cpp\Core\App</Filter>
-    </ClCompile>
-    <ClCompile Include="Game\cpp\Core\App\SmokeTestRunner.cpp">
-      <Filter>ソースファイル\Game\cpp\Core\App</Filter>
-    </ClCompile>
-    <ClCompile Include="Game\cpp\Core\App\SmokeTestRunnerVisit.cpp">
-      <Filter>ソースファイル\Game\cpp\Core\App</Filter>
-    </ClCompile>
-    <ClCompile Include="Game\cpp\Core\App\SmokeTestRunnerMonkey.cpp">
-      <Filter>ソースファイル\Game\cpp\Core\App</Filter>
-    </ClCompile>
-    <ClCompile Include="Game\cpp\Core\App\SmokeTestRunnerReport.cpp">
-      <Filter>ソースファイル\Game\cpp\Core\App</Filter>
-    </ClCompile>
-    <ClCompile Include="Game\cpp\Core\App\SmokeTestMonitors.cpp">
-      <Filter>ソースファイル\Game\cpp\Core\App</Filter>
-    </ClCompile>
-    <ClCompile Include="Game\cpp\Core\App\SmokeTestReplay.cpp">
-      <Filter>ソースファイル\Game\cpp\Core\App</Filter>
-    </ClCompile>
-    <ClCompile Include="Game\cpp\Core\App\TestCoverage.cpp">
-      <Filter>ソースファイル\Game\cpp\Core\App</Filter>
-    </ClCompile>
-    <ClCompile Include="Game\cpp\Core\App\BugHuntChanges.cpp">
       <Filter>ソースファイル\Game\cpp\Core\App</Filter>
     </ClCompile>
     <ClCompile Include="Game\cpp\Effect\AfterImageRenderer.cpp">
@@ -715,6 +706,9 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Game\h\Core\GamePch.h">
+      <Filter>ヘッダーファイル\Game\h\Core</Filter>
+    </ClInclude>
     <ClInclude Include="Game\h\Scene\AbstractSceneFactory.h">
       <Filter>ヘッダーファイル\Game\h\Scene\共通</Filter>
     </ClInclude>
@@ -739,22 +733,10 @@
     <ClInclude Include="Game\h\Core\App\GameAudio.h">
       <Filter>ヘッダーファイル\Game\h\Core\App</Filter>
     </ClInclude>
+    <ClInclude Include="Game\h\Core\App\GameSmokeTest.h">
+      <Filter>ヘッダーファイル\Game\h\Core\App</Filter>
+    </ClInclude>
     <ClInclude Include="Game\h\Core\App\MyGame.h">
-      <Filter>ヘッダーファイル\Game\h\Core\App</Filter>
-    </ClInclude>
-    <ClInclude Include="Game\h\Core\App\SmokeTestRunner.h">
-      <Filter>ヘッダーファイル\Game\h\Core\App</Filter>
-    </ClInclude>
-    <ClInclude Include="Game\h\Core\App\SmokeTestMonitors.h">
-      <Filter>ヘッダーファイル\Game\h\Core\App</Filter>
-    </ClInclude>
-    <ClInclude Include="Game\h\Core\App\SmokeTestReplay.h">
-      <Filter>ヘッダーファイル\Game\h\Core\App</Filter>
-    </ClInclude>
-    <ClInclude Include="Game\h\Core\App\TestCoverage.h">
-      <Filter>ヘッダーファイル\Game\h\Core\App</Filter>
-    </ClInclude>
-    <ClInclude Include="Game\h\Core\App\BugHuntChanges.h">
       <Filter>ヘッダーファイル\Game\h\Core\App</Filter>
     </ClInclude>
     <ClInclude Include="Game\h\Util\GameConstants.h">

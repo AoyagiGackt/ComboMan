@@ -4,6 +4,7 @@
  */
 #ifdef USE_IMGUI
 #include "GraphEditor.h"
+#include "EngineContext.h"
 #include "EditorUI.h"
 #include "GraphEditorServices.h"
 #include "GraphRuntime.h"
@@ -36,6 +37,8 @@ GraphEditor* GraphEditor::GetInstance() {
 /** @brief 指定パスのグラフを読み込んで編集対象にする（失敗時は空のグラフになる） */
 void GraphEditor::Open(const std::string& path) {
     graphPath_ = path;
+    // 開くパスの入力欄も、開いたグラフに合わせる
+    openPathInput_ = path;
     graph_ = graphIO::Load(path);
     ClearSelection();
     CancelCanvasInteractions();
@@ -58,7 +61,7 @@ void GraphEditor::Open(const std::string& path) {
     // 開いたグラフが画面の外に置かれていても見失わないよう、次の描画で全体を表示する
     requestFrameAll_ = true;
 
-    statusMessage_ = "Opened: " + path;
+    statusMessage_ = "開きました: " + path;
     statusTimer_ = kStatusShortSeconds;
 }
 
@@ -68,12 +71,18 @@ void GraphEditor::OpenAndShow(const std::string& path) {
         return;
     }
     if (path != graphPath_ || graph_.nodes.empty()) {
-        Open(path);
+        if (dirty_ && path != graphPath_) {
+            // ほかのグラフを編集中で未保存なら、ノードエディタ自身の開くと同じ確認を通す（やめたら今のグラフが残る）
+            pendingConfirmOpenPath_ = path;
+            requestConfirmOpen_ = true;
+        } else {
+            Open(path);
+        }
     }
     if (!visible_) {
         // F1トグルと同じ手順で背後のゲームを止める（閉じる時の復元はGraphEditorInteraction側）
-        savedTimeScale_ = TimeManager::GetInstance()->GetTimeScale();
-        TimeManager::GetInstance()->SetTimeScale(0.0f);
+        savedTimeScale_ = engine::Services().time->GetTimeScale();
+        engine::Services().time->SetTimeScale(0.0f);
         visible_ = true;
     }
 }
@@ -86,7 +95,7 @@ void GraphEditor::Save() {
         return;
     }
     dirty_ = false;
-    statusMessage_ = "Saved: " + graphPath_;
+    statusMessage_ = "保存しました: " + graphPath_;
     statusTimer_ = kStatusShortSeconds;
 }
 

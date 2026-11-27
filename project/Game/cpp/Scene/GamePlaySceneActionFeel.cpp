@@ -4,6 +4,7 @@
  * @note 調整値は Resources/Config/action_feel.json（ActionFeelTuning）。演出の名前は hit_effects.json、音の名前は sounds.json
  */
 #include "GamePlayScene.h"
+#include "EngineContext.h"
 #include "TestCoverage.h"
 
 #include "ActionFeelTuning.h"
@@ -55,7 +56,7 @@ bool GamePlayScene::IsFlyingEnemy(const EnemyEntity& enemy) const {
 /** @brief 吹き飛んだ敵がほかの敵に当たったら、相手にダメージを与えて同じ向きへ飛ばす（連鎖は決めた深さまで） */
 void GamePlayScene::UpdateFlyingEnemyCollisions() {
     const ActionFeelTuning& feel = ActionFeel();
-    if (!feel.collideEnabled || TimeManager::GetInstance()->IsHitStopped()) {
+    if (!feel.collideEnabled || engine::Services().time->IsHitStopped()) {
         return;
     }
     // 飛び終えた敵（と、もういない敵）の記録を消す。記録の鍵は比べるだけで、指す先には触らない
@@ -202,7 +203,7 @@ void GamePlayScene::StartRoomClearFinale(const Vector3& position) {
     const ActionFeelTuning& feel = ActionFeel();
     // 締めの寄りとブラーを借り、そのスローより部屋の締めのスローを優先する（後から頼んだ遅さが使われる）
     comboFeel_.TriggerFinisherImpact(position);
-    TimeManager::GetInstance()->RequestSlowMotion(feel.roomClearSlowSeconds, feel.roomClearSlowScale);
+    engine::Services().time->RequestSlowMotion(feel.roomClearSlowSeconds, feel.roomClearSlowScale);
     const HitEffectPlayer fx(pm_, &cameraShaker_, &rng_);
     fx.Impact(kRoomClearEffect);
     fx.Ring(kRoomClearEffect, position);

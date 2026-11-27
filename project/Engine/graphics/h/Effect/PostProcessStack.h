@@ -88,6 +88,17 @@ public:
     /** @brief どこかの列に一度でも登録された名前の一覧（エディタで足す候補にする） */
     static std::vector<std::string> GetKnownNames();
 
+    /**
+     * @brief 場面の列にエディタで見せる表示名を付ける
+     * @param stackName 設定ファイルの stacks の下の名前
+     * @param displayName エディタに出す名前（本編・訓練場など）
+     */
+    static void SetStackDisplayName(const std::string& stackName, const std::string& displayName);
+    /** @brief 場面の列の表示名を返す（付けていなければ設定ファイルの名前のまま） */
+    static std::string GetStackDisplayName(const std::string& stackName);
+    /** @brief 一番最近に掛けた場面の列の名前（今の画面がどの場面か。まだ無ければ空） */
+    static std::string GetActiveStackName();
+
 private:
     /** @brief 登録した1つのエフェクト */
     struct Stage {

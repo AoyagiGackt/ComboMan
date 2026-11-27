@@ -3,6 +3,7 @@
  * @brief 場面ごとの効果音（sounds.json）の読み込みと再生（gameSounds）の実装
  */
 #include "GameSounds.h"
+#include "EngineContext.h"
 #include "AudioBridge.h"
 #include "JsonHelper.h"
 #include "Logger.h"
@@ -100,7 +101,7 @@ void PlayStyled(const std::string& name, const std::string& style) {
 /** @brief プレイヤーのこのフレームの行動（回避・攻撃の振り・射撃）に合わせて鳴らす */
 void PlayPlayerActions(const Player& player) {
     // 止まっている間は行動の印が前のフレームのまま残っているので鳴らさない
-    if (TimeManager::GetInstance()->IsHitStopped()) {
+    if (engine::Services().time->IsHitStopped()) {
         return;
     }
     if (player.JustDodged()) {

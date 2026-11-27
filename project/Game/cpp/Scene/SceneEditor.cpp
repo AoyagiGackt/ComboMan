@@ -14,11 +14,13 @@
 #include "SceneManager.h"
 #include "ScoreManager.h"
 #include "RevolvedMeshBase.h"
+#include <algorithm>
 #include <iterator>
 #include <string>
 #ifdef USE_IMGUI
 #include "EditorHub.h"
 #include "EditorUI.h"
+#include "EditorFlowRow.h"
 #include "FieldMemory.h"
 #include <imgui.h>
 #endif
@@ -103,6 +105,24 @@ using engine::graphics::editorUI::OpenFileDialog;
 using engine::graphics::editorUI::ToProjectRelativePath;
 #endif
 
+/** @brief 書き込み結果を覚え、失敗した保存先を表示できるようにする */
+bool SceneEditor::SetSaveResult(bool saved, const char* path) {
+    savedTimer_ = saved ? kSavedMessageSeconds : 0.0f;
+    saveError_ = saved ? std::string() : std::string("保存に失敗しました: ") + path;
+    return saved;
+}
+
+/** @brief 保存成功を短時間、失敗した保存先は次の保存まで表示する */
+void SceneEditor::DrawSaveResult() const {
+#ifdef USE_IMGUI
+    if (!saveError_.empty()) {
+        graphics::editorUI::TextDisabledWrapped("%s", saveError_.c_str());
+    } else if (savedTimer_ > 0.0f) {
+        ImGui::TextColored(kSavedTextColor, "保存しました");
+    }
+#endif
+}
+
 // State 遷移
 
 // Hierarchy でオブジェクトが選ばれたとき、対応する State クラスに切り替える
@@ -179,6 +199,7 @@ void SceneEditor::Update(const EditContext& ctx, engine::Input* input) {
     RenderInspector(ctx); // 右 選択中オブジェクトのプロパティ
     RenderSceneControls(ctx); // 左下 スコア・ゲーム時刻・シーン操作
     RenderCameraControl(ctx); // 上中央 カメラ位置の簡易操作
+    savedTimer_ = (std::max)(0.0f, savedTimer_ - gameConstants::kFrameDeltaTime);
     UpdateUIGizmo(); // ゲーム画面の上のUI要素の枠
 #else
     (void)ctx;
@@ -194,7 +215,7 @@ void SceneEditor::RenderHierarchy(const EditContext& ctx) {
 #ifdef USE_IMGUI
     ImGui::SetNextWindowPos(ImVec2(kHierarchyX, kHierarchyY), ImGuiCond_Once);
     ImGui::SetNextWindowSize(ImVec2(kHierarchyW, kHierarchyH), ImGuiCond_Once);
-    ImGui::Begin("Hierarchy");
+    ImGui::Begin("配置一覧###Hierarchy");
 
     // Selectable を選んだら ChangeState を呼んで Inspector を切り替える
     auto selectable = [&](const char* label, Selection type) {
@@ -205,18 +226,18 @@ void SceneEditor::RenderHierarchy(const EditContext& ctx) {
 
     // Ring/Cylinder/Human/White Particles はこのシーンのEditContextに配線されておらず
     // 選んでも無効表示にしかならないため、実際に編集できる項目だけを並べる
-    selectable("Camera", Selection::kCamera);
-    selectable("Skydome", Selection::kSkydome);
+    selectable("カメラ", Selection::kCamera);
+    selectable("空", Selection::kSkydome);
 
     // UI Elements は可変長リストなのでツリーノードで折りたたみ表示する
     char uiHeader[textBufferCapacity::kSectionTitle];
-    snprintf(uiHeader, sizeof(uiHeader), "UI Elements (%d)", (int)uiElements_.size());
+    snprintf(uiHeader, sizeof(uiHeader), "画面の部品（%d 件）", (int)uiElements_.size());
     bool uiOpen = ImGui::TreeNodeEx(uiHeader);
     ImGui::SameLine();
     // + ボタンを押すと新しい UI スプライトを追加する
     if (ImGui::SmallButton("+##addUI")) {
         UIEntry entry;
-        entry.name = "UI Element " + std::to_string(uiElements_.size() + 1);
+        entry.name = "画面の部品 " + std::to_string(uiElements_.size() + 1);
         entry.texPath = "";
         entry.sprite = std::make_unique<Sprite>();
         entry.sprite->Initialize(ctx.spriteCommon, entry.texPath);
@@ -241,28 +262,22 @@ void SceneEditor::RenderHierarchy(const EditContext& ctx) {
 
     // Save ボタン 選択中オブジェクトのパラメータを JSON に保存する
     ImGui::Separator();
-    if (savedTimer_ > 0.0f) {
-        // 保存直後は "Saved!" と表示してフェードアウトする
-        savedTimer_ -= gameConstants::kFrameDeltaTime;
-        ImGui::TextColored(kSavedTextColor, "Saved!");
-    } else {
+    if (savedTimer_ <= 0.0f) {
         // 保存先があるのはカメラとUI要素だけなので、それ以外は押せなくする
         ImGui::BeginDisabled(selection_ != Selection::kCamera && selection_ != Selection::kUIElement);
-        if (ImGui::Button("Save", ImVec2(-1, 0))) {
+        if (ImGui::Button("保存", ImVec2(-1, 0))) {
             if (selection_ == Selection::kCamera) {
                 SaveCameraParams(ctx);
-                savedTimer_ = kSavedMessageSeconds;
             }
             if (selection_ == Selection::kUIElement) {
                 SaveUILayout();
-                // 書き込めなかった時は未保存の表示を残し、保存した表示は出さない
-                savedTimer_ = uiDirty_ ? 0.0f : kSavedMessageSeconds;
             }
         }
         ImGui::EndDisabled();
     }
+    DrawSaveResult();
     if (uiDirty_) {
-        ImGui::TextDisabled("UI Elements: 未保存");
+        ImGui::TextDisabled("画面の部品は未保存です");
     }
 
     ImGui::End();
@@ -282,7 +297,7 @@ void SceneEditor::RenderInspector(const EditContext& ctx) {
 
     ImGui::SetNextWindowPos(ImVec2(kInspectorX, kInspectorY), ImGuiCond_Once);
     ImGui::SetNextWindowSize(ImVec2(kInspectorW, kInspectorH), ImGuiCond_Once);
-    ImGui::Begin("Inspector");
+    ImGui::Begin("選択中の項目###Inspector");
 
     if (currentState_) {
         currentState_->RenderInspector(ctx, *this);
@@ -303,32 +318,38 @@ void SceneEditor::RenderSceneControls(const EditContext& ctx) {
 #ifdef USE_IMGUI
     ImGui::SetNextWindowPos(ImVec2(kSceneCtrlX, kSceneCtrlY), ImGuiCond_Once);
     ImGui::SetNextWindowSize(ImVec2(kSceneCtrlW, kSceneCtrlH), ImGuiCond_Once);
-    ImGui::Begin("Scene Controls");
+    ImGui::Begin("シーン操作###Scene Controls");
 
     // スコアランキングの表示（折りたたみ）
-    if (ImGui::CollapsingHeader("Score")) {
-        ImGui::Text("Current : %d", RunData::GetInstance()->GetScore());
+    if (ImGui::CollapsingHeader("スコア")) {
+        ImGui::Text("現在のスコア　%d", RunData::GetInstance()->GetScore());
         const auto ranking = ScoreManager::GetInstance()->GetRankingSnapshot();
         if (ranking.empty()) {
-            ImGui::TextDisabled("  (no records)");
+            ImGui::TextDisabled("記録はありません");
         }
         for (int i = 0; i < (int)ranking.size(); ++i) {
             ImGui::Text("  %2d. %d", i + 1, ranking[i]);
         }
-        if (ImGui::Button("Reset All Scores")) {
+        constexpr const char* kResetPopup = "ランキング削除の確認";
+        if (ImGui::Button("ランキングを全部消す")) {
+            ImGui::OpenPopup(kResetPopup);
+        }
+        const std::string message = "保存済みのランキング " + std::to_string(ranking.size()) + " 件を全部消します。";
+        if (graphics::editorUI::ConfirmModal(kResetPopup, message.c_str(), "全部消す") == graphics::editorUI::ConfirmResult::kOk) {
             ScoreManager::GetInstance()->ResetAllScores();
         }
     }
 
     // シーン切り替えボタン（折りたたみ）
-    if (ImGui::CollapsingHeader("Actions")) {
-        if (ImGui::Button("Game Clear")) {
+    if (ImGui::CollapsingHeader("シーンの切り替え")) {
+        engine::editor::FlowRow actions;
+        if (actions.Button("ゲームクリア")) {
             if (ctx.requestClear) {
                 *ctx.requestClear = true;
             }
         }
-        ImGui::SameLine();
-        if (ImGui::Button("Game Over")) {
+
+        if (actions.Button("ゲームオーバー")) {
             SceneFlow::GetInstance()->Transition("GAMEPLAY", "gameover", "GAMEOVER");
         }
     }
@@ -345,7 +366,7 @@ void SceneEditor::RenderCameraControl(const EditContext& ctx) {
 #ifdef USE_IMGUI
     ImGui::SetNextWindowPos(ImVec2(kCamCtrlX, kCamCtrlY), ImGuiCond_Once);
     ImGui::SetNextWindowSize(ImVec2(kCamCtrlW, kCamCtrlH), ImGuiCond_Once);
-    ImGui::Begin("Camera Control");
+    ImGui::Begin("カメラ操作###Camera Control");
 
     // ドラッグスライダーで目標座標・角度を変更する
     SceneFields().Track(ImGui::DragFloat3("位置", &ctx.cameraTargetPos->x, kDragStepPosition), *ctx.cameraTargetPos, "カメラが向かう場所です");
@@ -356,20 +377,21 @@ void SceneEditor::RenderCameraControl(const EditContext& ctx) {
     ImGui::Spacing();
 
     // 原点にリセットするボタン
-    if (ImGui::Button("Center")) {
+    engine::editor::FlowRow camera;
+    if (camera.Button("原点に戻す")) {
         *ctx.cameraTargetPos = { 0.0f, 0.0f, 0.0f };
         *ctx.cameraTargetRot = { 0.0f, 0.0f, 0.0f };
         ctx.cameraPosHistory->clear();
         ctx.cameraRotHistory->clear();
     }
-    ImGui::SameLine();
-    if (ImGui::Button("Save##cam")) {
+
+    if (camera.Button("保存##cam")) {
         SaveCameraParams(ctx);
     } // JSON に現在値を保存
-    ImGui::SameLine();
-    if (ImGui::Button("Load##cam")) {
+    if (camera.Button("読み込み##cam")) {
         LoadCameraParams(ctx);
     } // JSON から前回値を復元
+    DrawSaveResult();
 
     ImGui::End();
 #endif
@@ -392,34 +414,34 @@ void SceneEditor::RenderCameraControl(const EditContext& ctx) {
 /** @brief 何も選んでいないときのインスペクタに案内文を表示する */
 void SceneEditor::NoneState::RenderInspector(const EditContext&, SceneEditor&) {
 #ifdef USE_IMGUI
-    ImGui::TextDisabled("(Nothing selected)");
-    ImGui::TextDisabled("Hierarchy でオブジェクトを");
-    ImGui::TextDisabled("クリックしてください");
+    ImGui::TextDisabled("何も選んでいません");
+    graphics::editorUI::TextDisabledWrapped("配置一覧で編集する物をクリックしてください。");
 #endif
 }
 
 // Camera を選んでいるときの Inspector 表示
 void SceneEditor::CameraState::RenderInspector(const EditContext& ctx, SceneEditor& editor) {
 #ifdef USE_IMGUI
-    ImGui::TextColored(ImVec4(1, 1, 0, 1), "[Camera]");
+    ImGui::TextColored(ImVec4(1, 1, 0, 1), "カメラ");
     ImGui::Separator();
     SceneFields().Track(ImGui::DragFloat3("位置", &ctx.cameraTargetPos->x, kDragStepPosition), *ctx.cameraTargetPos, "カメラが向かう場所です"); // ドラッグで位置を変更
     SceneFields().Track(ImGui::DragFloat3("向き", &ctx.cameraTargetRot->x, kDragStepRotation), *ctx.cameraTargetRot, "カメラが向く角度です"); // ドラッグで角度を変更
     DrawSmoothFramesSlider(ctx);
     ImGui::Separator();
-    if (ImGui::Button("Save##inspCam")) {
+    if (ImGui::Button("保存##inspCam")) {
         editor.SaveCameraParams(ctx);
     }
+    editor.DrawSaveResult();
 #endif
 }
 
 // Ring を選んでいるときの Inspector 表示
 void SceneEditor::RingState::RenderInspector(const EditContext& ctx, SceneEditor&) {
 #ifdef USE_IMGUI
-    ImGui::TextColored(kRingHeaderColor, "[Ring]");
+    ImGui::TextColored(kRingHeaderColor, "輪");
     ImGui::Separator();
     if (!ctx.ring || !ctx.ringPosition) {
-        ImGui::TextDisabled("Ring is disabled.");
+        ImGui::TextDisabled("輪は使用できません");
         return;
     }
     RenderMeshTransform(*ctx.ring, *ctx.ringPosition, *ctx.ringRotation, *ctx.ringScale);
@@ -442,10 +464,10 @@ void SceneEditor::RingState::RenderInspector(const EditContext& ctx, SceneEditor
 // Cylinder を選んでいるときの Inspector 表示
 void SceneEditor::CylinderState::RenderInspector(const EditContext& ctx, SceneEditor&) {
 #ifdef USE_IMGUI
-    ImGui::TextColored(kCylinderHeaderColor, "[Cylinder]");
+    ImGui::TextColored(kCylinderHeaderColor, "円柱");
     ImGui::Separator();
     if (!ctx.cylinder || !ctx.cylinderPosition) {
-        ImGui::TextDisabled("Cylinder is disabled.");
+        ImGui::TextDisabled("円柱は使用できません");
         return;
     }
     RenderMeshTransform(*ctx.cylinder, *ctx.cylinderPosition, *ctx.cylinderRotation, *ctx.cylinderScale);
@@ -476,7 +498,7 @@ void SceneEditor::CylinderState::RenderInspector(const EditContext& ctx, SceneEd
 // Skydome を選んでいるときの Inspector 表示
 void SceneEditor::SkydomeState::RenderInspector(const EditContext& ctx, SceneEditor&) {
 #ifdef USE_IMGUI
-    ImGui::TextColored(kSkydomeHeaderColor, "[Skydome]");
+    ImGui::TextColored(kSkydomeHeaderColor, "空");
     ImGui::Separator();
     if (ctx.skydome) {
         if (SceneFields().Track(ImGui::ColorEdit4("空の色", &ctx.skyColor->x), *ctx.skyColor, "空に掛ける色です")) {
@@ -487,12 +509,12 @@ void SceneEditor::SkydomeState::RenderInspector(const EditContext& ctx, SceneEdi
                 *ctx.skyRotOffsetY, "空をぐるりと回して、見える方角を変えます")) {
             ctx.skydome->SetRotationOffsetY(*ctx.skyRotOffsetY);
         }
-        if (ImGui::Button("Reset Offset")) {
+        if (ImGui::Button("空の回転を戻す")) {
             *ctx.skyRotOffsetY = 0.0f;
             ctx.skydome->SetRotationOffsetY(0.0f);
         }
     } else {
-        ImGui::TextDisabled("Skydome is disabled.");
+        ImGui::TextDisabled("空は使用できません");
     }
 #endif
 }
@@ -500,10 +522,10 @@ void SceneEditor::SkydomeState::RenderInspector(const EditContext& ctx, SceneEdi
 // Human を選んでいるときの Inspector 表示
 void SceneEditor::HumanState::RenderInspector(const EditContext& ctx, SceneEditor&) {
 #ifdef USE_IMGUI
-    ImGui::TextColored(kHumanHeaderColor, "[Human]");
+    ImGui::TextColored(kHumanHeaderColor, "人型モデル");
     ImGui::Separator();
     if (!ctx.human || !ctx.humanPosition) {
-        ImGui::TextDisabled("Human is disabled.");
+        ImGui::TextDisabled("人型モデルは使用できません");
         return;
     }
     if (SceneFields().Track(ImGui::DragFloat3("位置", &ctx.humanPosition->x, kDragStepFinePosition), *ctx.humanPosition, "置く場所です")) {
@@ -522,7 +544,7 @@ void SceneEditor::HumanState::RenderInspector(const EditContext& ctx, SceneEdito
         ctx.human->SetAnimSpeed(*ctx.humanAnimSpeed);
     }
     ImGui::Separator();
-    if (ImGui::Button("Reset")) {
+    if (ImGui::Button("初期値に戻す")) {
         constexpr Vector3 kDefaultHumanPosition = { 5.0f, 0.0f, 0.0f };
         *ctx.humanPosition = kDefaultHumanPosition;
         *ctx.humanRotation = { };
@@ -541,10 +563,10 @@ void SceneEditor::HumanState::RenderInspector(const EditContext& ctx, SceneEdito
 // White Particles を選んでいるときの Inspector 表示
 void SceneEditor::ParticlesState::RenderInspector(const EditContext& ctx, SceneEditor&) {
 #ifdef USE_IMGUI
-    ImGui::TextColored(ImVec4(1.0f, 1.0f, 1.0f, 1), "[White Particles]");
+    ImGui::TextColored(ImVec4(1.0f, 1.0f, 1.0f, 1), "白い粒");
     ImGui::Separator();
     if (!ctx.whiteParticlePos) {
-        ImGui::TextDisabled("White Particles are disabled.");
+        ImGui::TextDisabled("白い粒は使用できません");
         return;
     }
     SceneFields().Track(ImGui::DragFloat3("位置", &ctx.whiteParticlePos->x, kDragStepPosition), *ctx.whiteParticlePos, "粒を出す場所です");
@@ -553,7 +575,7 @@ void SceneEditor::ParticlesState::RenderInspector(const EditContext& ctx, SceneE
         *ctx.whiteParticleScale, "粒1つの大きさです");
     SceneFields().Track(ImGui::SliderInt("数", ctx.whiteParticleCount, 1, kMaxParticleCount), *ctx.whiteParticleCount, "出す粒の数です。出し直すと反映されます");
     ImGui::Separator();
-    if (ImGui::Button("Re-emit", ImVec2(-1, 0))) {
+    if (ImGui::Button("粒を出し直す", ImVec2(-1, 0))) {
         engine::Services().particles->EmitScatterLoop(
             "white", *ctx.whiteParticlePos, kWhiteParticleSpread,
             static_cast<uint32_t>(*ctx.whiteParticleCount),
@@ -574,29 +596,30 @@ void SceneEditor::UIElementState::RenderInspector(const EditContext& ctx, SceneE
     Sprite* sp = entry.sprite.get();
     // 何を編集中か分かるよう、色付きの見出しを出す
     constexpr ImVec4 kHeadingColor = { 1.0f, 0.5f, 1.0f, 1.0f };
-    ImGui::TextColored(kHeadingColor, "[UI Element]");
+    ImGui::TextColored(kHeadingColor, "画面の部品");
     if (editor.uiDirty_) {
         graphics::editorUI::DrawUnsavedMark();
     }
     ImGui::Separator();
     // 元に戻す・やり直す（ウィンドウにフォーカスがある時はキーでも操作できる）
     ImGui::BeginDisabled(!editor.uiHistory_.CanUndo());
-    if (ImGui::Button("Undo") || graphics::editorUI::CtrlShortcut(ImGuiKey_Z)) {
+    engine::editor::FlowRow history;
+    if (history.Button("元に戻す") || graphics::editorUI::CtrlShortcut(ImGuiKey_Z)) {
         editor.UndoUIEdit();
     }
     ImGui::EndDisabled();
-    ImGui::SameLine();
+
     ImGui::BeginDisabled(!editor.uiHistory_.CanRedo());
-    if (ImGui::Button("Redo") || graphics::editorUI::CtrlShortcut(ImGuiKey_Y)) {
+    if (history.Button("やり直す") || graphics::editorUI::CtrlShortcut(ImGuiKey_Y)) {
         editor.RedoUIEdit();
     }
     ImGui::EndDisabled();
     // 画面上のドラッグのスナップ
-    ImGui::Checkbox("Snap", &editor.uiSnapEnabled_);
+    ImGui::Checkbox("格子に合わせる", &editor.uiSnapEnabled_);
     ImGui::SameLine();
     ImGui::SetNextItemWidth(-1);
     ImGui::SliderInt("##snapStep", &editor.uiSnapStep_, kMinUISnapStep, kMaxUISnapStep, "%d px");
-    ImGui::TextDisabled("画面上のスプライトをドラッグで移動、枠の四角で大きさ変更\nCtrl: スナップ反転  Shift+角: 縦横比を保つ");
+    graphics::editorUI::TextDisabledWrapped("画面上のスプライトをドラッグで移動、枠の四角で大きさ変更\nCtrl: スナップ反転  Shift+角: 縦横比を保つ");
     ImGui::Separator();
     // 選択が変わったときだけ名前の入力欄を読み直す
     if (editor.uiNameEditIndex_ != idx) {
@@ -612,26 +635,26 @@ void SceneEditor::UIElementState::RenderInspector(const EditContext& ctx, SceneE
     ImGui::Separator();
     // 位置・サイズ・回転・色を編集する（変わった値だけスプライトへ書き戻す）
     Vector2 pos = sp->GetPosition();
-    if (editor.TrackUIEdit(ImGui::DragFloat2("Position", &pos.x, kDragStepPixel))) {
+    if (editor.TrackUIEdit(ImGui::DragFloat2("位置", &pos.x, kDragStepPixel))) {
         sp->SetPosition(pos);
     }
     // サイズは小さすぎて見えなくならないよう上下限を付ける
     Vector2 sz = sp->GetSize();
-    if (editor.TrackUIEdit(ImGui::DragFloat2("Size", &sz.x, kDragStepPixel, kMinSpritePixels, kMaxSpritePixels))) {
+    if (editor.TrackUIEdit(ImGui::DragFloat2("大きさ", &sz.x, kDragStepPixel, kMinSpritePixels, kMaxSpritePixels))) {
         sp->SetSize(sz);
     }
     float rot = sp->GetRotation();
-    if (editor.TrackUIEdit(ImGui::DragFloat("Rotation", &rot, kDragStepRotation))) {
+    if (editor.TrackUIEdit(ImGui::DragFloat("向き", &rot, kDragStepRotation))) {
         sp->SetRotation(rot);
     }
     Vector4 col = sp->GetColor();
-    if (editor.TrackUIEdit(ImGui::ColorEdit4("Color", &col.x))) {
+    if (editor.TrackUIEdit(ImGui::ColorEdit4("色", &col.x))) {
         sp->SetColor(col);
     }
     ImGui::Separator();
     // テクスチャファイルのパスを表示し、Browse ボタンでファイル選択ダイアログを開く
-    ImGui::TextDisabled("%.40s", entry.texPath.empty() ? "(no texture)" : entry.texPath.c_str());
-    if (ImGui::Button("Browse##uitex")) {
+    ImGui::TextDisabled("%.40s", entry.texPath.empty() ? "画像なし" : entry.texPath.c_str());
+    if (ImGui::Button("画像を選ぶ##uitex")) {
         const std::string selected = OpenFileDialog("PNG Files\0*.png\0All Files\0*.*\0\0", "Resources");
         // キャンセルされたら何もしない
         if (!selected.empty()) {
@@ -644,7 +667,9 @@ void SceneEditor::UIElementState::RenderInspector(const EditContext& ctx, SceneE
     }
     ImGui::Separator();
     // Delete で一覧から削除、Save/Load で JSON に保存・復元する（削除は保存まで行うので元に戻せず、確認を挟む）
-    if (graphics::editorUI::ConfirmButton("Delete##ui", "このUI要素を消して、レイアウトを保存しますか？\n元に戻せません。")) {
+    engine::editor::FlowRow files;
+    files.Next(engine::editor::FlowRow::ButtonWidth("削除##ui"));
+    if (graphics::editorUI::ConfirmButton("削除##ui", "このUI要素を消して、レイアウトを保存しますか？\n元に戻せません。")) {
         // 消した要素を指したままにならないよう、選択を外して名前の編集状態も戻す
         editor.uiElements_.erase(editor.uiElements_.begin() + idx);
         editor.ChangeState(Selection::kNone);
@@ -653,17 +678,17 @@ void SceneEditor::UIElementState::RenderInspector(const EditContext& ctx, SceneE
         editor.uiDrag_ = UIDragState { };
         editor.SaveUILayout();
     } else {
-        ImGui::SameLine();
-        if (ImGui::Button("Save##inspUI")) {
+        if (files.Button("保存##inspUI")) {
             editor.SaveUILayout();
         }
-        ImGui::SameLine();
         // 未保存の変更があれば読み込み前に確認する
-        const char* const loadLabel = "Load##inspUI";
+        const char* const loadLabel = "読み込み##inspUI";
+        files.Next(engine::editor::FlowRow::ButtonWidth(loadLabel));
         if (editor.uiDirty_ ? graphics::editorUI::ConfirmButton(loadLabel, "未保存の変更を捨てて読み込みますか？", "読み込む") : ImGui::Button(loadLabel)) {
             editor.LoadUILayout(ctx);
         }
     }
+    editor.DrawSaveResult();
 #endif
 }
 /** @brief 編集対象のUIを一覧の所有権を公開せずに描画する */

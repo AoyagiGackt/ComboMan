@@ -280,6 +280,8 @@ private:
     EditorHistory<GraphDesc> history_;
 
     std::string graphPath_ = "Resources/Graphs/test_graph.json";
+    /** @brief 開くグラフのパスの入力欄（入力しただけでは保存先は変わらない。保存先は graphPath_） */
+    std::string openPathInput_ = "Resources/Graphs/test_graph.json";
     GraphDesc graph_;
 
     // 最後の保存以降に編集があるか（開く時の破棄確認と未保存マーカー表示に使う）
